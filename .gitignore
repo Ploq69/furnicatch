@@ -1,0 +1,39 @@
+# Virtual environment
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Node (if ever added)
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Large 3D asset packs (1.6GB+ total) — not suitable for git
+Animated Fish Pack by @Quaternius/
+Cube World - Aug 2023/
+Cute Fish Pack - Feb 2020/
+Pirate Kit - Nov 2023/
+Sunnyside_World_ASSET_PACK_V2.1/
+Super Pixel Effects Gigapack (Free Version)/
+Sushi Restaurant Kit - May 2023/
+Toon Shooter Game Kit - Dec 2022/
+Ultimate Animated Character Pack - Nov 2019/
+Ultimate Food Pack - Oct 2019/
+Ultimate House Interior Pack - June 2020/
+Ultimate Monsters/
+Ultimate Space Kit - March 2023/
+
+# Generated audio (can be regenerated with scripts/generate_kokoro_tts.py)
+audio/
+
+# Generated/test files
+animation_test.html
+simple_alphabet.glb
