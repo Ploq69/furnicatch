@@ -1,0 +1,2203 @@
+{
+  "summary": {
+    "total": 274,
+    "passed": 274,
+    "failed": 0,
+    "missing": 0,
+    "pass_rate": 100.0
+  },
+  "results": {
+    "acorn": {
+      "word": "acorn",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0457,
+      "zcr": 0.28
+    },
+    "airplane": {
+      "word": "airplane",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0433,
+      "zcr": 0.277
+    },
+    "alligator": {
+      "word": "alligator",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0459,
+      "zcr": 0.258
+    },
+    "anchor": {
+      "word": "anchor",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0447,
+      "zcr": 0.291
+    },
+    "animal": {
+      "word": "animal",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0447,
+      "zcr": 0.271
+    },
+    "ant": {
+      "word": "ant",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0437,
+      "zcr": 0.317
+    },
+    "apple": {
+      "word": "apple",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0416,
+      "zcr": 0.281
+    },
+    "apron": {
+      "word": "apron",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0424,
+      "zcr": 0.282
+    },
+    "arrow": {
+      "word": "arrow",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0401,
+      "zcr": 0.281
+    },
+    "artist": {
+      "word": "artist",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0466,
+      "zcr": 0.302
+    },
+    "baby": {
+      "word": "baby",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0414,
+      "zcr": 0.279
+    },
+    "ball": {
+      "word": "ball",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0432,
+      "zcr": 0.29
+    },
+    "bamboo": {
+      "word": "bamboo",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0454,
+      "zcr": 0.272
+    },
+    "banana": {
+      "word": "banana",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.046,
+      "zcr": 0.273
+    },
+    "basket": {
+      "word": "basket",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0447,
+      "zcr": 0.289
+    },
+    "bathtub": {
+      "word": "bathtub",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0429,
+      "zcr": 0.295
+    },
+    "bed": {
+      "word": "bed",
+      "passed": true,
+      "reason": null,
+      "duration": 0.85,
+      "rms": 0.0401,
+      "zcr": 0.282
+    },
+    "bell": {
+      "word": "bell",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0431,
+      "zcr": 0.289
+    },
+    "bird": {
+      "word": "bird",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0459,
+      "zcr": 0.311
+    },
+    "boat": {
+      "word": "boat",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.045,
+      "zcr": 0.302
+    },
+    "book": {
+      "word": "book",
+      "passed": true,
+      "reason": null,
+      "duration": 1.2,
+      "rms": 0.0464,
+      "zcr": 0.304
+    },
+    "bookshelf": {
+      "word": "bookshelf",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0469,
+      "zcr": 0.288
+    },
+    "bread": {
+      "word": "bread",
+      "passed": true,
+      "reason": null,
+      "duration": 1.07,
+      "rms": 0.044,
+      "zcr": 0.289
+    },
+    "bunkbed": {
+      "word": "bunkbed",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0479,
+      "zcr": 0.285
+    },
+    "bush": {
+      "word": "bush",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0458,
+      "zcr": 0.315
+    },
+    "button": {
+      "word": "button",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0448,
+      "zcr": 0.285
+    },
+    "cake": {
+      "word": "cake",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0419,
+      "zcr": 0.295
+    },
+    "camera": {
+      "word": "camera",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0452,
+      "zcr": 0.29
+    },
+    "candle": {
+      "word": "candle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0448,
+      "zcr": 0.279
+    },
+    "car": {
+      "word": "car",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0429,
+      "zcr": 0.303
+    },
+    "carrot": {
+      "word": "carrot",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0431,
+      "zcr": 0.297
+    },
+    "cart": {
+      "word": "cart",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0467,
+      "zcr": 0.323
+    },
+    "castle": {
+      "word": "castle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.041,
+      "zcr": 0.301
+    },
+    "cat": {
+      "word": "cat",
+      "passed": true,
+      "reason": null,
+      "duration": 1.2,
+      "rms": 0.039,
+      "zcr": 0.313
+    },
+    "chair": {
+      "word": "chair",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0418,
+      "zcr": 0.313
+    },
+    "chandelier": {
+      "word": "chandelier",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0471,
+      "zcr": 0.268
+    },
+    "chest": {
+      "word": "chest",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0438,
+      "zcr": 0.319
+    },
+    "clock": {
+      "word": "clock",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0442,
+      "zcr": 0.3
+    },
+    "closet": {
+      "word": "closet",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0458,
+      "zcr": 0.278
+    },
+    "cloud": {
+      "word": "cloud",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0419,
+      "zcr": 0.3
+    },
+    "couch": {
+      "word": "couch",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0388,
+      "zcr": 0.292
+    },
+    "crystal": {
+      "word": "crystal",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0445,
+      "zcr": 0.299
+    },
+    "cup": {
+      "word": "cup",
+      "passed": true,
+      "reason": null,
+      "duration": 1.2,
+      "rms": 0.042,
+      "zcr": 0.302
+    },
+    "desk": {
+      "word": "desk",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0453,
+      "zcr": 0.314
+    },
+    "diamond": {
+      "word": "diamond",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0458,
+      "zcr": 0.277
+    },
+    "doctor": {
+      "word": "doctor",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0452,
+      "zcr": 0.283
+    },
+    "dog": {
+      "word": "dog",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.043,
+      "zcr": 0.299
+    },
+    "doll": {
+      "word": "doll",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0418,
+      "zcr": 0.294
+    },
+    "donut": {
+      "word": "donut",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0467,
+      "zcr": 0.291
+    },
+    "door": {
+      "word": "door",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0455,
+      "zcr": 0.299
+    },
+    "dragon": {
+      "word": "dragon",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0445,
+      "zcr": 0.282
+    },
+    "drawer": {
+      "word": "drawer",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0458,
+      "zcr": 0.296
+    },
+    "drum": {
+      "word": "drum",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0463,
+      "zcr": 0.299
+    },
+    "duck": {
+      "word": "duck",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0449,
+      "zcr": 0.304
+    },
+    "eagle": {
+      "word": "eagle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0434,
+      "zcr": 0.274
+    },
+    "ear": {
+      "word": "ear",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0409,
+      "zcr": 0.308
+    },
+    "earth": {
+      "word": "earth",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0445,
+      "zcr": 0.325
+    },
+    "egg": {
+      "word": "egg",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.04,
+      "zcr": 0.301
+    },
+    "elbow": {
+      "word": "elbow",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0435,
+      "zcr": 0.282
+    },
+    "elephant": {
+      "word": "elephant",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0457,
+      "zcr": 0.286
+    },
+    "elf": {
+      "word": "elf",
+      "passed": true,
+      "reason": null,
+      "duration": 1.2,
+      "rms": 0.0432,
+      "zcr": 0.31
+    },
+    "engine": {
+      "word": "engine",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0457,
+      "zcr": 0.296
+    },
+    "envelope": {
+      "word": "envelope",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0476,
+      "zcr": 0.259
+    },
+    "eraser": {
+      "word": "eraser",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0459,
+      "zcr": 0.294
+    },
+    "family": {
+      "word": "family",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0459,
+      "zcr": 0.284
+    },
+    "fan": {
+      "word": "fan",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0418,
+      "zcr": 0.318
+    },
+    "farm": {
+      "word": "farm",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0471,
+      "zcr": 0.314
+    },
+    "feather": {
+      "word": "feather",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.045,
+      "zcr": 0.303
+    },
+    "fence": {
+      "word": "fence",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0457,
+      "zcr": 0.323
+    },
+    "fire": {
+      "word": "fire",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0445,
+      "zcr": 0.311
+    },
+    "fireplace": {
+      "word": "fireplace",
+      "passed": true,
+      "reason": null,
+      "duration": 1.55,
+      "rms": 0.047,
+      "zcr": 0.288
+    },
+    "fish": {
+      "word": "fish",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0433,
+      "zcr": 0.314
+    },
+    "flower": {
+      "word": "flower",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0436,
+      "zcr": 0.3
+    },
+    "forest": {
+      "word": "forest",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0483,
+      "zcr": 0.302
+    },
+    "fork": {
+      "word": "fork",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0493,
+      "zcr": 0.319
+    },
+    "fridge": {
+      "word": "fridge",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0424,
+      "zcr": 0.293
+    },
+    "frog": {
+      "word": "frog",
+      "passed": true,
+      "reason": null,
+      "duration": 1.05,
+      "rms": 0.0422,
+      "zcr": 0.312
+    },
+    "garden": {
+      "word": "garden",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0456,
+      "zcr": 0.276
+    },
+    "gate": {
+      "word": "gate",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.042,
+      "zcr": 0.292
+    },
+    "ghost": {
+      "word": "ghost",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0473,
+      "zcr": 0.321
+    },
+    "gift": {
+      "word": "gift",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0456,
+      "zcr": 0.309
+    },
+    "glass": {
+      "word": "glass",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0445,
+      "zcr": 0.312
+    },
+    "glove": {
+      "word": "glove",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0458,
+      "zcr": 0.304
+    },
+    "goat": {
+      "word": "goat",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0448,
+      "zcr": 0.296
+    },
+    "gold": {
+      "word": "gold",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0466,
+      "zcr": 0.294
+    },
+    "grape": {
+      "word": "grape",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0463,
+      "zcr": 0.285
+    },
+    "grass": {
+      "word": "grass",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0448,
+      "zcr": 0.308
+    },
+    "guitar": {
+      "word": "guitar",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0454,
+      "zcr": 0.294
+    },
+    "hammer": {
+      "word": "hammer",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0444,
+      "zcr": 0.291
+    },
+    "hand": {
+      "word": "hand",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0431,
+      "zcr": 0.305
+    },
+    "hat": {
+      "word": "hat",
+      "passed": true,
+      "reason": null,
+      "duration": 1.15,
+      "rms": 0.0397,
+      "zcr": 0.313
+    },
+    "heart": {
+      "word": "heart",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0474,
+      "zcr": 0.306
+    },
+    "helicopter": {
+      "word": "helicopter",
+      "passed": true,
+      "reason": null,
+      "duration": 1.6,
+      "rms": 0.0458,
+      "zcr": 0.257
+    },
+    "helmet": {
+      "word": "helmet",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0485,
+      "zcr": 0.282
+    },
+    "hill": {
+      "word": "hill",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0436,
+      "zcr": 0.288
+    },
+    "honey": {
+      "word": "honey",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0454,
+      "zcr": 0.282
+    },
+    "horse": {
+      "word": "horse",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0501,
+      "zcr": 0.324
+    },
+    "house": {
+      "word": "house",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.042,
+      "zcr": 0.329
+    },
+    "ice": {
+      "word": "ice",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0412,
+      "zcr": 0.323
+    },
+    "idea": {
+      "word": "idea",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0422,
+      "zcr": 0.283
+    },
+    "igloo": {
+      "word": "igloo",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0416,
+      "zcr": 0.283
+    },
+    "iguana": {
+      "word": "iguana",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0458,
+      "zcr": 0.269
+    },
+    "image": {
+      "word": "image",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0431,
+      "zcr": 0.277
+    },
+    "ink": {
+      "word": "ink",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0429,
+      "zcr": 0.302
+    },
+    "insect": {
+      "word": "insect",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0514,
+      "zcr": 0.291
+    },
+    "inside": {
+      "word": "inside",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0488,
+      "zcr": 0.305
+    },
+    "iron": {
+      "word": "iron",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0421,
+      "zcr": 0.294
+    },
+    "island": {
+      "word": "island",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0441,
+      "zcr": 0.292
+    },
+    "jacket": {
+      "word": "jacket",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0454,
+      "zcr": 0.282
+    },
+    "jam": {
+      "word": "jam",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.042,
+      "zcr": 0.302
+    },
+    "jar": {
+      "word": "jar",
+      "passed": true,
+      "reason": null,
+      "duration": 1.2,
+      "rms": 0.0436,
+      "zcr": 0.295
+    },
+    "jelly": {
+      "word": "jelly",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0466,
+      "zcr": 0.283
+    },
+    "jet": {
+      "word": "jet",
+      "passed": true,
+      "reason": null,
+      "duration": 1.15,
+      "rms": 0.045,
+      "zcr": 0.313
+    },
+    "jewel": {
+      "word": "jewel",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0447,
+      "zcr": 0.281
+    },
+    "jigsaw": {
+      "word": "jigsaw",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.044,
+      "zcr": 0.302
+    },
+    "juice": {
+      "word": "juice",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0426,
+      "zcr": 0.311
+    },
+    "jump": {
+      "word": "jump",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0465,
+      "zcr": 0.299
+    },
+    "jungle": {
+      "word": "jungle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0478,
+      "zcr": 0.279
+    },
+    "kangaroo": {
+      "word": "kangaroo",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0447,
+      "zcr": 0.271
+    },
+    "kettle": {
+      "word": "kettle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0423,
+      "zcr": 0.284
+    },
+    "key": {
+      "word": "key",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0377,
+      "zcr": 0.313
+    },
+    "king": {
+      "word": "king",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0414,
+      "zcr": 0.309
+    },
+    "kitchen": {
+      "word": "kitchen",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0429,
+      "zcr": 0.298
+    },
+    "kite": {
+      "word": "kite",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0425,
+      "zcr": 0.302
+    },
+    "kitten": {
+      "word": "kitten",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0417,
+      "zcr": 0.293
+    },
+    "kiwi": {
+      "word": "kiwi",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0424,
+      "zcr": 0.3
+    },
+    "knee": {
+      "word": "knee",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0405,
+      "zcr": 0.304
+    },
+    "koala": {
+      "word": "koala",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0456,
+      "zcr": 0.279
+    },
+    "ladder": {
+      "word": "ladder",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0436,
+      "zcr": 0.284
+    },
+    "lake": {
+      "word": "lake",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.046,
+      "zcr": 0.296
+    },
+    "lamp": {
+      "word": "lamp",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0444,
+      "zcr": 0.29
+    },
+    "leaf": {
+      "word": "leaf",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0421,
+      "zcr": 0.301
+    },
+    "lemon": {
+      "word": "lemon",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0459,
+      "zcr": 0.279
+    },
+    "letter": {
+      "word": "letter",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0436,
+      "zcr": 0.282
+    },
+    "lion": {
+      "word": "lion",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0431,
+      "zcr": 0.284
+    },
+    "lizard": {
+      "word": "lizard",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0449,
+      "zcr": 0.286
+    },
+    "lock": {
+      "word": "lock",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0451,
+      "zcr": 0.294
+    },
+    "lunch": {
+      "word": "lunch",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0465,
+      "zcr": 0.304
+    },
+    "magnet": {
+      "word": "magnet",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0462,
+      "zcr": 0.281
+    },
+    "map": {
+      "word": "map",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0458,
+      "zcr": 0.305
+    },
+    "milk": {
+      "word": "milk",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0497,
+      "zcr": 0.296
+    },
+    "mirror": {
+      "word": "mirror",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0474,
+      "zcr": 0.28
+    },
+    "monkey": {
+      "word": "monkey",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0495,
+      "zcr": 0.287
+    },
+    "moon": {
+      "word": "moon",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0438,
+      "zcr": 0.295
+    },
+    "mountain": {
+      "word": "mountain",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.048,
+      "zcr": 0.287
+    },
+    "mouse": {
+      "word": "mouse",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0444,
+      "zcr": 0.324
+    },
+    "muffin": {
+      "word": "muffin",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0473,
+      "zcr": 0.306
+    },
+    "mushroom": {
+      "word": "mushroom",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0481,
+      "zcr": 0.285
+    },
+    "music": {
+      "word": "music",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0493,
+      "zcr": 0.288
+    },
+    "napkin": {
+      "word": "napkin",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0448,
+      "zcr": 0.281
+    },
+    "necklace": {
+      "word": "necklace",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.048,
+      "zcr": 0.298
+    },
+    "needle": {
+      "word": "needle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0465,
+      "zcr": 0.278
+    },
+    "nest": {
+      "word": "nest",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0455,
+      "zcr": 0.326
+    },
+    "net": {
+      "word": "net",
+      "passed": true,
+      "reason": null,
+      "duration": 1.2,
+      "rms": 0.0457,
+      "zcr": 0.313
+    },
+    "night": {
+      "word": "night",
+      "passed": true,
+      "reason": null,
+      "duration": 1.23,
+      "rms": 0.0458,
+      "zcr": 0.3
+    },
+    "nose": {
+      "word": "nose",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0451,
+      "zcr": 0.316
+    },
+    "notebook": {
+      "word": "notebook",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0495,
+      "zcr": 0.275
+    },
+    "number": {
+      "word": "number",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0478,
+      "zcr": 0.284
+    },
+    "nurse": {
+      "word": "nurse",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0478,
+      "zcr": 0.309
+    },
+    "ocean": {
+      "word": "ocean",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0447,
+      "zcr": 0.304
+    },
+    "octopus": {
+      "word": "octopus",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0471,
+      "zcr": 0.291
+    },
+    "office": {
+      "word": "office",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0458,
+      "zcr": 0.321
+    },
+    "olive": {
+      "word": "olive",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0457,
+      "zcr": 0.307
+    },
+    "onion": {
+      "word": "onion",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0455,
+      "zcr": 0.279
+    },
+    "orange": {
+      "word": "orange",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0471,
+      "zcr": 0.285
+    },
+    "orbit": {
+      "word": "orbit",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0476,
+      "zcr": 0.286
+    },
+    "otter": {
+      "word": "otter",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0416,
+      "zcr": 0.303
+    },
+    "oven": {
+      "word": "oven",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.044,
+      "zcr": 0.301
+    },
+    "owl": {
+      "word": "owl",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0401,
+      "zcr": 0.3
+    },
+    "panda": {
+      "word": "panda",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0434,
+      "zcr": 0.287
+    },
+    "pen": {
+      "word": "pen",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0418,
+      "zcr": 0.301
+    },
+    "pencil": {
+      "word": "pencil",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0464,
+      "zcr": 0.296
+    },
+    "piano": {
+      "word": "piano",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0421,
+      "zcr": 0.275
+    },
+    "pig": {
+      "word": "pig",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0403,
+      "zcr": 0.296
+    },
+    "pillow": {
+      "word": "pillow",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0417,
+      "zcr": 0.283
+    },
+    "pizza": {
+      "word": "pizza",
+      "passed": true,
+      "reason": null,
+      "duration": 1.55,
+      "rms": 0.0431,
+      "zcr": 0.299
+    },
+    "plant": {
+      "word": "plant",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0446,
+      "zcr": 0.302
+    },
+    "pocket": {
+      "word": "pocket",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0448,
+      "zcr": 0.287
+    },
+    "pumpkin": {
+      "word": "pumpkin",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0469,
+      "zcr": 0.282
+    },
+    "quail": {
+      "word": "quail",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0437,
+      "zcr": 0.283
+    },
+    "quarter": {
+      "word": "quarter",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.047,
+      "zcr": 0.275
+    },
+    "queen": {
+      "word": "queen",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0426,
+      "zcr": 0.291
+    },
+    "question": {
+      "word": "question",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0462,
+      "zcr": 0.285
+    },
+    "quick": {
+      "word": "quick",
+      "passed": true,
+      "reason": null,
+      "duration": 1.2,
+      "rms": 0.0455,
+      "zcr": 0.288
+    },
+    "quiet": {
+      "word": "quiet",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0467,
+      "zcr": 0.28
+    },
+    "quilt": {
+      "word": "quilt",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0458,
+      "zcr": 0.293
+    },
+    "quiz": {
+      "word": "quiz",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0452,
+      "zcr": 0.309
+    },
+    "rabbit": {
+      "word": "rabbit",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0444,
+      "zcr": 0.28
+    },
+    "radio": {
+      "word": "radio",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0429,
+      "zcr": 0.273
+    },
+    "rain": {
+      "word": "rain",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0427,
+      "zcr": 0.296
+    },
+    "rainbow": {
+      "word": "rainbow",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0471,
+      "zcr": 0.28
+    },
+    "ring": {
+      "word": "ring",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0436,
+      "zcr": 0.302
+    },
+    "river": {
+      "word": "river",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0454,
+      "zcr": 0.289
+    },
+    "robot": {
+      "word": "robot",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0474,
+      "zcr": 0.278
+    },
+    "rock": {
+      "word": "rock",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0449,
+      "zcr": 0.296
+    },
+    "rocket": {
+      "word": "rocket",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0463,
+      "zcr": 0.279
+    },
+    "rug": {
+      "word": "rug",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0446,
+      "zcr": 0.3
+    },
+    "ruler": {
+      "word": "ruler",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0438,
+      "zcr": 0.273
+    },
+    "sandwich": {
+      "word": "sandwich",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0473,
+      "zcr": 0.291
+    },
+    "school": {
+      "word": "school",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0437,
+      "zcr": 0.301
+    },
+    "sheep": {
+      "word": "sheep",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0398,
+      "zcr": 0.324
+    },
+    "shelf": {
+      "word": "shelf",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0445,
+      "zcr": 0.304
+    },
+    "shoe": {
+      "word": "shoe",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0409,
+      "zcr": 0.327
+    },
+    "snake": {
+      "word": "snake",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0453,
+      "zcr": 0.312
+    },
+    "sock": {
+      "word": "sock",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0427,
+      "zcr": 0.321
+    },
+    "sofa": {
+      "word": "sofa",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.043,
+      "zcr": 0.322
+    },
+    "spoon": {
+      "word": "spoon",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0431,
+      "zcr": 0.314
+    },
+    "star": {
+      "word": "star",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0445,
+      "zcr": 0.324
+    },
+    "stool": {
+      "word": "stool",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0441,
+      "zcr": 0.313
+    },
+    "sun": {
+      "word": "sun",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0443,
+      "zcr": 0.334
+    },
+    "table": {
+      "word": "table",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.043,
+      "zcr": 0.287
+    },
+    "teacher": {
+      "word": "teacher",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0423,
+      "zcr": 0.298
+    },
+    "tiger": {
+      "word": "tiger",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0432,
+      "zcr": 0.291
+    },
+    "tomato": {
+      "word": "tomato",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.046,
+      "zcr": 0.273
+    },
+    "tooth": {
+      "word": "tooth",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0412,
+      "zcr": 0.319
+    },
+    "tower": {
+      "word": "tower",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.043,
+      "zcr": 0.301
+    },
+    "train": {
+      "word": "train",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0439,
+      "zcr": 0.302
+    },
+    "tree": {
+      "word": "tree",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0421,
+      "zcr": 0.305
+    },
+    "truck": {
+      "word": "truck",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0451,
+      "zcr": 0.305
+    },
+    "turtle": {
+      "word": "turtle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0433,
+      "zcr": 0.281
+    },
+    "ukulele": {
+      "word": "ukulele",
+      "passed": true,
+      "reason": null,
+      "duration": 1.57,
+      "rms": 0.0456,
+      "zcr": 0.242
+    },
+    "umbrella": {
+      "word": "umbrella",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0483,
+      "zcr": 0.265
+    },
+    "uncle": {
+      "word": "uncle",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0459,
+      "zcr": 0.277
+    },
+    "under": {
+      "word": "under",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.047,
+      "zcr": 0.295
+    },
+    "unicorn": {
+      "word": "unicorn",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0466,
+      "zcr": 0.255
+    },
+    "uniform": {
+      "word": "uniform",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0478,
+      "zcr": 0.277
+    },
+    "upstairs": {
+      "word": "upstairs",
+      "passed": true,
+      "reason": null,
+      "duration": 1.6,
+      "rms": 0.045,
+      "zcr": 0.299
+    },
+    "urchin": {
+      "word": "urchin",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0438,
+      "zcr": 0.295
+    },
+    "useful": {
+      "word": "useful",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0456,
+      "zcr": 0.297
+    },
+    "utensil": {
+      "word": "utensil",
+      "passed": true,
+      "reason": null,
+      "duration": 1.57,
+      "rms": 0.0447,
+      "zcr": 0.276
+    },
+    "vacuum": {
+      "word": "vacuum",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.045,
+      "zcr": 0.271
+    },
+    "valley": {
+      "word": "valley",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0437,
+      "zcr": 0.279
+    },
+    "van": {
+      "word": "van",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0413,
+      "zcr": 0.297
+    },
+    "vase": {
+      "word": "vase",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.0436,
+      "zcr": 0.321
+    },
+    "vegetable": {
+      "word": "vegetable",
+      "passed": true,
+      "reason": null,
+      "duration": 1.52,
+      "rms": 0.0442,
+      "zcr": 0.275
+    },
+    "vest": {
+      "word": "vest",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.044,
+      "zcr": 0.323
+    },
+    "village": {
+      "word": "village",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0426,
+      "zcr": 0.259
+    },
+    "violin": {
+      "word": "violin",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0438,
+      "zcr": 0.262
+    },
+    "visitor": {
+      "word": "visitor",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.046,
+      "zcr": 0.278
+    },
+    "volcano": {
+      "word": "volcano",
+      "passed": true,
+      "reason": null,
+      "duration": 1.6,
+      "rms": 0.0472,
+      "zcr": 0.259
+    },
+    "wagon": {
+      "word": "wagon",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0441,
+      "zcr": 0.283
+    },
+    "watch": {
+      "word": "watch",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0456,
+      "zcr": 0.317
+    },
+    "water": {
+      "word": "water",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0458,
+      "zcr": 0.293
+    },
+    "whale": {
+      "word": "whale",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0418,
+      "zcr": 0.283
+    },
+    "wheel": {
+      "word": "wheel",
+      "passed": true,
+      "reason": null,
+      "duration": 1.32,
+      "rms": 0.042,
+      "zcr": 0.286
+    },
+    "window": {
+      "word": "window",
+      "passed": true,
+      "reason": null,
+      "duration": 1.55,
+      "rms": 0.0459,
+      "zcr": 0.286
+    },
+    "winter": {
+      "word": "winter",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0481,
+      "zcr": 0.29
+    },
+    "wolf": {
+      "word": "wolf",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0481,
+      "zcr": 0.32
+    },
+    "woman": {
+      "word": "woman",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0477,
+      "zcr": 0.286
+    },
+    "wood": {
+      "word": "wood",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0455,
+      "zcr": 0.296
+    },
+    "xenon": {
+      "word": "xenon",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0443,
+      "zcr": 0.29
+    },
+    "xenops": {
+      "word": "xenops",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0463,
+      "zcr": 0.29
+    },
+    "xerox": {
+      "word": "xerox",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0465,
+      "zcr": 0.291
+    },
+    "xerus": {
+      "word": "xerus",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0441,
+      "zcr": 0.304
+    },
+    "xray": {
+      "word": "xray",
+      "passed": true,
+      "reason": null,
+      "duration": 1.5,
+      "rms": 0.0437,
+      "zcr": 0.288
+    },
+    "xylophone": {
+      "word": "xylophone",
+      "passed": true,
+      "reason": null,
+      "duration": 1.55,
+      "rms": 0.0438,
+      "zcr": 0.283
+    },
+    "yacht": {
+      "word": "yacht",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.043,
+      "zcr": 0.299
+    },
+    "yak": {
+      "word": "yak",
+      "passed": true,
+      "reason": null,
+      "duration": 1.25,
+      "rms": 0.0455,
+      "zcr": 0.296
+    },
+    "yard": {
+      "word": "yard",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0446,
+      "zcr": 0.297
+    },
+    "yarn": {
+      "word": "yarn",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0423,
+      "zcr": 0.292
+    },
+    "yawn": {
+      "word": "yawn",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0415,
+      "zcr": 0.296
+    },
+    "year": {
+      "word": "year",
+      "passed": true,
+      "reason": null,
+      "duration": 1.3,
+      "rms": 0.0427,
+      "zcr": 0.294
+    },
+    "yellow": {
+      "word": "yellow",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.0424,
+      "zcr": 0.25
+    },
+    "yogurt": {
+      "word": "yogurt",
+      "passed": true,
+      "reason": null,
+      "duration": 1.35,
+      "rms": 0.0482,
+      "zcr": 0.279
+    },
+    "yolk": {
+      "word": "yolk",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0476,
+      "zcr": 0.299
+    },
+    "yoyo": {
+      "word": "yoyo",
+      "passed": true,
+      "reason": null,
+      "duration": 1.4,
+      "rms": 0.0446,
+      "zcr": 0.268
+    },
+    "zebra": {
+      "word": "zebra",
+      "passed": true,
+      "reason": null,
+      "duration": 1.48,
+      "rms": 0.042,
+      "zcr": 0.297
+    },
+    "zero": {
+      "word": "zero",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0427,
+      "zcr": 0.286
+    },
+    "zigzag": {
+      "word": "zigzag",
+      "passed": true,
+      "reason": null,
+      "duration": 1.55,
+      "rms": 0.0429,
+      "zcr": 0.295
+    },
+    "zinnia": {
+      "word": "zinnia",
+      "passed": true,
+      "reason": null,
+      "duration": 1.45,
+      "rms": 0.0452,
+      "zcr": 0.297
+    },
+    "zipper": {
+      "word": "zipper",
+      "passed": true,
+      "reason": null,
+      "duration": 1.43,
+      "rms": 0.0441,
+      "zcr": 0.296
+    },
+    "zone": {
+      "word": "zone",
+      "passed": true,
+      "reason": null,
+      "duration": 1.38,
+      "rms": 0.0436,
+      "zcr": 0.32
+    },
+    "zoo": {
+      "word": "zoo",
+      "passed": true,
+      "reason": null,
+      "duration": 1.27,
+      "rms": 0.0405,
+      "zcr": 0.326
+    },
+    "zucchini": {
+      "word": "zucchini",
+      "passed": true,
+      "reason": null,
+      "duration": 1.55,
+      "rms": 0.0422,
+      "zcr": 0.283
+    }
+  }
+}

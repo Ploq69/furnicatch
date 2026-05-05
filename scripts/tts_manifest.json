@@ -1,0 +1,1920 @@
+{
+  "acorn": {
+    "word": "acorn",
+    "file": "audio/tts/acorn.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "airplane": {
+    "word": "airplane",
+    "file": "audio/tts/airplane.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "alligator": {
+    "word": "alligator",
+    "file": "audio/tts/alligator.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "anchor": {
+    "word": "anchor",
+    "file": "audio/tts/anchor.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "animal": {
+    "word": "animal",
+    "file": "audio/tts/animal.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ant": {
+    "word": "ant",
+    "file": "audio/tts/ant.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "apple": {
+    "word": "apple",
+    "file": "audio/tts/apple.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "apron": {
+    "word": "apron",
+    "file": "audio/tts/apron.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "arrow": {
+    "word": "arrow",
+    "file": "audio/tts/arrow.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "artist": {
+    "word": "artist",
+    "file": "audio/tts/artist.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "baby": {
+    "word": "baby",
+    "file": "audio/tts/baby.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ball": {
+    "word": "ball",
+    "file": "audio/tts/ball.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "bamboo": {
+    "word": "bamboo",
+    "file": "audio/tts/bamboo.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "banana": {
+    "word": "banana",
+    "file": "audio/tts/banana.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "basket": {
+    "word": "basket",
+    "file": "audio/tts/basket.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "bathtub": {
+    "word": "bathtub",
+    "file": "audio/tts/bathtub.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "bed": {
+    "word": "bed",
+    "file": "audio/tts/bed.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "bell": {
+    "word": "bell",
+    "file": "audio/tts/bell.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "bird": {
+    "word": "bird",
+    "file": "audio/tts/bird.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "boat": {
+    "word": "boat",
+    "file": "audio/tts/boat.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "book": {
+    "word": "book",
+    "file": "audio/tts/book.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "bookshelf": {
+    "word": "bookshelf",
+    "file": "audio/tts/bookshelf.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "bread": {
+    "word": "bread",
+    "file": "audio/tts/bread.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "bunkbed": {
+    "word": "bunkbed",
+    "file": "audio/tts/bunkbed.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "bush": {
+    "word": "bush",
+    "file": "audio/tts/bush.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "button": {
+    "word": "button",
+    "file": "audio/tts/button.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "cake": {
+    "word": "cake",
+    "file": "audio/tts/cake.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "camera": {
+    "word": "camera",
+    "file": "audio/tts/camera.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "candle": {
+    "word": "candle",
+    "file": "audio/tts/candle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "car": {
+    "word": "car",
+    "file": "audio/tts/car.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "carrot": {
+    "word": "carrot",
+    "file": "audio/tts/carrot.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "cart": {
+    "word": "cart",
+    "file": "audio/tts/cart.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "castle": {
+    "word": "castle",
+    "file": "audio/tts/castle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "cat": {
+    "word": "cat",
+    "file": "audio/tts/cat.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "chair": {
+    "word": "chair",
+    "file": "audio/tts/chair.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "chandelier": {
+    "word": "chandelier",
+    "file": "audio/tts/chandelier.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "chest": {
+    "word": "chest",
+    "file": "audio/tts/chest.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "clock": {
+    "word": "clock",
+    "file": "audio/tts/clock.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "closet": {
+    "word": "closet",
+    "file": "audio/tts/closet.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "cloud": {
+    "word": "cloud",
+    "file": "audio/tts/cloud.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "couch": {
+    "word": "couch",
+    "file": "audio/tts/couch.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "crystal": {
+    "word": "crystal",
+    "file": "audio/tts/crystal.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "cup": {
+    "word": "cup",
+    "file": "audio/tts/cup.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "desk": {
+    "word": "desk",
+    "file": "audio/tts/desk.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "diamond": {
+    "word": "diamond",
+    "file": "audio/tts/diamond.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "doctor": {
+    "word": "doctor",
+    "file": "audio/tts/doctor.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "dog": {
+    "word": "dog",
+    "file": "audio/tts/dog.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "doll": {
+    "word": "doll",
+    "file": "audio/tts/doll.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "donut": {
+    "word": "donut",
+    "file": "audio/tts/donut.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "door": {
+    "word": "door",
+    "file": "audio/tts/door.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "dragon": {
+    "word": "dragon",
+    "file": "audio/tts/dragon.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "drawer": {
+    "word": "drawer",
+    "file": "audio/tts/drawer.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "drum": {
+    "word": "drum",
+    "file": "audio/tts/drum.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "duck": {
+    "word": "duck",
+    "file": "audio/tts/duck.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "eagle": {
+    "word": "eagle",
+    "file": "audio/tts/eagle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ear": {
+    "word": "ear",
+    "file": "audio/tts/ear.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "earth": {
+    "word": "earth",
+    "file": "audio/tts/earth.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "egg": {
+    "word": "egg",
+    "file": "audio/tts/egg.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "elbow": {
+    "word": "elbow",
+    "file": "audio/tts/elbow.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "elephant": {
+    "word": "elephant",
+    "file": "audio/tts/elephant.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "elf": {
+    "word": "elf",
+    "file": "audio/tts/elf.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "engine": {
+    "word": "engine",
+    "file": "audio/tts/engine.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "envelope": {
+    "word": "envelope",
+    "file": "audio/tts/envelope.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "eraser": {
+    "word": "eraser",
+    "file": "audio/tts/eraser.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "family": {
+    "word": "family",
+    "file": "audio/tts/family.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "fan": {
+    "word": "fan",
+    "file": "audio/tts/fan.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "farm": {
+    "word": "farm",
+    "file": "audio/tts/farm.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "feather": {
+    "word": "feather",
+    "file": "audio/tts/feather.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "fence": {
+    "word": "fence",
+    "file": "audio/tts/fence.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "fire": {
+    "word": "fire",
+    "file": "audio/tts/fire.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "fireplace": {
+    "word": "fireplace",
+    "file": "audio/tts/fireplace.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "fish": {
+    "word": "fish",
+    "file": "audio/tts/fish.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "flower": {
+    "word": "flower",
+    "file": "audio/tts/flower.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "forest": {
+    "word": "forest",
+    "file": "audio/tts/forest.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "fork": {
+    "word": "fork",
+    "file": "audio/tts/fork.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "fridge": {
+    "word": "fridge",
+    "file": "audio/tts/fridge.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "frog": {
+    "word": "frog",
+    "file": "audio/tts/frog.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "garden": {
+    "word": "garden",
+    "file": "audio/tts/garden.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "gate": {
+    "word": "gate",
+    "file": "audio/tts/gate.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ghost": {
+    "word": "ghost",
+    "file": "audio/tts/ghost.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "gift": {
+    "word": "gift",
+    "file": "audio/tts/gift.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "glass": {
+    "word": "glass",
+    "file": "audio/tts/glass.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "glove": {
+    "word": "glove",
+    "file": "audio/tts/glove.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "goat": {
+    "word": "goat",
+    "file": "audio/tts/goat.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "gold": {
+    "word": "gold",
+    "file": "audio/tts/gold.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "grape": {
+    "word": "grape",
+    "file": "audio/tts/grape.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "grass": {
+    "word": "grass",
+    "file": "audio/tts/grass.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "guitar": {
+    "word": "guitar",
+    "file": "audio/tts/guitar.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "hammer": {
+    "word": "hammer",
+    "file": "audio/tts/hammer.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "hand": {
+    "word": "hand",
+    "file": "audio/tts/hand.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "hat": {
+    "word": "hat",
+    "file": "audio/tts/hat.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "heart": {
+    "word": "heart",
+    "file": "audio/tts/heart.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "helicopter": {
+    "word": "helicopter",
+    "file": "audio/tts/helicopter.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "helmet": {
+    "word": "helmet",
+    "file": "audio/tts/helmet.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "hill": {
+    "word": "hill",
+    "file": "audio/tts/hill.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "honey": {
+    "word": "honey",
+    "file": "audio/tts/honey.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "horse": {
+    "word": "horse",
+    "file": "audio/tts/horse.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "house": {
+    "word": "house",
+    "file": "audio/tts/house.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ice": {
+    "word": "ice",
+    "file": "audio/tts/ice.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "idea": {
+    "word": "idea",
+    "file": "audio/tts/idea.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "igloo": {
+    "word": "igloo",
+    "file": "audio/tts/igloo.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "iguana": {
+    "word": "iguana",
+    "file": "audio/tts/iguana.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "image": {
+    "word": "image",
+    "file": "audio/tts/image.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ink": {
+    "word": "ink",
+    "file": "audio/tts/ink.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "insect": {
+    "word": "insect",
+    "file": "audio/tts/insect.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "inside": {
+    "word": "inside",
+    "file": "audio/tts/inside.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "iron": {
+    "word": "iron",
+    "file": "audio/tts/iron.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "island": {
+    "word": "island",
+    "file": "audio/tts/island.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jacket": {
+    "word": "jacket",
+    "file": "audio/tts/jacket.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jam": {
+    "word": "jam",
+    "file": "audio/tts/jam.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jar": {
+    "word": "jar",
+    "file": "audio/tts/jar.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jelly": {
+    "word": "jelly",
+    "file": "audio/tts/jelly.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jet": {
+    "word": "jet",
+    "file": "audio/tts/jet.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jewel": {
+    "word": "jewel",
+    "file": "audio/tts/jewel.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jigsaw": {
+    "word": "jigsaw",
+    "file": "audio/tts/jigsaw.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "juice": {
+    "word": "juice",
+    "file": "audio/tts/juice.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jump": {
+    "word": "jump",
+    "file": "audio/tts/jump.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "jungle": {
+    "word": "jungle",
+    "file": "audio/tts/jungle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "kangaroo": {
+    "word": "kangaroo",
+    "file": "audio/tts/kangaroo.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "kettle": {
+    "word": "kettle",
+    "file": "audio/tts/kettle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "key": {
+    "word": "key",
+    "file": "audio/tts/key.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "king": {
+    "word": "king",
+    "file": "audio/tts/king.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "kitchen": {
+    "word": "kitchen",
+    "file": "audio/tts/kitchen.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "kite": {
+    "word": "kite",
+    "file": "audio/tts/kite.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "kitten": {
+    "word": "kitten",
+    "file": "audio/tts/kitten.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "kiwi": {
+    "word": "kiwi",
+    "file": "audio/tts/kiwi.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "knee": {
+    "word": "knee",
+    "file": "audio/tts/knee.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "koala": {
+    "word": "koala",
+    "file": "audio/tts/koala.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ladder": {
+    "word": "ladder",
+    "file": "audio/tts/ladder.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "lake": {
+    "word": "lake",
+    "file": "audio/tts/lake.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "lamp": {
+    "word": "lamp",
+    "file": "audio/tts/lamp.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "leaf": {
+    "word": "leaf",
+    "file": "audio/tts/leaf.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "lemon": {
+    "word": "lemon",
+    "file": "audio/tts/lemon.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "letter": {
+    "word": "letter",
+    "file": "audio/tts/letter.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "lion": {
+    "word": "lion",
+    "file": "audio/tts/lion.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "lizard": {
+    "word": "lizard",
+    "file": "audio/tts/lizard.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "lock": {
+    "word": "lock",
+    "file": "audio/tts/lock.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "lunch": {
+    "word": "lunch",
+    "file": "audio/tts/lunch.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "magnet": {
+    "word": "magnet",
+    "file": "audio/tts/magnet.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "map": {
+    "word": "map",
+    "file": "audio/tts/map.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "milk": {
+    "word": "milk",
+    "file": "audio/tts/milk.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "mirror": {
+    "word": "mirror",
+    "file": "audio/tts/mirror.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "monkey": {
+    "word": "monkey",
+    "file": "audio/tts/monkey.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "moon": {
+    "word": "moon",
+    "file": "audio/tts/moon.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "mountain": {
+    "word": "mountain",
+    "file": "audio/tts/mountain.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "mouse": {
+    "word": "mouse",
+    "file": "audio/tts/mouse.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "muffin": {
+    "word": "muffin",
+    "file": "audio/tts/muffin.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "mushroom": {
+    "word": "mushroom",
+    "file": "audio/tts/mushroom.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "music": {
+    "word": "music",
+    "file": "audio/tts/music.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "napkin": {
+    "word": "napkin",
+    "file": "audio/tts/napkin.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "necklace": {
+    "word": "necklace",
+    "file": "audio/tts/necklace.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "needle": {
+    "word": "needle",
+    "file": "audio/tts/needle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "nest": {
+    "word": "nest",
+    "file": "audio/tts/nest.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "net": {
+    "word": "net",
+    "file": "audio/tts/net.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "night": {
+    "word": "night",
+    "file": "audio/tts/night.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "nose": {
+    "word": "nose",
+    "file": "audio/tts/nose.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "notebook": {
+    "word": "notebook",
+    "file": "audio/tts/notebook.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "number": {
+    "word": "number",
+    "file": "audio/tts/number.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "nurse": {
+    "word": "nurse",
+    "file": "audio/tts/nurse.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ocean": {
+    "word": "ocean",
+    "file": "audio/tts/ocean.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "octopus": {
+    "word": "octopus",
+    "file": "audio/tts/octopus.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "office": {
+    "word": "office",
+    "file": "audio/tts/office.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "olive": {
+    "word": "olive",
+    "file": "audio/tts/olive.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "onion": {
+    "word": "onion",
+    "file": "audio/tts/onion.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "orange": {
+    "word": "orange",
+    "file": "audio/tts/orange.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "orbit": {
+    "word": "orbit",
+    "file": "audio/tts/orbit.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "otter": {
+    "word": "otter",
+    "file": "audio/tts/otter.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "oven": {
+    "word": "oven",
+    "file": "audio/tts/oven.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "owl": {
+    "word": "owl",
+    "file": "audio/tts/owl.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "panda": {
+    "word": "panda",
+    "file": "audio/tts/panda.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "pen": {
+    "word": "pen",
+    "file": "audio/tts/pen.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "pencil": {
+    "word": "pencil",
+    "file": "audio/tts/pencil.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "piano": {
+    "word": "piano",
+    "file": "audio/tts/piano.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "pig": {
+    "word": "pig",
+    "file": "audio/tts/pig.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "pillow": {
+    "word": "pillow",
+    "file": "audio/tts/pillow.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "pizza": {
+    "word": "pizza",
+    "file": "audio/tts/pizza.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "plant": {
+    "word": "plant",
+    "file": "audio/tts/plant.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "pocket": {
+    "word": "pocket",
+    "file": "audio/tts/pocket.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "pumpkin": {
+    "word": "pumpkin",
+    "file": "audio/tts/pumpkin.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "quail": {
+    "word": "quail",
+    "file": "audio/tts/quail.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "quarter": {
+    "word": "quarter",
+    "file": "audio/tts/quarter.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "queen": {
+    "word": "queen",
+    "file": "audio/tts/queen.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "question": {
+    "word": "question",
+    "file": "audio/tts/question.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "quick": {
+    "word": "quick",
+    "file": "audio/tts/quick.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "quiet": {
+    "word": "quiet",
+    "file": "audio/tts/quiet.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "quilt": {
+    "word": "quilt",
+    "file": "audio/tts/quilt.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "quiz": {
+    "word": "quiz",
+    "file": "audio/tts/quiz.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "rabbit": {
+    "word": "rabbit",
+    "file": "audio/tts/rabbit.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "radio": {
+    "word": "radio",
+    "file": "audio/tts/radio.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "rain": {
+    "word": "rain",
+    "file": "audio/tts/rain.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "rainbow": {
+    "word": "rainbow",
+    "file": "audio/tts/rainbow.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ring": {
+    "word": "ring",
+    "file": "audio/tts/ring.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "river": {
+    "word": "river",
+    "file": "audio/tts/river.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "robot": {
+    "word": "robot",
+    "file": "audio/tts/robot.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "rock": {
+    "word": "rock",
+    "file": "audio/tts/rock.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "rocket": {
+    "word": "rocket",
+    "file": "audio/tts/rocket.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "rug": {
+    "word": "rug",
+    "file": "audio/tts/rug.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "ruler": {
+    "word": "ruler",
+    "file": "audio/tts/ruler.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "sandwich": {
+    "word": "sandwich",
+    "file": "audio/tts/sandwich.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "school": {
+    "word": "school",
+    "file": "audio/tts/school.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "sheep": {
+    "word": "sheep",
+    "file": "audio/tts/sheep.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "shelf": {
+    "word": "shelf",
+    "file": "audio/tts/shelf.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "shoe": {
+    "word": "shoe",
+    "file": "audio/tts/shoe.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "snake": {
+    "word": "snake",
+    "file": "audio/tts/snake.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "sock": {
+    "word": "sock",
+    "file": "audio/tts/sock.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "sofa": {
+    "word": "sofa",
+    "file": "audio/tts/sofa.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "spoon": {
+    "word": "spoon",
+    "file": "audio/tts/spoon.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "star": {
+    "word": "star",
+    "file": "audio/tts/star.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "stool": {
+    "word": "stool",
+    "file": "audio/tts/stool.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab"
+  },
+  "sun": {
+    "word": "sun",
+    "file": "audio/tts/sun.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "table": {
+    "word": "table",
+    "file": "audio/tts/table.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "teacher": {
+    "word": "teacher",
+    "file": "audio/tts/teacher.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "tiger": {
+    "word": "tiger",
+    "file": "audio/tts/tiger.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "tomato": {
+    "word": "tomato",
+    "file": "audio/tts/tomato.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "tooth": {
+    "word": "tooth",
+    "file": "audio/tts/tooth.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "tower": {
+    "word": "tower",
+    "file": "audio/tts/tower.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "train": {
+    "word": "train",
+    "file": "audio/tts/train.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "tree": {
+    "word": "tree",
+    "file": "audio/tts/tree.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "prop+vocab+letter"
+  },
+  "truck": {
+    "word": "truck",
+    "file": "audio/tts/truck.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "turtle": {
+    "word": "turtle",
+    "file": "audio/tts/turtle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "ukulele": {
+    "word": "ukulele",
+    "file": "audio/tts/ukulele.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "umbrella": {
+    "word": "umbrella",
+    "file": "audio/tts/umbrella.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "uncle": {
+    "word": "uncle",
+    "file": "audio/tts/uncle.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "under": {
+    "word": "under",
+    "file": "audio/tts/under.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "unicorn": {
+    "word": "unicorn",
+    "file": "audio/tts/unicorn.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "uniform": {
+    "word": "uniform",
+    "file": "audio/tts/uniform.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "upstairs": {
+    "word": "upstairs",
+    "file": "audio/tts/upstairs.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "urchin": {
+    "word": "urchin",
+    "file": "audio/tts/urchin.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "useful": {
+    "word": "useful",
+    "file": "audio/tts/useful.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "utensil": {
+    "word": "utensil",
+    "file": "audio/tts/utensil.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "vacuum": {
+    "word": "vacuum",
+    "file": "audio/tts/vacuum.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "valley": {
+    "word": "valley",
+    "file": "audio/tts/valley.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "van": {
+    "word": "van",
+    "file": "audio/tts/van.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "vase": {
+    "word": "vase",
+    "file": "audio/tts/vase.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "vegetable": {
+    "word": "vegetable",
+    "file": "audio/tts/vegetable.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "vest": {
+    "word": "vest",
+    "file": "audio/tts/vest.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "village": {
+    "word": "village",
+    "file": "audio/tts/village.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "violin": {
+    "word": "violin",
+    "file": "audio/tts/violin.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "visitor": {
+    "word": "visitor",
+    "file": "audio/tts/visitor.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "volcano": {
+    "word": "volcano",
+    "file": "audio/tts/volcano.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "wagon": {
+    "word": "wagon",
+    "file": "audio/tts/wagon.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "watch": {
+    "word": "watch",
+    "file": "audio/tts/watch.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "water": {
+    "word": "water",
+    "file": "audio/tts/water.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "whale": {
+    "word": "whale",
+    "file": "audio/tts/whale.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "wheel": {
+    "word": "wheel",
+    "file": "audio/tts/wheel.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "window": {
+    "word": "window",
+    "file": "audio/tts/window.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "winter": {
+    "word": "winter",
+    "file": "audio/tts/winter.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "wolf": {
+    "word": "wolf",
+    "file": "audio/tts/wolf.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "woman": {
+    "word": "woman",
+    "file": "audio/tts/woman.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "wood": {
+    "word": "wood",
+    "file": "audio/tts/wood.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "xenon": {
+    "word": "xenon",
+    "file": "audio/tts/xenon.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "xenops": {
+    "word": "xenops",
+    "file": "audio/tts/xenops.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "xerox": {
+    "word": "xerox",
+    "file": "audio/tts/xerox.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "xerus": {
+    "word": "xerus",
+    "file": "audio/tts/xerus.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "xray": {
+    "word": "xray",
+    "file": "audio/tts/xray.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "xylophone": {
+    "word": "xylophone",
+    "file": "audio/tts/xylophone.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yacht": {
+    "word": "yacht",
+    "file": "audio/tts/yacht.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yak": {
+    "word": "yak",
+    "file": "audio/tts/yak.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yard": {
+    "word": "yard",
+    "file": "audio/tts/yard.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yarn": {
+    "word": "yarn",
+    "file": "audio/tts/yarn.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yawn": {
+    "word": "yawn",
+    "file": "audio/tts/yawn.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "year": {
+    "word": "year",
+    "file": "audio/tts/year.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yellow": {
+    "word": "yellow",
+    "file": "audio/tts/yellow.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yogurt": {
+    "word": "yogurt",
+    "file": "audio/tts/yogurt.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yolk": {
+    "word": "yolk",
+    "file": "audio/tts/yolk.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "yoyo": {
+    "word": "yoyo",
+    "file": "audio/tts/yoyo.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zebra": {
+    "word": "zebra",
+    "file": "audio/tts/zebra.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zero": {
+    "word": "zero",
+    "file": "audio/tts/zero.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zigzag": {
+    "word": "zigzag",
+    "file": "audio/tts/zigzag.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zinnia": {
+    "word": "zinnia",
+    "file": "audio/tts/zinnia.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zipper": {
+    "word": "zipper",
+    "file": "audio/tts/zipper.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zone": {
+    "word": "zone",
+    "file": "audio/tts/zone.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zoo": {
+    "word": "zoo",
+    "file": "audio/tts/zoo.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  },
+  "zucchini": {
+    "word": "zucchini",
+    "file": "audio/tts/zucchini.wav",
+    "exists": true,
+    "status": "pending",
+    "category": "letter"
+  }
+}

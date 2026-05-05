@@ -61,7 +61,7 @@ export class TTSManager {
 
   _getAudio(word) {
     if (this.cache.has(word)) return this.cache.get(word);
-    const audio = new Audio(`${this.basePath}/${word}.wav`);
+    const audio = new Audio(`${this.basePath}/${word}.wav?v=3`);
     audio.preload = 'auto';
     audio.addEventListener('error', () => this.missing.add(word), { once: true });
     this.cache.set(word, audio);
