@@ -19,6 +19,8 @@ export class Player {
     this.dodgeTimer = 0;
     this.dodgeDirection = new THREE.Vector3();
     this.celebrationTimer = 0;
+    this.isJumping = false;
+    this.jumpVelocity = 0;
     
     // Animation state machine — only switch clips on state change
     this.currentAnimState = null;
@@ -158,6 +160,13 @@ export class Player {
     const aiming = !!options.aiming;
     const sprinting = !aiming && input.isSprinting() && this.stamina > 0;
     const dodging = !aiming && input.isDodging() && this.stamina >= GAME.DODGE_COST;
+    const jumping = input.isJumping() && !this.isJumping && !this.isDodging;
+    
+    if (jumping) {
+      this.isJumping = true;
+      this.jumpVelocity = GAME.JUMP_FORCE;
+      this.playAction('jump', 0.05, { loop: false });
+    }
     
     if (dodging && !this.isDodging) {
       this.isDodging = true;
@@ -185,7 +194,12 @@ export class Player {
     
     this.position.x += this.velocity.x * dt;
     this.position.z += this.velocity.z * dt;
-    // Y is controlled by Game loop terrain snapping; don't zero it here
+    
+    // Jump physics
+    if (this.isJumping) {
+      this.jumpVelocity += GAME.GRAVITY * dt;
+      this.position.y += this.jumpVelocity * dt;
+    }
     
     // Defensive: reset if NaN somehow got in
     if (Number.isNaN(this.position.x) || Number.isNaN(this.position.z)) {

@@ -140,6 +140,10 @@ class InputManager {
   }
 
   isDodging() {
+    return this.wasJustPressed('KeyQ');
+  }
+
+  isJumping() {
     return this.wasJustPressed('Space');
   }
 

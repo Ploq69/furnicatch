@@ -51,11 +51,13 @@ export class World {
 
   async generate(biomeKey = 'meadow') {
     this.biomeKey = biomeKey;
+    this._frameCount = 0;
     await this.ensureActiveChunks(new THREE.Vector3(0, 0, 0), true);
   }
 
   update(dt, playerPos) {
     this.ensureActiveChunks(playerPos);
+    this._frameCount = (this._frameCount || 0) + 1;
     // Fade in newly loaded chunks
     for (const chunk of this.chunks.values()) {
       if (chunk.fadeIn < 1.0) {
@@ -64,17 +66,28 @@ export class World {
         chunk.group.scale.setScalar(s);
       }
     }
-    for (const f of this.getSimulatedFurniture(playerPos)) {
-      f.update(dt, playerPos);
+    // Cull entity visibility by distance (Minecraft-style entity culling)
+    this._cullEntityVisibility(playerPos);
+    // Update only visible and nearby entities, with throttling for distant ones
+    for (const f of this.furniture) {
+      if (this._shouldUpdateEntity(f, playerPos, this._frameCount)) {
+        f.update(dt, playerPos);
+      }
     }
-    for (const letter of this.getSimulatedLetters(playerPos)) {
-      letter.update(dt, playerPos);
+    for (const letter of this.letters) {
+      if (this._shouldUpdateEntity(letter, playerPos, this._frameCount)) {
+        letter.update(dt, playerPos);
+      }
     }
-    for (const prop of this.getSimulatedProps(playerPos)) {
-      prop.update(dt, playerPos);
+    for (const prop of this.props) {
+      if (this._shouldUpdateEntity(prop, playerPos, this._frameCount)) {
+        prop.update(dt, playerPos);
+      }
     }
-    for (const npc of this.getSimulatedNPCs(playerPos)) {
-      npc.update(dt, playerPos);
+    for (const npc of this.npcs) {
+      if (this._shouldUpdateEntity(npc, playerPos, this._frameCount)) {
+        npc.update(dt, playerPos);
+      }
     }
     // Remove inactive entities
     this.furniture = this.furniture.filter(f => {
@@ -393,11 +406,11 @@ export class World {
 
   _generateFurniture(chunk, biome) {
     const chunkWorldSize = this.chunkSize * this.tileSize;
-    const clusters = GAME.FURNITURE_CLUSTERS_PER_CHUNK + Math.floor(this._noise(chunk.cx, chunk.cz, 77, 88) * 2);
+    const clusters = GAME.FURNITURE_CLUSTERS_PER_CHUNK;
     for (let c = 0; c < clusters; c++) {
       const cx = chunk.cx * chunkWorldSize + (this._noise(chunk.cx, chunk.cz, c + 1, 1) - 0.5) * chunkWorldSize * 0.65;
       const cz = chunk.cz * chunkWorldSize + (this._noise(chunk.cx, chunk.cz, c + 2, 2) - 0.5) * chunkWorldSize * 0.65;
-      const clusterSize = 2 + Math.floor(this._noise(chunk.cx, chunk.cz, c + 3, 3) * 3);
+      const clusterSize = 1 + Math.floor(this._noise(chunk.cx, chunk.cz, c + 3, 3) * 2);
       for (let i = 0; i < clusterSize; i++) {
         const wordKey = biome.furniturePool[Math.floor(this._noise(chunk.cx, chunk.cz, c + 10 + i, c + 10 + i) * biome.furniturePool.length)];
         const vocab = VOCABULARY.find(v => v.word === wordKey);
@@ -410,6 +423,7 @@ export class World {
         pos.y = this.getTerrainHeight(pos.x, pos.z, true);
         const level = this.getFurnitureLevel(vocab.word);
         const furniture = new Furniture(this.scene, vocab, pos, { level });
+        this._disableEntityShadows(furniture.container);
         chunk.furniture.push(furniture);
         this.furniture.push(furniture);
       }
@@ -423,7 +437,7 @@ export class World {
     for (let c = 0; c < clusters; c++) {
       const cx = chunk.cx * chunkWorldSize + (this._noise(chunk.cx, chunk.cz, c + 50, 1) - 0.5) * chunkWorldSize * 0.7;
       const cz = chunk.cz * chunkWorldSize + (this._noise(chunk.cx, chunk.cz, c + 60, 2) - 0.5) * chunkWorldSize * 0.7;
-      const clusterSize = 1 + Math.floor(this._noise(chunk.cx, chunk.cz, c + 70, 3) * 2);
+      const clusterSize = 1 + Math.floor(this._noise(chunk.cx, chunk.cz, c + 70, 3) * 1);
       for (let i = 0; i < clusterSize; i++) {
         const letter = letters[Math.floor(this._noise(chunk.cx, chunk.cz, c + 80 + i, c + 80 + i) * letters.length)];
         const pos = new THREE.Vector3(
@@ -434,6 +448,7 @@ export class World {
         pos.y = this.getTerrainHeight(pos.x, pos.z, true);
         const level = this.getLetterLevel(letter);
         const creature = new LetterCreature(this.scene, letter, pos, { level });
+        this._disableEntityShadows(creature.container);
         chunk.letters.push(creature);
         this.letters.push(creature);
       }
@@ -472,6 +487,7 @@ export class World {
 
   _generateNPCs(chunk, biome) {
     if (this.npcs.length >= GAME.MAX_NPCS) return;
+    if (GAME.NPCS_PER_CHUNK <= 0) return;
     const chunkWorldSize = this.chunkSize * this.tileSize;
     const count = GAME.NPCS_PER_CHUNK;
     for (let i = 0; i < count; i++) {
@@ -481,9 +497,76 @@ export class World {
       const pos = new THREE.Vector3(x, 0, z);
       pos.y = this.getTerrainHeight(pos.x, pos.z, true);
       const npc = new NPC(this.scene, pos);
+      this._disableEntityShadows(npc.container);
       chunk.npcs.push(npc);
       this.npcs.push(npc);
     }
+  }
+
+  // Distance-based visibility culling: hide entities far from player
+  _cullEntityVisibility(playerPos) {
+    const cullDist = GAME.ENTITY_CULL_DISTANCE;
+    const cullDistSq = cullDist * cullDist;
+    for (const f of this.furniture) {
+      if (!f.container) continue;
+      const distSq = f.position.distanceToSquared(playerPos);
+      const visible = distSq <= cullDistSq;
+      f.container.visible = visible;
+      f.container.matrixAutoUpdate = visible;
+    }
+    for (const letter of this.letters) {
+      if (!letter.container) continue;
+      const distSq = letter.position.distanceToSquared(playerPos);
+      const visible = distSq <= cullDistSq;
+      letter.container.visible = visible;
+      letter.container.matrixAutoUpdate = visible;
+    }
+    for (const prop of this.props) {
+      if (!prop.container) continue;
+      const distSq = prop.position.distanceToSquared(playerPos);
+      const visible = distSq <= cullDistSq;
+      prop.container.visible = visible;
+      prop.container.matrixAutoUpdate = visible;
+    }
+    for (const npc of this.npcs) {
+      if (!npc.container) continue;
+      const distSq = npc.position.distanceToSquared(playerPos);
+      const visible = distSq <= cullDistSq;
+      npc.container.visible = visible;
+      npc.container.matrixAutoUpdate = visible;
+    }
+    // Also cull static decorations (cloned GLTF meshes)
+    for (const deco of this.decorations) {
+      if (!deco) continue;
+      const distSq = deco.position.distanceToSquared(playerPos);
+      deco.visible = distSq <= cullDistSq;
+    }
+  }
+
+  // Throttle updates for distant visible entities
+  _shouldUpdateEntity(entity, playerPos, frameCount) {
+    if (!entity.position) return false;
+    const dist = entity.position.distanceTo(playerPos);
+    if (dist > GAME.ENTITY_UPDATE_DISTANCE) {
+      // Very distant: update every 4th frame
+      return frameCount % 4 === 0;
+    }
+    if (dist > GAME.ENTITY_UPDATE_DISTANCE * 0.6) {
+      // Medium distance: update every 2nd frame
+      return frameCount % 2 === 0;
+    }
+    return true;
+  }
+
+  // Disable castShadow on all meshes in an entity container (called once at spawn)
+  _disableEntityShadows(container) {
+    if (!container) return;
+    container.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = false;
+        // Keep receiveShadow for subtle ambient occlusion feel
+      }
+    });
   }
 
   _disposeChunk(chunk) {

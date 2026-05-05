@@ -398,11 +398,22 @@ export class Game {
     const terrainY = this.world.getTerrainHeightForPlayer(this.player.position.x, this.player.position.z, 0.35);
     const targetY = terrainY - (this.player.groundOffset || 0);
     const currentY = this.player.position.y;
-    // Safety: if we fell more than 1 unit below terrain, snap instantly instead of lerping
-    if (currentY < targetY - 1.0) {
-      this.player.position.y = targetY;
+    
+    if (this.player.isJumping) {
+      // During jump: only snap to ground when falling and at or below terrain
+      if (this.player.jumpVelocity <= 0 && currentY <= targetY) {
+        this.player.isJumping = false;
+        this.player.jumpVelocity = 0;
+        this.player.position.y = targetY;
+      }
     } else {
-      this.player.position.y = THREE.MathUtils.lerp(currentY, targetY, 25 * dt);
+      // On ground: snap to terrain
+      // Safety: if we fell more than 1 unit below terrain, snap instantly instead of lerping
+      if (currentY < targetY - 1.0) {
+        this.player.position.y = targetY;
+      } else {
+        this.player.position.y = THREE.MathUtils.lerp(currentY, targetY, 25 * dt);
+      }
     }
     
     // Update world
