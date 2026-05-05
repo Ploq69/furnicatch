@@ -160,7 +160,7 @@ export class Player {
     const aiming = !!options.aiming;
     const sprinting = !aiming && input.isSprinting() && this.stamina > 0;
     const dodging = !aiming && input.isDodging() && this.stamina >= GAME.DODGE_COST;
-    const jumping = input.isJumping() && !this.isJumping && !this.isDodging;
+    const jumping = (typeof input.isJumping === 'function' && input.isJumping()) && !this.isJumping && !this.isDodging;
     
     if (jumping) {
       this.isJumping = true;
