@@ -164,7 +164,7 @@ export class Player {
     this.loadout.characterId = character.id;
 
     if (this.mesh) {
-      this._clearFlashTimers();
+      this._restoreDamageFlash();
       this.scene.remove(this.mesh);
       this.mesh = null;
     }
