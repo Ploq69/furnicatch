@@ -3,6 +3,103 @@ import { GAME } from './constants.js';
 import { Weapon } from './Weapon.js';
 import { assetLoader } from './AssetLoader.js';
 import { SFXMapper } from './SFXMapper.js';
+import {
+  DEFAULT_LOADOUT,
+  HOTBAR_LOADOUTS,
+  KAYKIT_ANIMATION_PATHS,
+  KAYKIT_ANIMATIONS,
+  KAYKIT_ITEM_GRIP_PRESETS,
+  KAYKIT_SOCKET_PRESETS,
+  WEAPON_ATTACK_ANIMS,
+  cloneLoadout,
+  getKayKitCharacter,
+  getKayKitItem,
+} from './KayKitLoadout.js';
+
+const TARGET_HEIGHT = 1.6;
+const _anchorOffsetMatrix = new THREE.Matrix4();
+const _targetWorldMatrix = new THREE.Matrix4();
+const _parentInverseMatrix = new THREE.Matrix4();
+const _targetLocalMatrix = new THREE.Matrix4();
+const _offsetPosition = new THREE.Vector3();
+const _offsetQuaternion = new THREE.Quaternion();
+const _offsetScale = new THREE.Vector3();
+const _offsetEuler = new THREE.Euler();
+
+const ITEM_TRANSFORMS = {
+  default: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: -1.0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 1.0 },
+    back: { scale: 0.9, x: 0, y: 0.02, z: -0.2, rx: 0, ry: 0, rz: 0 },
+  },
+  bow: {
+    rightHand: { scale: 0.38, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    leftHand: { scale: 0.38, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    back: { scale: 0.78, x: 0.12, y: 0.04, z: -0.24, rx: Math.PI / 2, ry: 0, rz: 0.35 },
+  },
+  bow_withString: {
+    rightHand: { scale: 0.38, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    leftHand: { scale: 0.38, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    back: { scale: 0.78, x: 0.12, y: 0.04, z: -0.24, rx: Math.PI / 2, ry: 0, rz: 0.35 },
+  },
+  crossbow_1handed: {
+    rightHand: { scale: 0.36, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    leftHand: { scale: 0.36, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    back: { scale: 0.72, x: 0.06, y: 0.1, z: -0.28, rx: Math.PI / 2, ry: 0, rz: 0.45 },
+  },
+  crossbow_2handed: {
+    rightHand: { scale: 0.34, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    leftHand: { scale: 0.34, x: 0, y: 0.02, z: 0.02, rx: Math.PI / 2, ry: 0, rz: 0 },
+    back: { scale: 0.68, x: 0.06, y: 0.08, z: -0.28, rx: Math.PI / 2, ry: 0, rz: 0.45 },
+  },
+  arrow_bow: { back: { scale: 0.82, x: -0.1, y: 0.05, z: -0.2, rx: Math.PI / 2, ry: 0, rz: -0.35 } },
+  arrow_crossbow: { back: { scale: 0.9, x: -0.1, y: 0.05, z: -0.2, rx: Math.PI / 2, ry: 0, rz: -0.35 } },
+  quiver: { back: { scale: 0.86, x: -0.16, y: 0.02, z: -0.24, rx: 0, ry: -0.15, rz: -0.35 } },
+  staff: {
+    rightHand: { scale: 0.42, x: 0, y: -0.12, z: 0, rx: 0, ry: 0, rz: Math.PI / 2 },
+    leftHand: { scale: 0.42, x: 0, y: -0.12, z: 0, rx: 0, ry: 0, rz: -Math.PI / 2 },
+    back: { scale: 0.78, x: 0.14, y: 0.05, z: -0.25, rx: 0, ry: 0, rz: 0.55 },
+  },
+  sword_2handed: { back: { scale: 0.78, x: 0.12, y: 0.05, z: -0.25, rx: 0, ry: 0, rz: 0.55 } },
+  sword_2handed_color: { back: { scale: 0.78, x: 0.12, y: 0.05, z: -0.25, rx: 0, ry: 0, rz: 0.55 } },
+  axe_2handed: { back: { scale: 0.78, x: 0.14, y: 0.02, z: -0.25, rx: 0, ry: 0, rz: 0.5 } },
+  shield_badge: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_badge_color: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_round: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_round_barbarian: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_round_color: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_spikes: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_spikes_color: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_square: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+  shield_square_color: {
+    rightHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+    leftHand: { scale: 0.42, x: 0, y: 0, z: 0, rx: -0.55, ry: 0, rz: 0 },
+  },
+};
 
 export class Player {
   constructor(scene) {
@@ -16,6 +113,7 @@ export class Player {
     this.maxHp = GAME.MAX_HP;
     this.mineDamage = 1;
     this.mineSpeed = 1.0;
+    this.stamina = GAME.MAX_STAMINA;
 
     this.mesh = null;
     this.mixer = null;
@@ -24,6 +122,12 @@ export class Player {
     this.animLockTimer = 0;
     this.groundOffset = 0;
 
+    // Combat state
+    this.isBlocking = false;
+    this.isDodging = false;
+    this.dodgeTimer = 0;
+    this.dodgeDir = { x: 0, z: 0 };
+
     this.weapons = [
       new Weapon('pickaxe'),
       new Weapon('sword'),
@@ -31,7 +135,16 @@ export class Player {
       new Weapon('grenade'),
     ];
     this.currentSlot = 0;
-    this.weaponHolder = null;
+    this.equipmentHolders = {};
+    this.equipmentMeshes = {};
+    this.damageFlashTimer = 0;
+    this.damageFlashEntries = [];
+    this.loadout = cloneLoadout(DEFAULT_LOADOUT);
+    this.calibration = {
+      enabled: false,
+      slot: 'rightHand',
+      offset: this._defaultCalibrationOffset(),
+    };
 
     this.coins = 0;
     this.keys = 0;
@@ -40,117 +153,295 @@ export class Player {
     this.xp = 0;
   }
 
-  async spawn(characterModel = 'Ultimate Animated Character Pack - Nov 2019/glTF/Ninja_Male.gltf') {
+  async spawn(characterId = DEFAULT_LOADOUT.characterId) {
+    this.animations = await this._loadKayKitAnimations();
+    await this.setCharacter(characterId);
+    await this.applyLoadout(this.loadout, { includeCharacter: false });
+  }
+
+  async setCharacter(characterId) {
+    const character = getKayKitCharacter(characterId);
+    this.loadout.characterId = character.id;
+
+    if (this.mesh) {
+      this._clearFlashTimers();
+      this.scene.remove(this.mesh);
+      this.mesh = null;
+    }
+
     try {
-      const gltf = await assetLoader.loadGLTF(characterModel);
-      if (!gltf || !gltf.scene) throw new Error('GLTF load returned empty');
+      await assetLoader.loadGLTF(character.model);
+      const cloned = assetLoader.cloneModel(character.model);
+      if (!cloned || !cloned.scene) throw new Error('GLTF clone returned empty');
 
-      this.mesh = gltf.scene;
-
-      // === CALIBRATION PASS ===
-      const box = new THREE.Box3().setFromObject(this.mesh);
-      const height = box.max.y - box.min.y;
-      console.log('[Player] Natural height:', height, 'model:', characterModel);
-
-      const targetHeight = 1.6;
-      const scale = targetHeight / height;
-      this.mesh.scale.setScalar(scale);
-      this.mesh.updateMatrixWorld(true);
-      console.log('[Player] Applied scale:', scale);
-
-      const box2 = new THREE.Box3().setFromObject(this.mesh);
-      this.groundOffset = -box2.min.y;
-      console.log('[Player] Ground offset:', this.groundOffset);
-
-      // Forward arrow
-      const arrow = new THREE.ArrowHelper(
-        new THREE.Vector3(0, 0, -1),
-        new THREE.Vector3(0, targetHeight * 0.6, 0),
-        0.5,
-        0xff00ff
-      );
-      this.mesh.add(arrow);
-
+      this.mesh = cloned.scene;
+      this._normalizeMesh(character.model);
+      this._bindEquipmentHolders();
       this.scene.add(this.mesh);
+      this._updateMesh();
 
-      // Weapon holder attached to right hand bone
-      this.weaponHolder = new THREE.Group();
-      const fistR = this.mesh.getObjectByName('Fist.R');
-      if (fistR) {
-        fistR.add(this.weaponHolder);
-      } else {
-        this.mesh.add(this.weaponHolder);
-        this.weaponHolder.position.set(0.3, 1.0, 0.2);
-      }
-
-      this.animations = gltf.animations || [];
       if (this.animations.length > 0) {
         this.mixer = new THREE.AnimationMixer(this.mesh);
+        this.currentAnim = null;
         this.playAnim('Idle');
       }
+
+      await this.applyLoadout(this.loadout, { includeCharacter: false });
     } catch (e) {
-      console.error('[Player] Model load failed, using fallback capsule:', e);
+      console.error('[Player] KayKit model load failed, using fallback capsule:', e);
       const geo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
       const mat = new THREE.MeshStandardMaterial({ color: 0x6644aa, emissive: 0x221144, emissiveIntensity: 0.5 });
       this.mesh = new THREE.Mesh(geo, mat);
       this.groundOffset = 0.5;
       this.scene.add(this.mesh);
+      this._bindEquipmentHolders();
     }
-
-    await this.equipWeapon(0);
   }
 
-  playAnim(name, lockDuration = 0) {
-    if (!this.mixer || !this.animations.length) return;
-    // Guard: don't restart same animation
-    if (this.currentAnim === name) return;
-    const clip = this.animations.find(a => a.name.toLowerCase().includes(name.toLowerCase()));
-    if (!clip) {
-      console.warn('[Player] Animation not found:', name, 'Available:', this.animations.map(a => a.name));
+  async applyLoadout(loadout, opts = {}) {
+    const next = cloneLoadout(loadout);
+    if (opts.includeCharacter !== false && next.characterId !== this.loadout.characterId) {
+      this.loadout = next;
+      await this.setCharacter(next.characterId);
       return;
     }
-    const action = this.mixer.clipAction(clip);
-    action.reset().fadeIn(0.15).play();
-    this.animations.forEach(a => {
-      if (a !== clip) {
-        const other = this.mixer.clipAction(a);
-        other.fadeOut(0.15);
+
+    this.loadout = next;
+    await this.equipSlot('rightHand', next.rightHand);
+    await this.equipSlot('leftHand', next.leftHand);
+    await this.equipSlot('back', next.back);
+  }
+
+  async equipSlot(slot, itemId) {
+    const holder = this.equipmentHolders[slot];
+    if (!holder) return;
+
+    if (this.equipmentMeshes[slot]) {
+      holder.remove(this.equipmentMeshes[slot]);
+      this.equipmentMeshes[slot] = null;
+    }
+
+    this.loadout[slot] = itemId || null;
+    const item = getKayKitItem(itemId);
+    if (!item || !item.slots.includes(slot)) return;
+
+    try {
+      await assetLoader.loadGLTF(item.model);
+      const cloned = assetLoader.cloneModel(item.model);
+      if (!cloned || !cloned.scene) return;
+      this.equipmentMeshes[slot] = cloned.scene;
+      this._applyEquippedItemTransform(slot);
+      holder.add(this.equipmentMeshes[slot]);
+      this._placeEquipmentHolders();
+    } catch (e) {
+      console.warn('[Player] Failed to equip KayKit item', item.id, e);
+    }
+  }
+
+  setCalibrationEnabled(enabled, slot = this.calibration.slot) {
+    this.calibration.enabled = enabled;
+    this.calibration.slot = slot;
+    this.calibration.offset = this._defaultCalibrationOffset();
+    this._placeEquipmentHolders();
+    this._applyEquippedItemTransform(slot);
+    return this.getCalibrationSnapshot();
+  }
+
+  setCalibrationSlot(slot) {
+    this.calibration.slot = slot;
+    this.calibration.offset = this._defaultCalibrationOffset();
+    this._placeEquipmentHolders();
+    this._applyEquippedItemTransform(slot);
+    return this.getCalibrationSnapshot();
+  }
+
+  adjustCalibration(field, delta) {
+    if (!this.calibration.enabled || !(field in this.calibration.offset)) return this.getCalibrationSnapshot();
+    this.calibration.offset[field] += delta;
+    if (field === 'scale') {
+      this.calibration.offset.scale = Math.max(0.1, this.calibration.offset.scale);
+    }
+    this._applyEquippedItemTransform(this.calibration.slot);
+    return this.getCalibrationSnapshot();
+  }
+
+  setCalibration(field, value) {
+    if (!this.calibration.enabled || !(field in this.calibration.offset)) return this.getCalibrationSnapshot();
+    this.calibration.offset[field] = value;
+    if (field === 'scale') {
+      this.calibration.offset.scale = Math.max(0.1, this.calibration.offset.scale);
+    }
+    this._applyEquippedItemTransform(this.calibration.slot);
+    return this.getCalibrationSnapshot();
+  }
+
+  resetCalibrationOffset() {
+    this.calibration.offset = this._defaultCalibrationOffset();
+    this._placeEquipmentHolders();
+    this._applyEquippedItemTransform(this.calibration.slot);
+    return this.getCalibrationSnapshot();
+  }
+
+  saveCalibrationOffset() {
+    // Merge live nudge into saved preset, then reset live nudge
+    const slot = this.calibration.slot;
+    const itemId = this.loadout[slot];
+    if (!itemId) return this.getCalibrationSnapshot();
+    const live = this.calibration.offset;
+    const saved = KAYKIT_ITEM_GRIP_PRESETS[itemId]?.[slot] || this._defaultCalibrationOffset();
+    const merged = this._combineOffsets(saved, live);
+    if (!KAYKIT_ITEM_GRIP_PRESETS[itemId]) KAYKIT_ITEM_GRIP_PRESETS[itemId] = {};
+    KAYKIT_ITEM_GRIP_PRESETS[itemId][slot] = this._roundOffset(merged);
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage?.setItem('voidloopKayKitItemGripPresetsV1', JSON.stringify(KAYKIT_ITEM_GRIP_PRESETS));
       }
+    } catch {}
+    this.calibration.offset = this._defaultCalibrationOffset();
+    this._applyEquippedItemTransform(slot);
+    return this.getCalibrationSnapshot();
+  }
+
+  getCalibrationSnapshot() {
+    return {
+      enabled: this.calibration.enabled,
+      slot: this.calibration.slot,
+      itemId: this.loadout[this.calibration.slot] || null,
+      offset: this._roundOffset(this.calibration.offset),
+      itemGripPreset: this._getActiveItemGripPreset(this.calibration.slot),
+    };
+  }
+
+  async equipWeapon(slot) {
+    if (this.currentSlot >= 0 && this.currentSlot < this.weapons.length) {
+      this.weapons[this.currentSlot].unequip();
+    }
+    this.currentSlot = slot;
+    const weapon = this.weapons[slot];
+    const hotbarLoadout = HOTBAR_LOADOUTS[weapon?.data?.id];
+    if (hotbarLoadout) {
+      await this.applyLoadout({ ...this.loadout, ...hotbarLoadout }, { includeCharacter: false });
+    }
+  }
+
+  playAnim(name, opts = {}) {
+    if (!this.mixer || !this.animations.length) return;
+
+    const lockDuration = opts.lock ?? 0;
+    const timeScale = opts.timeScale ?? 1.0;
+    const loop = opts.loop ?? true;
+
+    // Don't re-trigger same animation (fixes walk/run/idle freeze)
+    if (this.currentAnim === name) {
+      if (loop || this.animLockTimer > 0) return;
+    }
+
+    const mappedName = KAYKIT_ANIMATIONS[name] || name;
+    const clip = this.animations.find(a => a.name === mappedName);
+
+    if (!clip) {
+      console.warn(`[Player] Animation not found: "${name}" → mapped: "${mappedName}"`);
+      return;
+    }
+
+    const action = this.mixer.clipAction(clip);
+    action.reset().fadeIn(0.12);
+    action.timeScale = timeScale;
+    action.loop = loop ? THREE.LoopRepeat : THREE.LoopOnce;
+    action.clampWhenFinished = !loop;
+    action.play();
+
+    this.animations.forEach(a => {
+      if (a !== clip) this.mixer.clipAction(a).fadeOut(0.12);
     });
     this.currentAnim = name;
     if (lockDuration > 0) this.animLockTimer = lockDuration;
   }
 
-  playAttackAnim(weaponId) {
-    const map = {
-      pickaxe: 'Punch',
-      sword: 'SwordSlash',
-      pistol: 'Shoot_OneHanded',
-      grenade: 'PickUp',
-    };
-    const anim = map[weaponId] || 'Punch';
-    this.playAnim(anim, 0.5);
+  playAttackAnim() {
+    const itemId = this.loadout.rightHand;
+    const attackDef = WEAPON_ATTACK_ANIMS[itemId];
+
+    if (attackDef) {
+      const cooldown = GAME.ATTACK_COOLDOWN;
+      const timeScale = attackDef.duration / cooldown;
+      console.log(`[Attack] ${itemId} → ${attackDef.animKey} (timeScale: ${timeScale.toFixed(2)})`);
+      this.playAnim(attackDef.animKey, { lock: cooldown, timeScale, loop: false });
+    } else {
+      console.warn(`[Attack] No anim mapping for item: ${itemId}`);
+      this.playAnim('Use', { lock: 0.5, loop: false });
+    }
   }
 
-  async equipWeapon(slot) {
-    // Unequip current
-    if (this.currentSlot >= 0 && this.currentSlot < this.weapons.length) {
-      this.weapons[this.currentSlot].unequip();
+  startBlock() {
+    if (this.isDodging || this.animLockTimer > 0) return;
+    this.isBlocking = true;
+    this.playAnim('Block', { loop: true });
+  }
+
+  endBlock() {
+    this.isBlocking = false;
+    if (this.currentAnim === 'Block') {
+      this.playAnim('Idle', { lock: 0 });
     }
-    this.currentSlot = slot;
-    // Equip new
-    if (this.weaponHolder) {
-      await this.weapons[slot].equip(this.weaponHolder);
-    }
+  }
+
+  dodge(dx, dz) {
+    if (this.isDodging || this.stamina < GAME.DODGE_COST) return;
+    this.stamina -= GAME.DODGE_COST;
+    this.isDodging = true;
+    this.dodgeTimer = GAME.DODGE_DURATION;
+    this.dodgeDir = { x: dx, z: dz };
+
+    // Choose dodge animation based on direction
+    let anim = 'DodgeForward';
+    if (dz > 0.5) anim = 'DodgeForward';
+    else if (dz < -0.5) anim = 'DodgeBack';
+    else if (dx > 0.5) anim = 'DodgeRight';
+    else if (dx < -0.5) anim = 'DodgeLeft';
+
+    this.playAnim(anim, { lock: GAME.DODGE_DURATION, timeScale: 1.3 });
   }
 
   update(dt, input) {
     if (this.mixer) this.mixer.update(dt);
+
+    // Damage flash countdown
+    if (this.damageFlashTimer > 0) {
+      this.damageFlashTimer -= dt;
+      if (this.damageFlashTimer <= 0) {
+        this._restoreDamageFlash();
+      }
+    }
+
     if (this.animLockTimer > 0) {
       this.animLockTimer -= dt;
     }
 
-    // 8-directional movement
+    // Stamina regen
+    if (this.stamina < GAME.MAX_STAMINA) {
+      this.stamina = Math.min(GAME.MAX_STAMINA, this.stamina + GAME.STAMINA_REGEN * dt);
+    }
+
+    // Dodge handling
+    if (this.isDodging) {
+      this.dodgeTimer -= dt;
+      this.position.x += this.dodgeDir.x * GAME.DODGE_FORCE * dt;
+      this.position.z += this.dodgeDir.z * GAME.DODGE_FORCE * dt;
+      if (this.dodgeTimer <= 0) {
+        this.isDodging = false;
+      }
+      this._updateMesh();
+      return; // Skip normal movement during dodge
+    }
+
+    // Block input
+    if (input.buttons.right) {
+      if (!this.isBlocking) this.startBlock();
+    } else {
+      if (this.isBlocking) this.endBlock();
+    }
+
     let dx = 0;
     let dz = 0;
     if (input.isDown('ArrowUp') || input.isDown('KeyW')) dz -= 1;
@@ -164,26 +455,35 @@ export class Player {
       dz /= len;
     }
 
-    const speed = GAME.PLAYER_SPEED;
+    // Dodge on double-tap Space + direction
+    if (input.pressed('Space') && (dx !== 0 || dz !== 0)) {
+      this.dodge(dx, dz);
+    }
+
+    const speed = input.isDown('ShiftLeft') && this.stamina > 0
+      ? GAME.PLAYER_SPRINT_SPEED
+      : GAME.PLAYER_SPEED;
+
+    if (input.isDown('ShiftLeft')) {
+      this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
+    }
+
     this.position.x += dx * speed * dt;
     this.position.z += dz * speed * dt;
 
     if (dx !== 0 || dz !== 0) {
       this.targetRotation = Math.atan2(dx, dz);
-      // Smooth rotation lerp
       let diff = this.targetRotation - this.rotation;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       this.rotation += diff * Math.min(1, 10 * dt);
 
-      if (this.animLockTimer <= 0) {
-        const isRunning = input.isDown('ShiftLeft');
+      if (this.animLockTimer <= 0 && !this.isBlocking) {
+        const isRunning = input.isDown('ShiftLeft') && this.stamina > 0;
         this.playAnim(isRunning ? 'Run' : 'Walk');
       }
-    } else {
-      if (this.animLockTimer <= 0 && this.currentAnim !== 'Idle') {
-        this.playAnim('Idle');
-      }
+    } else if (this.animLockTimer <= 0 && !this.isBlocking && this.currentAnim !== 'Idle') {
+      this.playAnim('Idle');
     }
 
     const bound = GAME.FLOOR_SIZE - 1;
@@ -193,33 +493,31 @@ export class Player {
     this._updateMesh();
   }
 
-  _updateMesh() {
-    if (this.mesh) {
-      this.mesh.position.set(this.position.x, this.position.y + this.groundOffset, this.position.z);
-      this.mesh.rotation.y = this.rotation;
-    }
-  }
-
   takeDamage(amount) {
     if (this.hp <= 0) return;
-    this.hp -= amount;
-    if (this.hp < 0) this.hp = 0;
-    this.playAnim('RecieveHit', 0.4);
 
-    if (this.mesh) {
-      this.mesh.traverse(c => {
-        if (c.isMesh && c.material && c.material.emissive !== undefined) {
-          const orig = c.material.emissive.getHex();
-          c.material.emissive.setHex(0xff0000);
-          setTimeout(() => { if (c.material && c.material.emissive) c.material.emissive.setHex(orig); }, 150);
-        }
-      });
+    // Block mitigation
+    if (this.isBlocking) {
+      amount = Math.floor(amount * 0.3); // 70% blocked
+      this.playAnim('BlockHit', { lock: 0.3 });
+      SFXMapper.meleeHit(); // reuse block sound
+      if (amount <= 0) return;
     }
 
-    if (amount > 15) {
+    this.hp -= amount;
+    if (this.hp < 0) this.hp = 0;
+
+    // Light vs heavy hit reaction
+    if (amount >= 15) {
+      this.playAnim('HitHeavy', { lock: 0.6 });
       SFXMapper.playerHurtHeavy();
     } else {
+      this.playAnim('Hit', { lock: 0.4 });
       SFXMapper.playerHurt();
+    }
+
+    if (this.mesh) {
+      this._flashDamage();
     }
   }
 
@@ -243,5 +541,207 @@ export class Player {
 
   getHandPosition() {
     return this.position.clone().add(new THREE.Vector3(0, 1.2 + this.groundOffset, 0));
+  }
+
+  _flashDamage() {
+    // Restore any previous flash first so we always save true originals
+    this._restoreDamageFlash();
+
+    const entries = [];
+    this.mesh.traverse(c => {
+      if (!c.isMesh || !c.material) return;
+      const materials = Array.isArray(c.material) ? c.material : [c.material];
+      for (const mat of materials) {
+        if (!mat || !mat.color) continue;
+        entries.push({
+          mat,
+          color: mat.color.clone(),
+          emissive: mat.emissive ? mat.emissive.clone() : null,
+        });
+        mat.color.setHex(0xff6b5f);
+        if (mat.emissive) mat.emissive.setHex(0xff2a1f);
+      }
+    });
+
+    this.damageFlashEntries = entries;
+    this.damageFlashTimer = 0.12;
+  }
+
+  _restoreDamageFlash() {
+    for (const entry of this.damageFlashEntries) {
+      entry.mat.color.copy(entry.color);
+      if (entry.mat.emissive && entry.emissive) entry.mat.emissive.copy(entry.emissive);
+    }
+    this.damageFlashEntries = [];
+    this.damageFlashTimer = 0;
+  }
+
+  _normalizeMesh(modelPath) {
+    // Ensure skeleton matrices are initialized before measuring bounds.
+    this.mesh.updateMatrixWorld(true);
+    // Clear stale SkinnedMesh bounding-box caches so setFromObject
+    // computes fresh, accurate bounds.
+    this.mesh.traverse(c => { if (c.isSkinnedMesh) c.boundingBox = null; });
+
+    const box = new THREE.Box3().setFromObject(this.mesh);
+    const height = box.max.y - box.min.y;
+    const scale = height > 0 ? TARGET_HEIGHT / height : 1;
+    this.mesh.scale.setScalar(scale);
+    this.mesh.updateMatrixWorld(true);
+
+    // Clear caches again before the second measurement.
+    this.mesh.traverse(c => { if (c.isSkinnedMesh) c.boundingBox = null; });
+    const box2 = new THREE.Box3().setFromObject(this.mesh);
+    this.groundOffset = -box2.min.y;
+    console.log('[Player] KayKit model:', modelPath, 'height:', height, 'scale:', scale, 'groundOffset:', this.groundOffset);
+  }
+
+  _bindEquipmentHolders() {
+    this.equipmentHolders = {
+      rightHand: new THREE.Group(),
+      leftHand: new THREE.Group(),
+      back: new THREE.Group(),
+    };
+    this.equipmentMeshes = {};
+
+    this.mesh.add(this.equipmentHolders.rightHand);
+    this.mesh.add(this.equipmentHolders.leftHand);
+    this.mesh.add(this.equipmentHolders.back);
+    this._placeEquipmentHolders();
+  }
+
+  _placeEquipmentHolders() {
+    this._placeSlotHolder('rightHand');
+    this._placeSlotHolder('leftHand');
+    this._placeSlotHolder('back');
+  }
+
+  _placeSlotHolder(slot) {
+    const holder = this.equipmentHolders[slot];
+    if (!holder) return;
+
+    const preset = KAYKIT_SOCKET_PRESETS[slot] || KAYKIT_SOCKET_PRESETS.rightHand;
+    const anchorName = preset.anchor || this._defaultAnchorForSlot(slot);
+    const offset = preset.offset || this._defaultCalibrationOffset();
+
+    const anchor = this._getAnchorNode(anchorName) || this._getAnchorNode(this._defaultAnchorForSlot(slot));
+    if (!anchor) return;
+    if (holder.parent !== this.mesh) {
+      this.mesh.add(holder);
+    }
+    this._applyAnchorOffsetToObject(holder, anchor, offset);
+  }
+
+  _applyItemTransform(mesh, itemId, slot) {
+    const cfg = ITEM_TRANSFORMS[itemId]?.[slot] || ITEM_TRANSFORMS.default[slot] || ITEM_TRANSFORMS.default.rightHand;
+    const grip = this._getActiveItemGripOffset(itemId, slot);
+    mesh.position.set((cfg.x || 0) + grip.x, (cfg.y || 0) + grip.y, (cfg.z || 0) + grip.z);
+    mesh.rotation.set((cfg.rx || 0) + grip.rx, (cfg.ry || 0) + grip.ry, (cfg.rz || 0) + grip.rz);
+    mesh.scale.setScalar((cfg.scale || 1) * (grip.scale || 1));
+  }
+
+  _updateMesh() {
+    if (this.mesh) {
+      this.mesh.position.set(this.position.x, this.position.y + this.groundOffset, this.position.z);
+      this.mesh.rotation.y = this.rotation;
+      this.mesh.updateMatrixWorld(true);
+      this._placeEquipmentHolders();
+    }
+  }
+
+  async _loadKayKitAnimations() {
+    const clips = [];
+    for (const path of KAYKIT_ANIMATION_PATHS) {
+      try {
+        const gltf = await assetLoader.loadGLTF(path);
+        const loaded = gltf.animations || [];
+        console.log(`[Anim] ${path}: ${loaded.length} clips → ${loaded.map(c => c.name).join(', ')}`);
+        clips.push(...loaded);
+      } catch (e) {
+        console.error(`[Anim] FAILED to load: ${path}`, e);
+      }
+    }
+    return clips;
+  }
+
+  _defaultCalibrationOffset() {
+    return { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, scale: 1 };
+  }
+
+  _getAnchorNode(anchorName) {
+    return anchorName && this.mesh ? this.mesh.getObjectByName(anchorName) : null;
+  }
+
+  _defaultAnchorForSlot(slot) {
+    if (slot === 'leftHand') return 'handslotl';
+    if (slot === 'back') return 'chest';
+    return 'handslotr';
+  }
+
+  _combineOffsets(base = {}, extra = {}) {
+    return {
+      x: (base.x || 0) + (extra.x || 0),
+      y: (base.y || 0) + (extra.y || 0),
+      z: (base.z || 0) + (extra.z || 0),
+      rx: (base.rx || 0) + (extra.rx || 0),
+      ry: (base.ry || 0) + (extra.ry || 0),
+      rz: (base.rz || 0) + (extra.rz || 0),
+      scale: (base.scale || 1) * (extra.scale || 1),
+    };
+  }
+
+  _applyEquippedItemTransform(slot) {
+    const mesh = this.equipmentMeshes[slot];
+    const itemId = this.loadout[slot];
+    if (mesh && itemId) this._applyItemTransform(mesh, itemId, slot);
+  }
+
+  _getActiveItemGripOffset(itemId, slot) {
+    const base = KAYKIT_ITEM_GRIP_PRESETS[itemId]?.[slot]
+      || KAYKIT_ITEM_GRIP_PRESETS[itemId]?.default
+      || KAYKIT_ITEM_GRIP_PRESETS.default?.[slot]
+      || this._defaultCalibrationOffset();
+    if (this.calibration.enabled && this.calibration.slot === slot) {
+      return this._combineOffsets(base, this.calibration.offset);
+    }
+    return base;
+  }
+
+  _getActiveItemGripPreset(slot) {
+    const itemId = this.loadout[slot];
+    if (!itemId) return null;
+    return {
+      itemId,
+      slot,
+      offset: this._roundOffset(this._getActiveItemGripOffset(itemId, slot)),
+    };
+  }
+
+  _roundVec(v) {
+    return {
+      x: Number(v.x.toFixed(4)),
+      y: Number(v.y.toFixed(4)),
+      z: Number(v.z.toFixed(4)),
+    };
+  }
+
+  _roundOffset(offset) {
+    return Object.fromEntries(Object.entries(offset).map(([key, value]) => [key, Number(value.toFixed(4))]));
+  }
+
+  _applyAnchorOffsetToObject(object, anchor, offset = {}) {
+    this.mesh.updateMatrixWorld(true);
+    anchor.updateWorldMatrix(true, false);
+
+    _offsetPosition.set(offset.x || 0, offset.y || 0, offset.z || 0);
+    _offsetEuler.set(offset.rx || 0, offset.ry || 0, offset.rz || 0);
+    _offsetQuaternion.setFromEuler(_offsetEuler);
+    _offsetScale.setScalar(offset.scale || 1);
+    _anchorOffsetMatrix.compose(_offsetPosition, _offsetQuaternion, _offsetScale);
+
+    _targetWorldMatrix.multiplyMatrices(anchor.matrixWorld, _anchorOffsetMatrix);
+    _parentInverseMatrix.copy(this.mesh.matrixWorld).invert();
+    _targetLocalMatrix.multiplyMatrices(_parentInverseMatrix, _targetWorldMatrix);
+    _targetLocalMatrix.decompose(object.position, object.quaternion, object.scale);
   }
 }

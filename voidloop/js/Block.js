@@ -37,6 +37,7 @@ export class Block {
     this.drop = this.def.drop;
     this.hpBar = null;
     this.hpBarFg = null;
+    this.hpBarTimer = 0;
     this.shakeOffset = new THREE.Vector3();
     this.shakeTimer = 0;
   }
@@ -61,6 +62,7 @@ export class Block {
   _createHpBar(scene) {
     const group = new THREE.Group();
     group.position.set(0, 0.6, 0);
+    group.visible = false;
 
     const bg = new THREE.Mesh(HP_GEO, HP_BG_MAT);
     group.add(bg);
@@ -116,11 +118,21 @@ export class Block {
     }
 
     this._updateHpBar();
+    if (this.hpBar) {
+      this.hpBar.visible = true;
+      this.hpBarTimer = 2.0;
+    }
     SFXMapper.mineHit(this.typeKey);
     return this.hp <= 0;
   }
 
   update(dt) {
+    if (this.hpBarTimer > 0) {
+      this.hpBarTimer -= dt;
+      if (this.hpBarTimer <= 0 && this.hpBar) {
+        this.hpBar.visible = false;
+      }
+    }
     if (this.shakeTimer > 0 && this.mesh) {
       this.shakeTimer -= dt;
       const decay = this.shakeTimer / 0.15;

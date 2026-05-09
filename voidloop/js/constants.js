@@ -53,10 +53,10 @@ export const PICKAXE_TIERS = [
 ];
 
 export const WEAPONS = [
-  { id: 'pickaxe', name: 'Pickaxe', type: 'melee', slot: 0, damage: 10, icon: '⛏' },
-  { id: 'sword', name: 'Void Sword', type: 'melee', slot: 1, damage: 15, model: 'Cube World - Aug 2023/Tools/glTF/Sword_Diamond.gltf', sfx: 'DSGNTonl_MELEE-Sword Critical', icon: '⚔' },
-  { id: 'pistol', name: 'Pistol', type: 'ranged', slot: 2, damage: 12, model: 'Pirate Kit - Nov 2023/glTF/Weapon_Pistol.gltf', sfx: 'DSGNImpt_EXPLOSION-Smaller Flare', icon: '🔫' },
-  { id: 'grenade', name: 'Grenade', type: 'thrown', slot: 3, damage: 40, model: 'Toon Shooter Game Kit - Dec 2022/Guns/glTF/Grenade.gltf', sfx: 'DSGNImpt_EXPLOSION-Thud', icon: '💣' },
+  { id: 'pickaxe', name: 'Hand Axe', type: 'melee', slot: 0, damage: 10, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/axe_1handed.gltf', sfx: 'DSGNTonl_USABLE-Generic Item', icon: '🪓' },
+  { id: 'sword', name: 'Sword', type: 'melee', slot: 1, damage: 15, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/sword_1handed.gltf', sfx: 'DSGNTonl_MELEE-Sword Critical', icon: '⚔' },
+  { id: 'pistol', name: 'Hand Crossbow', type: 'ranged', slot: 2, damage: 12, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/crossbow_1handed.gltf', sfx: 'DSGNImpt_EXPLOSION-Smaller Flare', icon: '🏹' },
+  { id: 'grenade', name: 'Smokebomb', type: 'thrown', slot: 3, damage: 40, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/smokebomb.gltf', sfx: 'DSGNImpt_EXPLOSION-Thud', icon: '●' },
 ];
 
 export const BLOCK_TYPES = {

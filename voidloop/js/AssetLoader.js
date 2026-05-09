@@ -1,4 +1,5 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 
 class AssetLoader {
@@ -36,13 +37,18 @@ class AssetLoader {
   cloneModel(path) {
     const gltf = this.cache.get(path);
     if (!gltf) return null;
-    const scene = gltf.scene.clone(true);
+    const scene = cloneSkeleton(gltf.scene);
     const animations = gltf.animations.slice();
     // Re-find skinned meshes in clone
     scene.traverse(c => {
       if (c.isMesh) {
         c.castShadow = true;
         c.receiveShadow = true;
+        if (Array.isArray(c.material)) {
+          c.material = c.material.map(mat => mat.clone());
+        } else if (c.material) {
+          c.material = c.material.clone();
+        }
       }
     });
     return { scene, animations };

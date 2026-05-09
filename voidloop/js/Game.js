@@ -10,6 +10,7 @@ import { UIManager } from './UIManager.js';
 import { SFXMapper } from './SFXMapper.js';
 import { LootDrop, LOOT_CONFIG } from './LootDrop.js';
 import { GAME, BIOMES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES } from './constants.js';
+import { getKayKitPaths } from './KayKitLoadout.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -38,7 +39,7 @@ export class Game {
     this.scene.background = new THREE.Color(0x0a0a0a);
 
     // Camera — Orthographic isometric (stationary)
-    this.cameraZoom = 1.0;
+    this.cameraZoom = 3.0;
     this.baseD = 18;
     const aspect = window.innerWidth / window.innerHeight;
     const d = this.baseD / this.cameraZoom;
@@ -120,12 +121,7 @@ export class Game {
       'Cube World - Aug 2023/Enemies/glTF/Goblin.gltf',
       'Cube World - Aug 2023/Enemies/glTF/Skeleton.gltf',
       'Cube World - Aug 2023/Enemies/glTF/Demon.gltf',
-      'Cube World - Aug 2023/Characters/glTF/Character_Male_1.gltf',
-      // Weapons
-      'Cube World - Aug 2023/Tools/glTF/Pickaxe_Wood.gltf',
-      'Cube World - Aug 2023/Tools/glTF/Sword_Diamond.gltf',
-      'Pirate Kit - Nov 2023/glTF/Weapon_Pistol.gltf',
-      'Toon Shooter Game Kit - Dec 2022/Guns/glTF/Grenade.gltf',
+      ...getKayKitPaths(),
     ];
 
     assetLoader.onProgress = (loaded, total) => {
@@ -149,6 +145,7 @@ export class Game {
   }
 
   async _generateFloor(floorNum) {
+    this._clearExitPortal();
     this.world.setFloor(floorNum);
     await this.world.generateFloor();
     this.player.position.set(0, 0, 0);
@@ -214,11 +211,20 @@ export class Game {
     const dt = Math.min(this.clock.getDelta(), 0.05);
 
     if (this.state === STATES.PLAYING) {
-      this._updatePlaying(dt);
+      if (input.pressed('KeyI')) {
+        this.ui.toggleLoadout();
+      } else if (this.ui.loadoutOpen && input.pressed('Escape')) {
+        this.ui.hideLoadout();
+      }
+
+      if (!this.ui.loadoutOpen) {
+        this._updatePlaying(dt);
+      }
     }
 
     this.particles.update(dt);
     this.flipbooks.update(dt, this.camera);
+    this.ui.update(dt);
     this.renderer.render(this.scene, this.camera);
     input.update();
   }
@@ -264,7 +270,7 @@ export class Game {
       // Check for nearby enemy first (combat priority)
       const nearestEnemy = this._findNearestEnemy(2.5);
       if (nearestEnemy) {
-        this.player.playAttackAnim('sword');
+        this.player.playAttackAnim();
         nearestEnemy.takeDamage(weapon.data.damage);
         // Attack VFX
         const hitPos = nearestEnemy.position.clone().add(new THREE.Vector3(0, 0.5, 0));
@@ -278,7 +284,8 @@ export class Game {
         // Mine nearest block
         const nearestBlock = this._findNearestBlock(GAME.MINE_RANGE);
         if (nearestBlock && !nearestBlock.destroyed) {
-          this.player.playAttackAnim('pickaxe');
+          // Use the same weapon attack animation for mining
+          this.player.playAttackAnim();
           SFXMapper.mineSwing();
           // Mine VFX
           const blockPos = nearestBlock.position.clone();
@@ -301,8 +308,12 @@ export class Game {
             this.floorTimer += GAME.TIME_BONUS_MINING;
             SFXMapper.collectOre();
           }
-          weapon.cooldown = GAME.ATTACK_COOLDOWN;
+        } else {
+          // Swing at nothing
+          this.player.playAttackAnim();
+          SFXMapper.swingMiss();
         }
+        weapon.cooldown = GAME.ATTACK_COOLDOWN;
       }
     }
 
@@ -419,7 +430,15 @@ export class Game {
     return nearest;
   }
 
+  _clearExitPortal() {
+    if (this.exitMesh) {
+      this.scene.remove(this.exitMesh);
+      this.exitMesh = null;
+    }
+  }
+
   _spawnExitPortal() {
+    this._clearExitPortal();
     if (!this.world.exitPosition) return;
     const geo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
     const mat = new THREE.MeshStandardMaterial({
@@ -488,5 +507,6 @@ export class Game {
     this.camera.bottom = -d;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.ui.preview?.resize();
   }
 }

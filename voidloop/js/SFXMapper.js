@@ -56,32 +56,28 @@ export const SFXMapper = {
 
   // === MINING ===
   mineSwing(pickaxeTier = 'wood') {
-    const map = {
-      wood: ['DSGNTonl', 'USABLE-Generic Item'],
-      stone: ['DSGNTonl', 'USABLE-Metallic Item'],
-      iron: ['DSGNTonl', 'USABLE-Metallic Item'],
-      gold: ['DSGNTonl', 'USABLE-Magic Item'],
-      diamond: ['DSGNTonl', 'USABLE-Magic Item'],
-    };
-    const [pre, name] = map[pickaxeTier] || map.wood;
-    playVariant(pre, name, { volume: 0.5 });
+    playVariant('WHSH', 'MOVEMENT-Simple Whoosh', { volume: 0.35 });
   },
 
   mineHit(blockType) {
     const map = {
-      dirt: ['FGHTImpt', 'HIT-Swish Clap'],
-      grass: ['FGHTImpt', 'HIT-Swish Clap'],
-      stone: ['FGHTImpt', 'HIT-Synth Hit'],
-      brick: ['FGHTImpt', 'HIT-Synth Hit'],
-      coal: ['DSGNTonl', 'SKILL IMPACT-Metallic Bubble'],
-      metal: ['DSGNTonl', 'SKILL IMPACT-Metallic Bubble'],
-      crystal: ['DSGNMisc', 'HIT-Laser Synth'],
-      diamond: ['DSGNMisc', 'HIT-Laser Synth'],
-      ice: ['FGHTImpt', 'HIT-Swish Clap'],
-      snow: ['FGHTImpt', 'HIT-Swish Clap'],
+      dirt: ['DSGNImpt', 'EXPLOSION-Thud'],
+      grass: ['DSGNImpt', 'EXPLOSION-Thud'],
+      stone: ['DSGNImpt', 'EXPLOSION-Thud'],
+      brick: ['DSGNImpt', 'EXPLOSION-Thud'],
+      coal: ['DSGNImpt', 'EXPLOSION-Thud'],
+      metal: ['DSGNImpt', 'EXPLOSION-Thud'],
+      crystal: ['DSGNImpt', 'EXPLOSION-Thud'],
+      diamond: ['DSGNImpt', 'EXPLOSION-Thud'],
+      ice: ['DSGNImpt', 'EXPLOSION-Thud'],
+      snow: ['DSGNImpt', 'EXPLOSION-Thud'],
     };
     const [pre, name] = map[blockType] || map.stone;
     playVariant(pre, name, { volume: 0.35 });
+  },
+
+  swingMiss() {
+    playVariant('WHSH', 'MOVEMENT-Simple Whoosh', { volume: 0.4 });
   },
 
   mineBreak(blockType) {

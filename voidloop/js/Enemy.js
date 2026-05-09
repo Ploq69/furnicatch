@@ -36,10 +36,11 @@ export class Enemy {
 
   async spawn(scene) {
     try {
-      const gltf = await assetLoader.loadGLTF(this.def.model);
-      if (!gltf || !gltf.scene) throw new Error('GLTF empty');
+      await assetLoader.loadGLTF(this.def.model); // ensure cached
+      const cloned = assetLoader.cloneModel(this.def.model);
+      if (!cloned || !cloned.scene) throw new Error('Clone failed');
 
-      this.mesh = gltf.scene;
+      this.mesh = cloned.scene;
 
       // Calibration
       const box = new THREE.Box3().setFromObject(this.mesh);
@@ -55,9 +56,9 @@ export class Enemy {
 
       scene.add(this.mesh);
 
-      if (gltf.animations && gltf.animations.length > 0) {
+      if (cloned.animations && cloned.animations.length > 0) {
         this.mixer = new THREE.AnimationMixer(this.mesh);
-        this.animations = gltf.animations;
+        this.animations = cloned.animations;
         this.playAnim('idle');
       }
     } catch (e) {
@@ -235,7 +236,7 @@ export class Enemy {
 
       case STATES.ATTACK:
         if (this.attackCooldown <= 0) {
-          if (player) {
+          if (player && !player.isDodging) {
             player.takeDamage(this.def.damage);
           }
           this.attackCooldown = this.def.attackCooldown || 1.5;

@@ -1,10 +1,25 @@
-import { UPGRADES } from './constants.js';
+import { GAME, UPGRADES } from './constants.js';
 import { SFXMapper } from './SFXMapper.js';
+import { LoadoutPreview } from './LoadoutPreview.js';
+import {
+  DEFAULT_LOADOUT,
+  KAYKIT_CHARACTERS,
+  SLOT_LABELS,
+  clearKayKitItemGripPreset,
+  cloneLoadout,
+  getKayKitItemsForSlot,
+} from './KayKitLoadout.js';
 
 export class UIManager {
   constructor(game) {
     this.game = game;
     this.upgradeLevels = {};
+    this.loadoutState = cloneLoadout(DEFAULT_LOADOUT);
+    this.loadoutOpen = false;
+    this.loadoutBusy = false;
+    this.preview = null;
+    this.calibrationEnabled = false;
+    this.calibrationSlot = 'rightHand';
     for (const cat of Object.keys(UPGRADES)) {
       for (const u of UPGRADES[cat]) {
         this.upgradeLevels[u.id] = 0;
@@ -13,6 +28,7 @@ export class UIManager {
     this._bindElements();
     this._bindHotbar();
     this._bindCamp();
+    this._bindLoadout();
   }
 
   _bindElements() {
@@ -39,6 +55,19 @@ export class UIManager {
     this.elZoom = document.getElementById('zoom-control');
     this.elZoomSlider = document.getElementById('zoom-slider');
     this.elFps = document.getElementById('fps-display');
+    this.elLoadout = document.getElementById('loadout-ui');
+    this.elLoadoutPreview = document.getElementById('loadout-preview');
+    this.elLoadoutCharacters = document.getElementById('loadout-characters');
+    this.elLoadoutEquipment = document.getElementById('loadout-equipment');
+    this.elLoadoutClose = document.getElementById('loadout-close');
+    this.elLoadoutStatus = document.getElementById('loadout-status');
+    this.elCalibrationPanel = document.getElementById('calibration-panel');
+    this.elCalibrationToggle = document.getElementById('calibration-toggle');
+    this.elCalibrationSlot = document.getElementById('calibration-slot');
+    this.elCalibrationMark = document.getElementById('calibration-mark');
+    this.elCalibrationReset = document.getElementById('calibration-reset');
+    this.elCalibrationReadout = document.getElementById('calibration-readout');
+    this.elCalibrationScaleSlider = document.getElementById('calibration-scale-slider');
     this.onBrightnessChange = null;
     this.onCameraZoomChange = null;
     this.elBrightnessSlider.addEventListener('input', (e) => {
@@ -47,6 +76,30 @@ export class UIManager {
     this.elZoomSlider.addEventListener('input', (e) => {
       if (this.onCameraZoomChange) this.onCameraZoomChange(parseFloat(e.target.value));
     });
+  }
+
+  _bindLoadout() {
+    if (this.elLoadoutClose) {
+      this.elLoadoutClose.addEventListener('click', () => this.hideLoadout());
+    }
+    if (this.elCalibrationToggle) {
+      this.elCalibrationToggle.addEventListener('click', () => this._toggleCalibration());
+    }
+    if (this.elCalibrationSlot) {
+      this.elCalibrationSlot.addEventListener('change', () => this._setCalibrationSlot(this.elCalibrationSlot.value));
+    }
+    if (this.elCalibrationReset) {
+      this.elCalibrationReset.addEventListener('click', () => this._resetCalibration());
+    }
+    if (this.elCalibrationMark) {
+      this.elCalibrationMark.addEventListener('click', () => this._saveCalibration());
+    }
+    if (this.elCalibrationScaleSlider) {
+      this.elCalibrationScaleSlider.addEventListener('input', (e) => {
+        this._setCalibrationScale(parseFloat(e.target.value));
+      });
+    }
+    this._bindNudgeButtons();
   }
 
   _bindHotbar() {
@@ -137,10 +190,284 @@ export class UIManager {
     if (this.elZoom) this.elZoom.style.display = 'flex';
   }
 
+  async toggleLoadout() {
+    if (this.loadoutBusy) return;
+    if (this.loadoutOpen) {
+      await this.hideLoadout();
+    } else {
+      await this.showLoadout();
+    }
+  }
+
+  async showLoadout() {
+    if (!this.elLoadout || this.loadoutOpen || this.loadoutBusy) return;
+    this.loadoutBusy = true;
+    this.loadoutState = cloneLoadout(this.game.player.loadout || DEFAULT_LOADOUT);
+    this._renderLoadout();
+    this.elLoadout.classList.add('active');
+    this.loadoutOpen = true;
+
+    if (!this.preview) {
+      this.preview = new LoadoutPreview(this.elLoadoutPreview);
+      await this.preview.init(this.loadoutState);
+    } else {
+      this.preview.resize();
+      await this.preview.setLoadout(this.loadoutState);
+    }
+
+    this._setLoadoutStatus();
+    this._syncCalibrationPanel();
+    this._renderCalibrationReadout(this.preview?.getCalibrationSnapshot?.());
+    this.loadoutBusy = false;
+    SFXMapper.uiClick();
+  }
+
+  async hideLoadout() {
+    if (!this.elLoadout || !this.loadoutOpen || this.loadoutBusy) return;
+    this.loadoutBusy = true;
+    await this.game.player.applyLoadout(this.loadoutState);
+    this.elLoadout.classList.remove('active');
+    this.loadoutOpen = false;
+    this.calibrationEnabled = false;
+    this.preview?.setCalibrationEnabled(false, this.calibrationSlot);
+    this._syncCalibrationPanel();
+    this._renderCalibrationReadout(this.preview?.getCalibrationSnapshot?.());
+    this.loadoutBusy = false;
+    SFXMapper.uiClick();
+  }
+
+  update(dt) {
+    if (this.loadoutOpen && this.preview) {
+      this.preview.resize();
+      this.preview.update(dt);
+    }
+  }
+
+  _renderLoadout() {
+    this._renderCharacterGrid();
+    this._renderEquipmentGrid();
+    this._setLoadoutStatus();
+  }
+
+  _renderCharacterGrid() {
+    if (!this.elLoadoutCharacters) return;
+    this.elLoadoutCharacters.innerHTML = '';
+    for (const character of KAYKIT_CHARACTERS) {
+      const btn = document.createElement('button');
+      btn.className = 'loadout-option';
+      btn.classList.toggle('active', this.loadoutState.characterId === character.id);
+      btn.textContent = character.name;
+      btn.addEventListener('click', async () => {
+        this.loadoutState.characterId = character.id;
+        this._renderLoadout();
+        await this.preview?.setLoadout(this.loadoutState);
+        if (this.calibrationEnabled) {
+          this._renderCalibrationReadout(this.preview?.setCalibrationEnabled(true, this.calibrationSlot));
+        }
+      });
+      this.elLoadoutCharacters.appendChild(btn);
+    }
+  }
+
+  _renderEquipmentGrid() {
+    if (!this.elLoadoutEquipment) return;
+    this.elLoadoutEquipment.innerHTML = '';
+    for (const slot of ['rightHand', 'leftHand', 'back']) {
+      const section = document.createElement('section');
+      section.className = 'loadout-slot-section';
+
+      const title = document.createElement('h3');
+      title.textContent = SLOT_LABELS[slot];
+      section.appendChild(title);
+
+      const grid = document.createElement('div');
+      grid.className = 'loadout-item-grid';
+
+      const empty = this._createItemButton('Empty', !this.loadoutState[slot], async () => {
+        this.loadoutState[slot] = null;
+        this._renderLoadout();
+        await this.preview?.setLoadout(this.loadoutState);
+        this._refreshCalibrationAfterLoadout(slot);
+      });
+      grid.appendChild(empty);
+
+      for (const item of getKayKitItemsForSlot(slot)) {
+        const btn = this._createItemButton(item.name, this.loadoutState[slot] === item.id, async () => {
+          this.loadoutState[slot] = item.id;
+          this._renderLoadout();
+          // Reset calibration nudge before loading new item so it doesn't inherit the old item's offset
+          if (this.calibrationEnabled && this.preview) {
+            this.preview.resetCalibrationOffset();
+          }
+          await this.preview?.setLoadout(this.loadoutState);
+          this._refreshCalibrationAfterLoadout(slot);
+        });
+        grid.appendChild(btn);
+      }
+
+      section.appendChild(grid);
+      this.elLoadoutEquipment.appendChild(section);
+    }
+  }
+
+  _createItemButton(label, active, onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'loadout-option loadout-item';
+    btn.classList.toggle('active', active);
+    btn.textContent = label;
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  _setLoadoutStatus() {
+    if (!this.elLoadoutStatus) return;
+    const character = KAYKIT_CHARACTERS.find(c => c.id === this.loadoutState.characterId);
+    const slots = ['rightHand', 'leftHand', 'back']
+      .map(slot => this.loadoutState[slot] ? SLOT_LABELS[slot] : null)
+      .filter(Boolean)
+      .join(' / ');
+    this.elLoadoutStatus.textContent = `${character?.name || 'Character'} · ${slots || 'No items'}`;
+  }
+
+  _toggleCalibration() {
+    if (!this.preview) return;
+    this.calibrationEnabled = !this.calibrationEnabled;
+    this._syncCalibrationPanel();
+    const snapshot = this.preview.setCalibrationEnabled(this.calibrationEnabled, this.calibrationSlot);
+    this._syncScaleSlider(snapshot);
+    this._renderCalibrationReadout(snapshot);
+  }
+
+  _syncCalibrationPanel() {
+    this.elCalibrationToggle?.classList.toggle('active', this.calibrationEnabled);
+    this.elCalibrationPanel?.classList.toggle('active', this.calibrationEnabled);
+  }
+
+  _bindNudgeButtons() {
+    const startRepeat = (btn) => {
+      const field = btn.dataset.calField;
+      const delta = parseFloat(btn.dataset.calDelta);
+      if (this._nudgeInterval) clearInterval(this._nudgeInterval);
+      this._adjustCalibration(field, delta);
+      this._nudgeInterval = setInterval(() => {
+        this._adjustCalibration(field, delta);
+      }, 80);
+    };
+    const stopRepeat = () => {
+      if (this._nudgeInterval) {
+        clearInterval(this._nudgeInterval);
+        this._nudgeInterval = null;
+      }
+    };
+    document.querySelectorAll('[data-cal-field]').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => { e.preventDefault(); startRepeat(btn); });
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); startRepeat(btn); });
+      btn.addEventListener('mouseup', stopRepeat);
+      btn.addEventListener('mouseleave', stopRepeat);
+      btn.addEventListener('touchend', stopRepeat);
+      btn.addEventListener('touchcancel', stopRepeat);
+    });
+  }
+
+  _setCalibrationSlot(slot) {
+    this.calibrationSlot = slot;
+    if (!this.preview) return;
+    const snapshot = this.calibrationEnabled
+      ? this.preview.setCalibrationSlot(slot)
+      : this.preview.setCalibrationEnabled(false, slot);
+    this._renderCalibrationReadout(snapshot);
+  }
+
+  _adjustCalibration(field, delta) {
+    if (!this.preview || !this.calibrationEnabled) return;
+    const snapshot = this.preview.adjustCalibration(field, delta);
+    this._syncScaleSlider(snapshot);
+    this._renderCalibrationReadout(snapshot);
+  }
+
+  _setCalibrationScale(value) {
+    if (!this.preview || !this.calibrationEnabled) return;
+    const snapshot = this.preview.setCalibration('scale', value);
+    this._renderCalibrationReadout(snapshot);
+  }
+
+  _syncScaleSlider(snapshot) {
+    if (!this.elCalibrationScaleSlider || !snapshot || !snapshot.enabled) return;
+    if (snapshot.offset && typeof snapshot.offset.scale === 'number') {
+      this.elCalibrationScaleSlider.value = snapshot.offset.scale;
+    }
+  }
+
+  _resetCalibration() {
+    if (!this.preview) return;
+    const snapshot = this.preview.getCalibrationSnapshot();
+    const itemId = snapshot?.itemId;
+    const slot = snapshot?.slot;
+    if (itemId && slot) {
+      clearKayKitItemGripPreset(itemId, slot);
+    }
+    const resetSnapshot = this.preview.resetCalibrationOffset();
+    this._syncScaleSlider(resetSnapshot);
+    this._renderCalibrationReadout(resetSnapshot);
+  }
+
+  _saveCalibration() {
+    if (!this.preview) return;
+    this.preview.player.saveCalibrationOffset();
+    this._syncScaleSlider(this.preview.getCalibrationSnapshot());
+    this._renderCalibrationReadout(this.preview.getCalibrationSnapshot(), true);
+    this._flashReadout('✓ Saved');
+  }
+
+  _refreshCalibrationAfterLoadout(slot) {
+    if (!this.preview || !this.calibrationEnabled) return;
+    const nextSlot = slot || this.calibrationSlot;
+    this.calibrationSlot = nextSlot;
+    if (this.elCalibrationSlot) this.elCalibrationSlot.value = nextSlot;
+    const snapshot = this.preview.setCalibrationSlot(nextSlot);
+    this._syncScaleSlider(snapshot);
+    this._renderCalibrationReadout(snapshot);
+  }
+
+  _flashReadout(message) {
+    if (!this.elCalibrationReadout) return;
+    const originalBg = this.elCalibrationReadout.style.background;
+    this.elCalibrationReadout.style.background = 'rgba(126,214,171,0.25)';
+    this.elCalibrationReadout.dataset.flashMsg = message;
+    this._renderCalibrationReadout(this.preview?.getCalibrationSnapshot?.() || null, false, null, message);
+    setTimeout(() => {
+      if (this.elCalibrationReadout) {
+        this.elCalibrationReadout.style.background = originalBg || '';
+        delete this.elCalibrationReadout.dataset.flashMsg;
+        this._renderCalibrationReadout(this.preview?.getCalibrationSnapshot?.() || null);
+      }
+    }, 1500);
+  }
+
+  _renderCalibrationReadout(snapshot, marked = false, message = null) {
+    if (!this.elCalibrationReadout) return;
+    if (!snapshot || !snapshot.enabled) {
+      this.elCalibrationReadout.textContent = 'Calibration off';
+      return;
+    }
+    const itemName = snapshot.itemId || 'none';
+    const hasSaved = snapshot.itemGripPreset && Object.keys(snapshot.itemGripPreset.offset || {}).some(k => snapshot.itemGripPreset.offset[k] !== 0 && snapshot.itemGripPreset.offset[k] !== 1);
+    const savedTag = hasSaved ? ' [SAVED]' : '';
+    const prefix = marked ? '✓ SAVED ' : '';
+    const msgLine = message ? ` → ${message}` : '';
+    const zoomLine = this.preview && this.preview.zoom !== 1.0 ? `  zoom ${this.preview.zoom.toFixed(1)}x` : '';
+
+    const o = snapshot.offset || {};
+    this.elCalibrationReadout.textContent =
+      `${prefix}${itemName} · ${snapshot.slot}${savedTag}${zoomLine}${msgLine}\n` +
+      `pos ${o.x},${o.y},${o.z}  rot ${o.rx},${o.ry},${o.rz}  scale ${o.scale}`;
+  }
+
   updateStats() {
     const p = this.game.player;
     if (this.elHp) this.elHp.style.width = (p.hp / p.maxHp * 100) + '%';
     if (this.elHpText) this.elHpText.textContent = `${Math.ceil(p.hp)}/${p.maxHp}`;
+    if (this.elStamina) this.elStamina.style.width = (p.stamina / GAME.MAX_STAMINA * 100) + '%';
     if (this.elFloor) this.elFloor.textContent = this.game.world.floor;
     if (this.elCoin) this.elCoin.textContent = p.coins;
     if (this.elLevel) this.elLevel.textContent = p.level;
