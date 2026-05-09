@@ -362,8 +362,8 @@ export class Game {
             if (table) {
               this.loot.spawnFromTable(blockPos, table);
             }
-            // Letter drop chance (~25%)
-            if (Math.random() < 0.25) {
+            // Letter drop chance (~10%)
+            if (Math.random() < 0.10) {
               const letter = this.letterPool.pickRandomLetter();
               if (letter) {
                 this.letterDrops.spawn(blockPos, letter);
@@ -787,8 +787,8 @@ export class Game {
     if (table) {
       this.loot.spawnFromTable(blockPos, table);
     }
-    // Letter drop chance (~25%)
-    if (Math.random() < 0.25) {
+    // Letter drop chance (~10%)
+    if (Math.random() < 0.10) {
       const letter = this.letterPool.pickRandomLetter();
       if (letter) {
         this.letterDrops.spawn(blockPos, letter);
