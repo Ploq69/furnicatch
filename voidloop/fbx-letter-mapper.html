@@ -241,6 +241,7 @@
   <script type="module">
     import * as THREE from 'three';
     import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
     // ── State ──
     let sourceScene = null;
@@ -250,6 +251,7 @@
     let previewScene, previewCamera, previewRenderer, previewLight;
     let previewMeshGroup = null;
     let autoRotate = true;
+    let currentFormat = 'obj';
 
     // ── DOM refs ──
     const elStatus = document.getElementById('status');
