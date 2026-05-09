@@ -772,55 +772,64 @@ export class Game {
       // Inspect and log all object names for debugging
       const names = [];
       fbxScene.traverse((node) => {
-        if (node.name) names.push(node.name);
+        if (node.name) names.push(`${node.type || 'Node'}:"${node.name}"`);
       });
       console.log('[Pet] alpfabet.FBX object names:', [...new Set(names)].sort());
 
-      // Try to find letter meshes by name
-      const letterMap = new Map();
+      // Find top-level nodes named A-Z (they may be Group/Object3D, not Mesh)
+      const letterNodes = new Map();
       fbxScene.traverse((node) => {
-        if (!node.isMesh) return;
-        const name = node.name;
-        // Try patterns: exact single letter, "A_text", "letter_A", etc.
-        const exactMatch = name.match(/^([A-Z])$/);
-        const textMatch = name.match(/([A-Z])_text/);
-        const letterMatch = name.match(/letter_?([A-Z])/i);
-        const meshMatch = name.match(/^Mesh(\d+)$/);
-
-        let key = null;
-        if (exactMatch) key = exactMatch[1];
-        else if (textMatch) key = textMatch[1];
-        else if (letterMatch) key = letterMatch[1].toUpperCase();
-
-        if (key && !letterMap.has(key)) {
-          letterMap.set(key, node);
-        }
+        if (!node.name) return;
+        if (node.name.length !== 1) return;
+        const code = node.name.charCodeAt(0);
+        if (code < 65 || code > 90) return;
+        if (letterNodes.has(node.name)) return;
+        letterNodes.set(node.name, node);
       });
 
-      // Build normalized prototypes
-      for (const [key, mesh] of letterMap) {
-        const wrapper = new THREE.Group();
-        const geometry = mesh.geometry.clone();
-        geometry.applyMatrix4(mesh.matrixWorld);
-        const mat = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          emissive: 0xa5f3fc,
-          emissiveIntensity: 0.6,
-          roughness: 0.4,
-          metalness: 0.2,
-        });
-        const clone = new THREE.Mesh(geometry, mat);
-        wrapper.add(clone);
+      console.log('[Pet] Letter nodes found:', letterNodes.size, [...letterNodes.keys()].sort());
 
+      // Build normalized prototypes from each letter's mesh subtree
+      for (const [key, node] of letterNodes) {
+        const wrapper = new THREE.Group();
+
+        // Traverse original node and clone each mesh with world transform baked in
+        node.updateMatrixWorld();
+        node.traverse((child) => {
+          if (child.isMesh && child.geometry) {
+            const geo = child.geometry.clone();
+            geo.applyMatrix4(child.matrixWorld);
+            const mat = child.material
+              ? (Array.isArray(child.material)
+                  ? child.material.map(m => m.clone())
+                  : child.material.clone())
+              : new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const mesh = new THREE.Mesh(geo, mat);
+            wrapper.add(mesh);
+          }
+        });
+
+        // Compute combined bounds
         const box = new THREE.Box3().setFromObject(wrapper);
-        if (box.isEmpty()) continue;
+        if (box.isEmpty()) {
+          console.warn('[Pet] No geometry for letter', key);
+          continue;
+        }
+
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
-        geometry.translate(-center.x, -box.min.y, -center.z);
+
+        // Center all geometry (keep Y on floor)
+        wrapper.traverse((child) => {
+          if (child.isMesh && child.geometry) {
+            child.geometry.translate(-center.x, -box.min.y, -center.z);
+          }
+        });
 
         const maxAxis = Math.max(size.x, size.y, size.z, 0.001);
         wrapper.scale.setScalar(1.0 / maxAxis);
         wrapper.userData.evolvedLetter = key;
+
         this.evolvedPrototypes.set(key, wrapper);
       }
 
