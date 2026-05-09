@@ -14,9 +14,11 @@ export class PetLetter {
     this.scene = scene;
     this.letter = String(letter || 'A').toUpperCase();
     this.level = level;
+    this.visualLevel = level;
     this.container = null;
     this.mesh = null;
     this.glowLight = null;
+    this.evolvedPrototype = null;
     this.onBlockDestroyed = options.onBlockDestroyed || null;
     this.initialPosition = options.initialPosition || null;
 
@@ -36,12 +38,50 @@ export class PetLetter {
 
   async _loadModel() {
     await glyph3D.load();
-    const levelConfig = PET_LEVELS.find(l => l.level === this.level) || PET_LEVELS[0];
-    const style = levelConfig.style;
-
-    const glyph = glyph3D.createGlyph(this.letter, style);
     this.container = new THREE.Group();
+    this.glowLight = new THREE.PointLight(0xffffff, 0.5, 2.5);
+    this.glowLight.position.y = 0.8;
+    this.container.add(this.glowLight);
+    this._applyVisuals();
+    if (this.initialPosition) {
+      this.container.position.copy(this.initialPosition);
+    }
+    this.scene.add(this.container);
+  }
 
+  _applyVisuals() {
+    const cfg = PET_LEVELS.find(l => l.level === this.visualLevel) || PET_LEVELS[0];
+
+    if (this.glowLight) {
+      this.glowLight.color.setHex(cfg.color);
+    }
+
+    if (!this.container) return;
+
+    this._removeCurrentMesh();
+    this._buildGlyphMesh(cfg);
+  }
+
+  _removeCurrentMesh() {
+    if (!this.mesh) return;
+    this.container.remove(this.mesh);
+    this.mesh.traverse((child) => {
+      if (child.isMesh) {
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose?.());
+          } else {
+            child.material.dispose?.();
+          }
+        }
+        child.geometry?.dispose?.();
+      }
+    });
+    this.mesh = null;
+  }
+
+  _buildGlyphMesh(cfg) {
+    const glyph = glyph3D.createGlyph(this.letter, cfg.style);
     if (glyph) {
       this.mesh = glyph;
       this.mesh.scale.multiplyScalar(0.75);
@@ -49,61 +89,39 @@ export class PetLetter {
       this.container.add(this.mesh);
     } else {
       const mat = new THREE.MeshStandardMaterial({
-        color: levelConfig.color,
-        emissive: levelConfig.color,
+        color: cfg.color,
+        emissive: cfg.color,
         emissiveIntensity: 0.5,
       });
       this.mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.15), mat);
       this.mesh.position.y = 0.4;
       this.container.add(this.mesh);
     }
-
-    this.glowLight = new THREE.PointLight(levelConfig.color, 0.5, 2.5);
-    this.glowLight.position.y = 0.8;
-    this.container.add(this.glowLight);
-    if (this.initialPosition) {
-      this.container.position.copy(this.initialPosition);
-    }
-    this.scene.add(this.container);
   }
 
   setEvolvedMesh(evolvedMesh) {
-    if (!this.container) return;
-    if (this.mesh) {
-      this.container.remove(this.mesh);
-    }
-    this.mesh = evolvedMesh.clone(true);
-    // Clone materials so each pet instance has its own
-    this.mesh.traverse((c) => {
-      if (c.isMesh && c.material) {
-        if (Array.isArray(c.material)) {
-          c.material = c.material.map((m) => m.clone());
-        } else {
-          c.material = c.material.clone();
-        }
-      }
-    });
-    this.mesh.scale.multiplyScalar(0.75);
-    this.mesh.position.y = 0.1;
-    this.container.add(this.mesh);
+    // No-op: evolved FBX approach scrapped in favor of rainbow effect
   }
 
   setEvolvedPrototype(proto) {
-    this.evolvedPrototype = proto;
+    // No-op: evolved FBX approach scrapped in favor of rainbow effect
   }
 
   setLevel(level) {
     if (this.level === level) return;
     this.level = level;
-    const levelConfig = PET_LEVELS.find(l => l.level === level) || PET_LEVELS[0];
-    if (this.glowLight) {
-      this.glowLight.color.setHex(levelConfig.color);
-    }
-    if (level >= 7 && this.evolvedPrototype) {
-      this.setEvolvedMesh(this.evolvedPrototype);
-    } else if (this.mesh && level < 7) {
-      glyph3D.applyStyle(this.mesh, levelConfig.style);
-    }
+    this.visualLevel = level;
+    this._applyVisuals();
+  }
+
+  setVisualLevel(v) {
+    if (this.visualLevel === v) return;
+    this.visualLevel = Math.max(1, Math.min(7, v));
+    this._applyVisuals();
+  }
+
+  clearVisualLevel() {
+    this.setVisualLevel(this.level);
   }
 
   update(dt, player, world) {
@@ -127,6 +145,34 @@ export class PetLetter {
       case PET_STATES.LEVEL_UP:
         this._updateLevelUp(dt, player);
         break;
+    }
+
+    if (this.visualLevel >= 7) {
+      this._updateRainbowEffect();
+    }
+  }
+
+  _updateRainbowEffect() {
+    const t = performance.now() * 0.001;
+    const hue = (t * 0.3) % 1;
+    const intensity = 1.1 + Math.sin(t * 2) * 0.4;
+    const color = new THREE.Color().setHSL(hue, 1.0, 0.5);
+
+    if (this.glowLight) {
+      this.glowLight.color.copy(color);
+      this.glowLight.intensity = intensity * 0.8;
+    }
+
+    if (this.mesh) {
+      this.mesh.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          for (const m of mats) {
+            m.emissive.copy(color);
+            m.emissiveIntensity = intensity;
+          }
+        }
+      });
     }
   }
 

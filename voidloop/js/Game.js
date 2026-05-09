@@ -121,7 +121,6 @@ export class Game {
     // Pet system
     this.petManager = new PetManager();
     this.pet = null;
-    this.evolvedPrototypes = new Map();
 
     // Screen shake
     this.shakeIntensity = 0;
@@ -161,9 +160,6 @@ export class Game {
     // Preload alphabet glyphs for letter drops
     await glyph3D.load();
     await this.letterDrops.preload();
-
-    // Preload evolved alphabet FBX
-    await this._loadEvolvedAlphabet();
 
     this._initAudioOnInteraction();
     await this.player.spawn();
@@ -713,14 +709,7 @@ export class Game {
           this.pet.setLevel(result.newLevel);
           this.pet.playLevelUp();
           this.ui.showFloatingText(`Pet ${letter} ➜ Lv${result.newLevel}!`, 0x4ade80);
-          // If evolved to level 7, set the evolved prototype
-          if (result.newLevel >= 7) {
-            const evolved = this.evolvedPrototypes.get(letter);
-            if (evolved) {
-              this.pet.setEvolvedPrototype(evolved);
-              this.pet.setEvolvedMesh(evolved);
-            }
-          }
+          // Level 7 triggers rainbow effect automatically via PetLetter.update()
         }
         // Bonus rewards
         this.player.coins += 10;
@@ -765,104 +754,7 @@ export class Game {
   // ===== Pet System =====
 
   async _loadEvolvedAlphabet() {
-    try {
-      // 1. Try to load user-created letter mapping
-      let mapping = null;
-      try {
-        const resp = await fetch('alpfabet_letter_map.json');
-        if (resp.ok) {
-          mapping = await resp.json();
-          console.log('[Pet] Loaded letter map:', Object.keys(mapping).length, 'letters');
-        }
-      } catch (e) {
-        console.log('[Pet] No alpfabet_letter_map.json found, will try name guessing');
-      }
-
-      const fbxScene = await assetLoader.loadFBX('alpfabet.FBX');
-      if (!fbxScene) return;
-
-      // Build name → node lookup
-      const nodeByName = new Map();
-      fbxScene.traverse((node) => {
-        if (node.name && !nodeByName.has(node.name)) {
-          nodeByName.set(node.name, node);
-        }
-      });
-
-      // Log all names for debugging
-      console.log('[Pet] alpfabet.FBX object names:', [...nodeByName.keys()].sort());
-
-      // Determine which node to use for each letter
-      const letterNodes = new Map();
-      for (let i = 0; i < 26; i++) {
-        const letter = String.fromCharCode(65 + i);
-        let nodeName = null;
-
-        if (mapping && mapping[letter]) {
-          nodeName = mapping[letter];
-        } else {
-          // Fallback: look for a node named exactly like the letter
-          nodeName = letter;
-        }
-
-        const node = nodeByName.get(nodeName);
-        if (node) {
-          letterNodes.set(letter, node);
-        } else if (mapping && mapping[letter]) {
-          console.warn('[Pet] Mapped node not found:', nodeName, 'for letter', letter);
-        }
-      }
-
-      console.log('[Pet] Letter nodes found:', letterNodes.size, [...letterNodes.keys()].sort());
-
-      // Build normalized prototypes from each letter's mesh subtree
-      for (const [letter, node] of letterNodes) {
-        const wrapper = new THREE.Group();
-
-        // Traverse original node and clone each mesh with world transform baked in
-        node.updateMatrixWorld();
-        node.traverse((child) => {
-          if (child.isMesh && child.geometry) {
-            const geo = child.geometry.clone();
-            geo.applyMatrix4(child.matrixWorld);
-            const mat = child.material
-              ? (Array.isArray(child.material)
-                  ? child.material.map(m => m.clone())
-                  : child.material.clone())
-              : new THREE.MeshStandardMaterial({ color: 0xffffff });
-            const mesh = new THREE.Mesh(geo, mat);
-            wrapper.add(mesh);
-          }
-        });
-
-        // Compute combined bounds
-        const box = new THREE.Box3().setFromObject(wrapper);
-        if (box.isEmpty()) {
-          console.warn('[Pet] No geometry for letter', letter);
-          continue;
-        }
-
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-
-        // Center all geometry (keep Y on floor)
-        wrapper.traverse((child) => {
-          if (child.isMesh && child.geometry) {
-            child.geometry.translate(-center.x, -box.min.y, -center.z);
-          }
-        });
-
-        const maxAxis = Math.max(size.x, size.y, size.z, 0.001);
-        wrapper.scale.setScalar(1.0 / maxAxis);
-        wrapper.userData.evolvedLetter = letter;
-
-        this.evolvedPrototypes.set(letter, wrapper);
-      }
-
-      console.log('[Pet] Evolved prototypes built:', this.evolvedPrototypes.size, [...this.evolvedPrototypes.keys()].sort());
-    } catch (err) {
-      console.warn('[Pet] Failed to load evolved alphabet FBX:', err);
-    }
+    // No-op: evolved FBX approach scrapped in favor of rainbow breathing effect at level 7
   }
 
   _spawnPet() {
@@ -875,15 +767,6 @@ export class Game {
       onBlockDestroyed: (block) => this._onPetBlockDestroyed(block),
       initialPosition: this.player.position.clone().add(new THREE.Vector3(-1.2, 0.5, -1.2)),
     });
-
-    // If level 7, swap to evolved mesh
-    const evolved = this.evolvedPrototypes.get(equipped.letter);
-    if (evolved) {
-      pet.setEvolvedPrototype(evolved);
-      if (equipped.level >= 7) {
-        pet.setEvolvedMesh(evolved);
-      }
-    }
 
     this.pet = pet;
   }
