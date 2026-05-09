@@ -243,7 +243,7 @@
     import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
     // ── State ──
-    let fbxScene = null;
+    let sourceScene = null;
     let meshNodes = [];        // { name, node, meshCount }
     let selectedMeshName = null;
     let mapping = {};          // { A: 'Box001', B: 'Box002', ... }
@@ -496,7 +496,7 @@
       a.click();
       URL.revokeObjectURL(url);
       elStatus.textContent = 'Mapping exported!';
-      setTimeout(() => { elStatus.textContent = 'FBX loaded — ' + countNodes(fbxScene) + ' nodes'; }, 2000);
+      setTimeout(() => { elStatus.textContent = currentFormat.toUpperCase() + ' loaded — ' + countNodes(sourceScene) + ' nodes'; }, 2000);
     });
 
     // ── Import ──
@@ -517,7 +517,7 @@
           renderLetterGrid();
           if (selectedMeshName) showPreview(selectedMeshName);
           elStatus.textContent = 'Mapping imported — ' + Object.keys(mapping).length + ' letters';
-          setTimeout(() => { elStatus.textContent = 'FBX loaded — ' + countNodes(fbxScene) + ' nodes'; }, 2000);
+          setTimeout(() => { elStatus.textContent = currentFormat.toUpperCase() + ' loaded — ' + countNodes(sourceScene) + ' nodes'; }, 2000);
         } catch (err) {
           alert('Failed to import: ' + err.message);
         }
