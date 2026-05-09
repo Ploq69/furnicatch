@@ -766,31 +766,57 @@ export class Game {
 
   async _loadEvolvedAlphabet() {
     try {
+      // 1. Try to load user-created letter mapping
+      let mapping = null;
+      try {
+        const resp = await fetch('alpfabet_letter_map.json');
+        if (resp.ok) {
+          mapping = await resp.json();
+          console.log('[Pet] Loaded letter map:', Object.keys(mapping).length, 'letters');
+        }
+      } catch (e) {
+        console.log('[Pet] No alpfabet_letter_map.json found, will try name guessing');
+      }
+
       const fbxScene = await assetLoader.loadFBX('alpfabet.FBX');
       if (!fbxScene) return;
 
-      // Inspect and log all object names for debugging
-      const names = [];
+      // Build name → node lookup
+      const nodeByName = new Map();
       fbxScene.traverse((node) => {
-        if (node.name) names.push(`${node.type || 'Node'}:"${node.name}"`);
+        if (node.name && !nodeByName.has(node.name)) {
+          nodeByName.set(node.name, node);
+        }
       });
-      console.log('[Pet] alpfabet.FBX object names:', [...new Set(names)].sort());
 
-      // Find top-level nodes named A-Z (they may be Group/Object3D, not Mesh)
+      // Log all names for debugging
+      console.log('[Pet] alpfabet.FBX object names:', [...nodeByName.keys()].sort());
+
+      // Determine which node to use for each letter
       const letterNodes = new Map();
-      fbxScene.traverse((node) => {
-        if (!node.name) return;
-        if (node.name.length !== 1) return;
-        const code = node.name.charCodeAt(0);
-        if (code < 65 || code > 90) return;
-        if (letterNodes.has(node.name)) return;
-        letterNodes.set(node.name, node);
-      });
+      for (let i = 0; i < 26; i++) {
+        const letter = String.fromCharCode(65 + i);
+        let nodeName = null;
+
+        if (mapping && mapping[letter]) {
+          nodeName = mapping[letter];
+        } else {
+          // Fallback: look for a node named exactly like the letter
+          nodeName = letter;
+        }
+
+        const node = nodeByName.get(nodeName);
+        if (node) {
+          letterNodes.set(letter, node);
+        } else if (mapping && mapping[letter]) {
+          console.warn('[Pet] Mapped node not found:', nodeName, 'for letter', letter);
+        }
+      }
 
       console.log('[Pet] Letter nodes found:', letterNodes.size, [...letterNodes.keys()].sort());
 
       // Build normalized prototypes from each letter's mesh subtree
-      for (const [key, node] of letterNodes) {
+      for (const [letter, node] of letterNodes) {
         const wrapper = new THREE.Group();
 
         // Traverse original node and clone each mesh with world transform baked in
@@ -812,7 +838,7 @@ export class Game {
         // Compute combined bounds
         const box = new THREE.Box3().setFromObject(wrapper);
         if (box.isEmpty()) {
-          console.warn('[Pet] No geometry for letter', key);
+          console.warn('[Pet] No geometry for letter', letter);
           continue;
         }
 
@@ -828,9 +854,9 @@ export class Game {
 
         const maxAxis = Math.max(size.x, size.y, size.z, 0.001);
         wrapper.scale.setScalar(1.0 / maxAxis);
-        wrapper.userData.evolvedLetter = key;
+        wrapper.userData.evolvedLetter = letter;
 
-        this.evolvedPrototypes.set(key, wrapper);
+        this.evolvedPrototypes.set(letter, wrapper);
       }
 
       console.log('[Pet] Evolved prototypes built:', this.evolvedPrototypes.size, [...this.evolvedPrototypes.keys()].sort());

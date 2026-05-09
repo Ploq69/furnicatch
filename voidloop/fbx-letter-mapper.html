@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alpfabet FBX Letter Mapper</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0a12;
+      color: #e0e0e0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #14141f;
+      border-bottom: 1px solid #2a2a3a;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 18px; color: #facc15; }
+    header .status { font-size: 13px; color: #888; margin-left: auto; }
+    header .status.ready { color: #4ade80; }
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+    /* Sidebar - object list */
+    .sidebar {
+      width: 280px;
+      background: #111118;
+      border-right: 1px solid #2a2a3a;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .sidebar h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      padding: 12px 16px 8px;
+    }
+    .object-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px 8px;
+    }
+    .object-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.1s;
+      border: 1px solid transparent;
+    }
+    .object-item:hover { background: rgba(255,255,255,0.05); }
+    .object-item.active {
+      background: rgba(250,204,21,0.1);
+      border-color: rgba(250,204,21,0.3);
+    }
+    .object-item .mesh-icon { font-size: 10px; opacity: 0.5; }
+    .object-item .assigned-tag {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(74,222,128,0.15);
+      color: #4ade80;
+    }
+    /* Preview area */
+    .preview-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    #preview-canvas {
+      flex: 1;
+      min-height: 0;
+      background: #0d0d15;
+    }
+    .preview-info {
+      padding: 10px 16px;
+      background: #14141f;
+      border-top: 1px solid #2a2a3a;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .preview-info .selected-name {
+      color: #facc15;
+      font-weight: 600;
+    }
+    /* Letter grid */
+    .letter-panel {
+      background: #111118;
+      border-top: 1px solid #2a2a3a;
+      padding: 16px 20px;
+      flex-shrink: 0;
+    }
+    .letter-panel h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    .letter-grid {
+      display: grid;
+      grid-template-columns: repeat(13, 1fr);
+      gap: 6px;
+      max-width: 600px;
+    }
+    .letter-btn {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 2px solid #2a2a3a;
+      background: #1a1a25;
+      color: #ccc;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .letter-btn:hover { border-color: #555; transform: scale(1.05); }
+    .letter-btn.assigned {
+      border-color: #4ade80;
+      background: rgba(74,222,128,0.1);
+    }
+    .letter-btn .mesh-name {
+      font-size: 9px;
+      font-weight: 400;
+      color: #4ade80;
+      margin-top: 2px;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 4px;
+    }
+    .letter-btn.current-target {
+      box-shadow: 0 0 0 2px #facc15;
+    }
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      align-items: center;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #3a3a4a;
+      background: #1e1e2e;
+      color: #e0e0e0;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #2a2a3e; border-color: #555; }
+    .btn.primary { border-color: #facc15; color: #facc15; }
+    .btn.primary:hover { background: rgba(250,204,21,0.1); }
+    .btn.danger { border-color: #f87171; color: #f87171; }
+    .btn.danger:hover { background: rgba(248,113,113,0.1); }
+    input[type="file"] { display: none; }
+    .progress-count {
+      margin-left: auto;
+      font-size: 13px;
+      color: #888;
+    }
+    .progress-count.done { color: #4ade80; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>📝 Alpfabet FBX Letter Mapper</h1>
+    <span class="status" id="status">Loading FBX...</span>
+    <span class="progress-count" id="progress-count">0 / 26 mapped</span>
+  </header>
+
+  <div class="main">
+    <div class="sidebar">
+      <h2>Objects in FBX</h2>
+      <div class="object-list" id="object-list"></div>
+    </div>
+
+    <div class="preview-area">
+      <div id="preview-canvas"></div>
+      <div class="preview-info">
+        <span>Selected:</span>
+        <span class="selected-name" id="selected-name">—</span>
+        <span id="selected-hint" style="color:#888;font-size:12px;">Click an object to preview</span>
+        <div class="controls" style="margin-left:auto;margin-top:0;">
+          <button class="btn danger" id="btn-clear">Clear All</button>
+          <button class="btn primary" id="btn-export">Export JSON</button>
+          <label class="btn" for="file-import">Import JSON</label>
+          <input type="file" id="file-import" accept=".json">
+        </div>
+      </div>
+
+      <div class="letter-panel">
+        <h3>Click a letter to assign the selected object</h3>
+        <div class="letter-grid" id="letter-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+    // ── State ──
+    let fbxScene = null;
+    let meshNodes = [];        // { name, node, meshCount }
+    let selectedMeshName = null;
+    let mapping = {};          // { A: 'Box001', B: 'Box002', ... }
+    let previewScene, previewCamera, previewRenderer, previewLight;
+    let previewMeshGroup = null;
+    let autoRotate = true;
+
+    // ── DOM refs ──
+    const elStatus = document.getElementById('status');
+    const elProgress = document.getElementById('progress-count');
+    const elObjectList = document.getElementById('object-list');
+    const elSelectedName = document.getElementById('selected-name');
+    const elSelectedHint = document.getElementById('selected-hint');
+    const elLetterGrid = document.getElementById('letter-grid');
+    const elPreviewCanvas = document.getElementById('preview-canvas');
+
+    // ── Init Preview Scene ──
+    function initPreview() {
+      previewScene = new THREE.Scene();
+      previewScene.background = new THREE.Color(0x0d0d15);
+
+      const w = elPreviewCanvas.clientWidth;
+      const h = elPreviewCanvas.clientHeight;
+      previewCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+      previewCamera.position.set(3, 2, 4);
+
+      previewRenderer = new THREE.WebGLRenderer({ antialias: true });
+      previewRenderer.setSize(w, h);
+      previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      elPreviewCanvas.appendChild(previewRenderer.domElement);
+
+      previewLight = new THREE.DirectionalLight(0xffffff, 1.5);
+      previewLight.position.set(2, 4, 2);
+      previewScene.add(previewLight);
+      previewScene.add(new THREE.AmbientLight(0x444466, 0.8));
+
+      // Grid helper
+      previewScene.add(new THREE.GridHelper(4, 8, 0x333344, 0x222233));
+
+      window.addEventListener('resize', onResize);
+      animate();
+    }
+
+    function onResize() {
+      const w = elPreviewCanvas.clientWidth;
+      const h = elPreviewCanvas.clientHeight;
+      previewCamera.aspect = w / h;
+      previewCamera.updateProjectionMatrix();
+      previewRenderer.setSize(w, h);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (autoRotate && previewMeshGroup) {
+        previewMeshGroup.rotation.y += 0.008;
+      }
+      previewRenderer.render(previewScene, previewCamera);
+    }
+
+    // ── Load FBX ──
+    async function loadFBX() {
+      const loader = new FBXLoader();
+      try {
+        fbxScene = await new Promise((resolve, reject) => {
+          loader.load('../alpfabet.FBX', resolve, undefined, reject);
+        });
+      } catch (err) {
+        elStatus.textContent = 'Failed to load FBX: ' + err.message;
+        elStatus.style.color = '#f87171';
+        console.error(err);
+        return;
+      }
+
+      elStatus.textContent = 'FBX loaded — ' + countNodes(fbxScene) + ' nodes';
+      elStatus.classList.add('ready');
+
+      // Collect all named nodes that contain at least one mesh
+      const seen = new Set();
+      fbxScene.traverse((node) => {
+        if (!node.name || seen.has(node.name)) return;
+        let meshCount = 0;
+        node.traverse((child) => { if (child.isMesh) meshCount++; });
+        if (meshCount > 0) {
+          seen.add(node.name);
+          meshNodes.push({ name: node.name, node, meshCount });
+        }
+      });
+
+      meshNodes.sort((a, b) => a.name.localeCompare(b.name));
+      renderObjectList();
+      renderLetterGrid();
+
+      // Auto-select first item
+      if (meshNodes.length > 0) {
+        selectMesh(meshNodes[0].name);
+      }
+    }
+
+    function countNodes(root) {
+      let n = 0;
+      root.traverse(() => n++);
+      return n;
+    }
+
+    // ── Object List ──
+    function renderObjectList() {
+      elObjectList.innerHTML = '';
+      for (const item of meshNodes) {
+        const div = document.createElement('div');
+        div.className = 'object-item' + (item.name === selectedMeshName ? ' active' : '');
+        const assignedLetter = findLetterForMesh(item.name);
+        div.innerHTML = `
+          <span class="mesh-icon">🔷</span>
+          <span>${item.name}</span>
+          <span style="opacity:0.4;font-size:11px;margin-left:4px;">(${item.meshCount} mesh${item.meshCount > 1 ? 'es' : ''})</span>
+          ${assignedLetter ? `<span class="assigned-tag">→ ${assignedLetter}</span>` : ''}
+        `;
+        div.addEventListener('click', () => selectMesh(item.name));
+        elObjectList.appendChild(div);
+      }
+    }
+
+    function findLetterForMesh(meshName) {
+      for (const [letter, name] of Object.entries(mapping)) {
+        if (name === meshName) return letter;
+      }
+      return null;
+    }
+
+    // ── Select & Preview ──
+    function selectMesh(name) {
+      selectedMeshName = name;
+      elSelectedName.textContent = name;
+      elSelectedHint.textContent = 'Now click a letter below to assign';
+      renderObjectList();
+      renderLetterGrid();
+      showPreview(name);
+    }
+
+    function showPreview(name) {
+      if (previewMeshGroup) {
+        previewScene.remove(previewMeshGroup);
+        previewMeshGroup = null;
+      }
+
+      const item = meshNodes.find(m => m.name === name);
+      if (!item) return;
+
+      previewMeshGroup = new THREE.Group();
+
+      // Clone all meshes from this node with world transform baked in
+      item.node.updateMatrixWorld();
+      item.node.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+          const geo = child.geometry.clone();
+          geo.applyMatrix4(child.matrixWorld);
+          const mat = child.material
+            ? (Array.isArray(child.material)
+                ? child.material.map(m => m.clone())
+                : child.material.clone())
+            : new THREE.MeshStandardMaterial({ color: 0xffffff });
+          const mesh = new THREE.Mesh(geo, mat);
+          previewMeshGroup.add(mesh);
+        }
+      });
+
+      // Center and normalize
+      const box = new THREE.Box3().setFromObject(previewMeshGroup);
+      if (!box.isEmpty()) {
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        previewMeshGroup.traverse((child) => {
+          if (child.isMesh && child.geometry) {
+            child.geometry.translate(-center.x, -center.y, -center.z);
+          }
+        });
+        const maxAxis = Math.max(size.x, size.y, size.z, 0.001);
+        previewMeshGroup.scale.setScalar(1.5 / maxAxis);
+      }
+
+      previewScene.add(previewMeshGroup);
+      previewCamera.lookAt(0, 0, 0);
+    }
+
+    // ── Letter Grid ──
+    function renderLetterGrid() {
+      elLetterGrid.innerHTML = '';
+      for (let i = 0; i < 26; i++) {
+        const letter = String.fromCharCode(65 + i);
+        const assignedMesh = mapping[letter];
+        const btn = document.createElement('button');
+        btn.className = 'letter-btn' + (assignedMesh ? ' assigned' : '');
+        if (assignedMesh && assignedMesh === selectedMeshName) {
+          btn.classList.add('current-target');
+        }
+        btn.innerHTML = `
+          <span>${letter}</span>
+          ${assignedMesh ? `<span class="mesh-name">${assignedMesh}</span>` : ''}
+        `;
+        btn.addEventListener('click', () => assignLetter(letter));
+        elLetterGrid.appendChild(btn);
+      }
+      updateProgress();
+    }
+
+    function assignLetter(letter) {
+      if (!selectedMeshName) {
+        elSelectedHint.textContent = 'Select an object from the list first!';
+        elSelectedHint.style.color = '#f87171';
+        setTimeout(() => { elSelectedHint.style.color = '#888'; }, 1500);
+        return;
+      }
+      // Remove any existing assignment for this mesh
+      for (const [l, name] of Object.entries(mapping)) {
+        if (name === selectedMeshName) delete mapping[l];
+      }
+      mapping[letter] = selectedMeshName;
+      renderObjectList();
+      renderLetterGrid();
+      elSelectedHint.textContent = `Assigned ${selectedMeshName} → ${letter}`;
+      elSelectedHint.style.color = '#4ade80';
+    }
+
+    function updateProgress() {
+      const count = Object.keys(mapping).length;
+      elProgress.textContent = `${count} / 26 mapped`;
+      elProgress.classList.toggle('done', count === 26);
+    }
+
+    // ── Export ──
+    document.getElementById('btn-export').addEventListener('click', () => {
+      const data = JSON.stringify(mapping, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'alpfabet_letter_map.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      elStatus.textContent = 'Mapping exported!';
+      setTimeout(() => { elStatus.textContent = 'FBX loaded — ' + countNodes(fbxScene) + ' nodes'; }, 2000);
+    });
+
+    // ── Import ──
+    document.getElementById('file-import').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          mapping = JSON.parse(ev.target.result);
+          // Validate
+          for (const [letter, name] of Object.entries(mapping)) {
+            if (letter.length !== 1 || letter < 'A' || letter > 'Z') {
+              throw new Error('Invalid letter: ' + letter);
+            }
+          }
+          renderObjectList();
+          renderLetterGrid();
+          if (selectedMeshName) showPreview(selectedMeshName);
+          elStatus.textContent = 'Mapping imported — ' + Object.keys(mapping).length + ' letters';
+          setTimeout(() => { elStatus.textContent = 'FBX loaded — ' + countNodes(fbxScene) + ' nodes'; }, 2000);
+        } catch (err) {
+          alert('Failed to import: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+
+    // ── Clear All ──
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      if (!confirm('Clear all letter assignments?')) return;
+      mapping = {};
+      renderObjectList();
+      renderLetterGrid();
+    });
+
+    // ── Keyboard shortcuts ──
+    document.addEventListener('keydown', (e) => {
+      if (e.key >= 'a' && e.key <= 'z' && selectedMeshName) {
+        assignLetter(e.key.toUpperCase());
+      }
+    });
+
+    // ── Start ──
+    initPreview();
+    loadFBX();
+  </script>
+</body>
+</html>
