@@ -199,9 +199,13 @@
 </head>
 <body>
   <header>
-    <h1>📝 Alpfabet FBX Letter Mapper</h1>
-    <span style="color:#888;font-size:12px;margin-left:8px;">Each object below is likely a complete letter — just poorly named (Box001, Box002, etc.)</span>
-    <span class="status" id="status">Loading FBX...</span>
+    <h1>📝 Alpfabet Letter Mapper</h1>
+    <div class="format-toggle" id="format-toggle">
+      <button data-fmt="obj" class="active">OBJ</button>
+      <button data-fmt="fbx">FBX</button>
+    </div>
+    <span style="color:#888;font-size:12px;margin-left:8px;">Click objects to preview. Press A-Z to assign.</span>
+    <span class="status" id="status">Loading...</span>
     <span class="progress-count" id="progress-count">0 / 26 mapped</span>
   </header>
 
@@ -299,26 +303,38 @@
       previewRenderer.render(previewScene, previewCamera);
     }
 
-    // ── Load FBX ──
-    async function loadFBX() {
-      const loader = new FBXLoader();
+    // ── Load Scene ──
+    async function loadScene() {
+      meshNodes = [];
+      sourceScene = null;
+      elStatus.textContent = 'Loading ' + currentFormat.toUpperCase() + '...';
+      elStatus.classList.remove('ready');
+
       try {
-        fbxScene = await new Promise((resolve, reject) => {
-          loader.load('../alpfabet.FBX', resolve, undefined, reject);
-        });
+        if (currentFormat === 'obj') {
+          const loader = new OBJLoader();
+          sourceScene = await new Promise((resolve, reject) => {
+            loader.load('../alpfabet.obj', resolve, undefined, reject);
+          });
+        } else {
+          const loader = new FBXLoader();
+          sourceScene = await new Promise((resolve, reject) => {
+            loader.load('../alpfabet.FBX', resolve, undefined, reject);
+          });
+        }
       } catch (err) {
-        elStatus.textContent = 'Failed to load FBX: ' + err.message;
+        elStatus.textContent = 'Failed to load: ' + err.message;
         elStatus.style.color = '#f87171';
         console.error(err);
         return;
       }
 
-      elStatus.textContent = 'FBX loaded — ' + countNodes(fbxScene) + ' nodes';
+      elStatus.textContent = currentFormat.toUpperCase() + ' loaded — ' + countNodes(sourceScene) + ' nodes';
       elStatus.classList.add('ready');
 
       // Collect all named nodes that contain at least one mesh
       const seen = new Set();
-      fbxScene.traverse((node) => {
+      sourceScene.traverse((node) => {
         if (!node.name || seen.has(node.name)) return;
         let meshCount = 0;
         node.traverse((child) => { if (child.isMesh) meshCount++; });
@@ -555,9 +571,19 @@
       }
     });
 
+    // ── Format toggle ──
+    document.querySelectorAll('#format-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#format-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFormat = btn.dataset.fmt;
+        loadScene();
+      });
+    });
+
     // ── Start ──
     initPreview();
-    loadFBX();
+    loadScene();
   </script>
 </body>
 </html>
