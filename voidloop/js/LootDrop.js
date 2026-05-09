@@ -20,19 +20,19 @@ const LOOT_MODELS = {
 };
 
 const LOOT_CONFIG = {
-  coin:         { scale: 0.15, spin: 12.0, value: 1,  color: 0xffd700 },
-  gem_blue:     { scale: 0.20, spin: 6.0,  value: 5,  color: 0x4488ff },
-  gem_green:    { scale: 0.20, spin: 6.0,  value: 5,  color: 0x44ff88 },
-  gem_pink:     { scale: 0.20, spin: 6.0,  value: 10, color: 0xff44cc },
-  gold_bag:     { scale: 0.15, spin: 3.0,  value: 25, color: 0xffd700 },
-  crystal:      { scale: 0.30, spin: 9.0,  value: 15, color: 0x00ffff },
-  health_meat:  { scale: 0.20, spin: 3.0,  value: 0,  color: 0xff6644 },
-  health_scifi: { scale: 0.25, spin: 6.0,  value: 0,  color: 0x44ff44 },
-  key:          { scale: 0.20, spin: 12.0, value: 0,  color: 0xffaa00 },
-  ore_coal:     { scale: 0.15, spin: 6.0,  value: 2,  color: 0x333333 },
-  ore_stone:    { scale: 0.20, spin: 3.0,  value: 1,  color: 0x888888 },
-  ore_metal:    { scale: 0.15, spin: 3.0,  value: 3,  color: 0x8899aa },
-  energy_orb:   { scale: 0.20, spin: 12.0, value: 20, color: 0xaa44ff },
+  coin:         { scale: 0.75, spin: 12.0, value: 1,  color: 0xffd700 },
+  gem_blue:     { scale: 1.00, spin: 6.0,  value: 5,  color: 0x4488ff },
+  gem_green:    { scale: 1.00, spin: 6.0,  value: 5,  color: 0x44ff88 },
+  gem_pink:     { scale: 1.00, spin: 6.0,  value: 10, color: 0xff44cc },
+  gold_bag:     { scale: 0.75, spin: 3.0,  value: 25, color: 0xffd700 },
+  crystal:      { scale: 1.50, spin: 9.0,  value: 15, color: 0x00ffff },
+  health_meat:  { scale: 1.00, spin: 3.0,  value: 0,  color: 0xff6644 },
+  health_scifi: { scale: 1.25, spin: 6.0,  value: 0,  color: 0x44ff44 },
+  key:          { scale: 1.00, spin: 12.0, value: 0,  color: 0xffaa00 },
+  ore_coal:     { scale: 0.75, spin: 6.0,  value: 2,  color: 0x333333 },
+  ore_stone:    { scale: 1.00, spin: 3.0,  value: 1,  color: 0x888888 },
+  ore_metal:    { scale: 0.75, spin: 3.0,  value: 3,  color: 0x8899aa },
+  energy_orb:   { scale: 1.00, spin: 12.0, value: 20, color: 0xaa44ff },
 };
 
 const GRAVITY = -15;
