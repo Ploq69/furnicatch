@@ -200,6 +200,7 @@
 <body>
   <header>
     <h1>📝 Alpfabet FBX Letter Mapper</h1>
+    <span style="color:#888;font-size:12px;margin-left:8px;">Each object below is likely a complete letter — just poorly named (Box001, Box002, etc.)</span>
     <span class="status" id="status">Loading FBX...</span>
     <span class="progress-count" id="progress-count">0 / 26 mapped</span>
   </header>
@@ -217,6 +218,8 @@
         <span class="selected-name" id="selected-name">—</span>
         <span id="selected-hint" style="color:#888;font-size:12px;">Click an object to preview</span>
         <div class="controls" style="margin-left:auto;margin-top:0;">
+          <button class="btn" id="btn-auto-order" title="Guess A-Z by object list order">Auto-map Order</button>
+          <button class="btn" id="btn-auto-name" title="Guess by matching names (U, W, etc)">Auto-map Names</button>
           <button class="btn danger" id="btn-clear">Clear All</button>
           <button class="btn primary" id="btn-export">Export JSON</button>
           <label class="btn" for="file-import">Import JSON</label>
@@ -505,6 +508,36 @@
       };
       reader.readAsText(file);
       e.target.value = '';
+    });
+
+    // ── Auto-map by order ──
+    document.getElementById('btn-auto-order').addEventListener('click', () => {
+      // Sort mesh nodes and assign A-Z in order
+      const sorted = [...meshNodes].sort((a, b) => a.name.localeCompare(b.name));
+      mapping = {};
+      for (let i = 0; i < 26 && i < sorted.length; i++) {
+        const letter = String.fromCharCode(65 + i);
+        mapping[letter] = sorted[i].name;
+      }
+      renderObjectList();
+      renderLetterGrid();
+      elStatus.textContent = `Auto-mapped ${Math.min(26, sorted.length)} letters by order`;
+    });
+
+    // ── Auto-map by name ──
+    document.getElementById('btn-auto-name').addEventListener('click', () => {
+      let count = 0;
+      for (let i = 0; i < 26; i++) {
+        const letter = String.fromCharCode(65 + i);
+        const found = meshNodes.find(m => m.name === letter);
+        if (found) {
+          mapping[letter] = found.name;
+          count++;
+        }
+      }
+      renderObjectList();
+      renderLetterGrid();
+      elStatus.textContent = `Auto-mapped ${count} letters by name match`;
     });
 
     // ── Clear All ──
