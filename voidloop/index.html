@@ -536,6 +536,10 @@
       overflow-y: auto;
     }
     #camp-ui.active { display: flex; }
+    .camp-grid { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 1000px) {
+      .camp-grid { grid-template-columns: repeat(2, 1fr); }
+    }
     .camp-title { font-size: 36px; margin-bottom: 8px; }
     .camp-subtitle { opacity: 0.6; margin-bottom: 32px; }
     .camp-grid {
@@ -600,6 +604,327 @@
       25% { transform: translateX(-6px); }
       75% { transform: translateX(6px); }
     }
+    /* Spelling Overlay */
+    /* Pet Den */
+    .pet-equipped-letter {
+      font-size: 48px;
+      font-weight: 900;
+      text-align: center;
+      color: #facc15;
+      text-shadow: 0 0 12px rgba(250, 204, 21, 0.5);
+      margin-bottom: 4px;
+    }
+    .pet-equipped-level {
+      text-align: center;
+      font-size: 14px;
+      color: #a78bfa;
+      margin-bottom: 12px;
+    }
+    .pet-letter-grid {
+      display: grid;
+      grid-template-columns: repeat(13, 1fr);
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .pet-letter-card {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.1s, border-color 0.15s;
+      background: rgba(255,255,255,0.06);
+      color: #888;
+    }
+    .pet-letter-card:hover { transform: scale(1.1); }
+    .pet-letter-card.locked {
+      background: rgba(255,255,255,0.03);
+      color: #444;
+      cursor: not-allowed;
+    }
+    .pet-letter-card.equipped {
+      border-color: #facc15;
+      box-shadow: 0 0 8px rgba(250, 204, 21, 0.4);
+    }
+    .pet-progress-bar {
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    #pet-progress-fill, #pet-overlay-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #a855f7, #facc15);
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .pet-progress-text { font-size: 12px; color: #aaa; text-align: center; }
+
+    /* Pet Den Overlay (in-game) */
+    #pet-den-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,10,0.92);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      z-index: 90;
+      padding: 40px 20px;
+      overflow-y: auto;
+    }
+    #pet-den-overlay.active { display: flex; }
+    .pet-den-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      cursor: pointer;
+      opacity: 0.6;
+      transition: opacity 0.15s;
+    }
+    .pet-den-close:hover { opacity: 1; }
+    .pet-den-title { font-size: 32px; margin-bottom: 4px; margin-top: 8px; }
+    .pet-den-subtitle { opacity: 0.6; margin-bottom: 20px; font-size: 14px; }
+    .pet-den-shell {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(255,255,255,0.1);
+      max-width: 520px;
+      width: 100%;
+    }
+    .pet-den-equipped {
+      margin-bottom: 16px;
+    }
+
+    /* Pet HUD */
+    #pet-hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,0,0,0.6);
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+      z-index: 50;
+    }
+    #pet-hud.active { display: flex; }
+    .pet-hud-letter {
+      font-size: 22px;
+      font-weight: 900;
+    }
+    .pet-hud-level {
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    #spelling-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,10,0.92);
+      backdrop-filter: blur(6px);
+      z-index: 90;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      gap: 16px;
+      pointer-events: auto;
+    }
+    #spelling-overlay.active { display: flex; }
+    .spelling-shell {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+    }
+    .spelling-progress {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #fbbf24;
+      text-shadow: 0 0 8px rgba(251,191,36,0.4);
+      min-height: 28px;
+    }
+    .spelling-progress span.spelled { color: #4ade80; }
+    .spelling-progress span.pending { color: rgba(255,255,255,0.35); }
+    .spelling-letter-box {
+      width: 120px;
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.06);
+      border: 2px solid rgba(251,191,36,0.45);
+      border-radius: 20px;
+      box-shadow: 0 0 30px rgba(251,191,36,0.15);
+    }
+    .spelling-letter-box .big-letter {
+      font-size: 72px;
+      font-weight: 900;
+      color: #facc15;
+      text-shadow: 0 0 16px rgba(250,204,21,0.5);
+      line-height: 1;
+    }
+    .spelling-play-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid rgba(74,222,128,0.6);
+      background: rgba(74,222,128,0.15);
+      color: #4ade80;
+      font-size: 28px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(74,222,128,0.2);
+    }
+    .spelling-play-btn:hover {
+      transform: scale(1.08);
+      background: rgba(74,222,128,0.25);
+      box-shadow: 0 0 28px rgba(74,222,128,0.35);
+    }
+    .spelling-play-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .spelling-input-row {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 420px;
+    }
+    #spelling-input {
+      flex: 1;
+      padding: 14px 18px;
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 1px;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      outline: none;
+    }
+    #spelling-input:focus {
+      border-color: #a855f7;
+      box-shadow: 0 0 12px rgba(168,85,247,0.3);
+    }
+    .spelling-btn {
+      padding: 12px 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .spelling-btn:hover {
+      background: rgba(255,255,255,0.18);
+      transform: translateY(-1px);
+    }
+    .spelling-btn.primary {
+      background: linear-gradient(90deg, #a855f7, #7c3aed);
+      border-color: transparent;
+    }
+    .spelling-btn.primary:hover {
+      box-shadow: 0 0 20px rgba(168,85,247,0.4);
+    }
+    .spelling-hint-area {
+      min-height: 28px;
+      font-size: 20px;
+      font-weight: 700;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 3px;
+      color: #e2e8f0;
+    }
+    .spelling-hint-count {
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      font-weight: 600;
+    }
+    .spelling-feedback {
+      min-height: 24px;
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .spelling-feedback.correct { color: #4ade80; }
+    .spelling-feedback.wrong { color: #f87171; }
+    .spelling-wordlist {
+      width: 100%;
+      max-width: 520px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .spelling-wordlist h4 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: rgba(232,224,210,0.7);
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .spelling-wordlist-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+    .spelling-word-chip {
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.8);
+      cursor: default;
+    }
+    .spelling-word-chip:hover {
+      background: rgba(168,85,247,0.2);
+      border-color: rgba(168,85,247,0.5);
+    }
+    .spelling-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .spelling-close:hover {
+      background: rgba(239,68,68,0.25);
+      border-color: rgba(239,68,68,0.5);
+    }
   </style>
 </head>
 <body>
@@ -623,6 +948,10 @@
         <span class="coin-icon">🪙</span>
         <span id="coin-display">0</span>
         <span class="coin-rate" id="coin-rate">+0</span>
+      </div>
+      <div id="pet-hud">
+        <span class="pet-hud-letter" id="pet-hud-letter">🐾</span>
+        <span class="pet-hud-level" id="pet-hud-level"></span>
       </div>
     </div>
 
@@ -724,6 +1053,22 @@
     </div>
   </div>
 
+  <!-- In-game Pet Den Overlay -->
+  <div id="pet-den-overlay">
+    <button class="pet-den-close" id="pet-den-close" title="Close">✕</button>
+    <div class="pet-den-title">🐾 Pet Den</div>
+    <div class="pet-den-subtitle">Select a pet to fight by your side</div>
+    <div class="pet-den-shell">
+      <div class="pet-den-equipped">
+        <div class="pet-equipped-letter" id="pet-overlay-letter">?</div>
+        <div class="pet-equipped-level" id="pet-overlay-level"></div>
+      </div>
+      <div class="pet-letter-grid" id="pet-overlay-grid"></div>
+      <div class="pet-progress-bar"><div id="pet-overlay-progress-fill"></div></div>
+      <div class="pet-progress-text" id="pet-overlay-progress-text"></div>
+    </div>
+  </div>
+
   <div id="camp-ui">
     <div class="camp-title">🏕️ Camp</div>
     <div class="camp-subtitle">Upgrade your gear before the next descent</div>
@@ -740,8 +1085,41 @@
         <h3>🔮 Spirit</h3>
         <div id="spirit-upgrades"></div>
       </div>
+      <div class="camp-panel" id="pet-den">
+        <h3>🐾 Pet Den</h3>
+        <div id="pet-equipped-display">
+          <div class="pet-equipped-letter" id="pet-equipped-letter">?</div>
+          <div class="pet-equipped-level" id="pet-equipped-level"></div>
+        </div>
+        <div class="pet-letter-grid" id="pet-letter-grid"></div>
+        <div class="pet-progress-bar"><div id="pet-progress-fill"></div></div>
+        <div class="pet-progress-text" id="pet-progress-text"></div>
+      </div>
     </div>
     <button id="btn-descend">DESCEND</button>
+  </div>
+
+  <div id="spelling-overlay">
+    <button class="spelling-close" id="spelling-close" title="Skip challenge">✕</button>
+    <div class="spelling-shell">
+      <div class="spelling-progress" id="spelling-progress"></div>
+      <div class="spelling-letter-box">
+        <div class="big-letter" id="spelling-big-letter">?</div>
+      </div>
+      <button class="spelling-play-btn" id="spelling-play-btn" title="Listen">▶</button>
+      <div class="spelling-hint-count" id="spelling-hint-count"></div>
+      <div class="spelling-hint-area" id="spelling-hint-area"></div>
+      <div class="spelling-input-row">
+        <input type="text" id="spelling-input" placeholder="Type the word..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <button class="spelling-btn" id="spelling-reveal-btn" style="display:none;">Reveal</button>
+        <button class="spelling-btn primary" id="spelling-check-btn">Check</button>
+      </div>
+      <div class="spelling-feedback" id="spelling-feedback"></div>
+      <div class="spelling-wordlist">
+        <h4>Words this level</h4>
+        <div class="spelling-wordlist-grid" id="spelling-wordlist-grid"></div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/main.js"></script>

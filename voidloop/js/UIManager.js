@@ -1,4 +1,4 @@
-import { GAME, UPGRADES } from './constants.js';
+import { GAME, UPGRADES, PET_LEVELS } from './constants.js';
 import { SFXMapper } from './SFXMapper.js';
 import { LoadoutPreview } from './LoadoutPreview.js';
 import {
@@ -29,6 +29,7 @@ export class UIManager {
     this._bindHotbar();
     this._bindCamp();
     this._bindLoadout();
+    this._bindPetDen();
   }
 
   _bindElements() {
@@ -70,6 +71,41 @@ export class UIManager {
     this.elCalibrationScaleSlider = document.getElementById('calibration-scale-slider');
     this.onBrightnessChange = null;
     this.onCameraZoomChange = null;
+
+    // Pet UI elements
+    this.elPetHud = document.getElementById('pet-hud');
+    this.elPetHudLetter = document.getElementById('pet-hud-letter');
+    this.elPetHudLevel = document.getElementById('pet-hud-level');
+    this.elPetEquippedLetter = document.getElementById('pet-equipped-letter');
+    this.elPetEquippedLevel = document.getElementById('pet-equipped-level');
+    this.elPetLetterGrid = document.getElementById('pet-letter-grid');
+    this.elPetProgressFill = document.getElementById('pet-progress-fill');
+    this.elPetProgressText = document.getElementById('pet-progress-text');
+
+    // Pet Den overlay elements
+    this.elPetDenOverlay = document.getElementById('pet-den-overlay');
+    this.elPetOverlayLetter = document.getElementById('pet-overlay-letter');
+    this.elPetOverlayLevel = document.getElementById('pet-overlay-level');
+    this.elPetOverlayGrid = document.getElementById('pet-overlay-grid');
+    this.elPetOverlayProgressFill = document.getElementById('pet-overlay-progress-fill');
+    this.elPetOverlayProgressText = document.getElementById('pet-overlay-progress-text');
+    this.elPetOverlayClose = document.getElementById('pet-den-close');
+    this.petDenOpen = false;
+
+    // Spelling overlay elements
+    this.elSpellingOverlay = document.getElementById('spelling-overlay');
+    this.elSpellingProgress = document.getElementById('spelling-progress');
+    this.elSpellingBigLetter = document.getElementById('spelling-big-letter');
+    this.elSpellingPlayBtn = document.getElementById('spelling-play-btn');
+    this.elSpellingHintCount = document.getElementById('spelling-hint-count');
+    this.elSpellingHintArea = document.getElementById('spelling-hint-area');
+    this.elSpellingInput = document.getElementById('spelling-input');
+    this.elSpellingRevealBtn = document.getElementById('spelling-reveal-btn');
+    this.elSpellingCheckBtn = document.getElementById('spelling-check-btn');
+    this.elSpellingFeedback = document.getElementById('spelling-feedback');
+    this.elSpellingWordlistGrid = document.getElementById('spelling-wordlist-grid');
+    this.elSpellingClose = document.getElementById('spelling-close');
+    this._bindSpellingEvents();
     this.elBrightnessSlider.addEventListener('input', (e) => {
       if (this.onBrightnessChange) this.onBrightnessChange(parseFloat(e.target.value));
     });
@@ -100,6 +136,95 @@ export class UIManager {
       });
     }
     this._bindNudgeButtons();
+  }
+
+  _bindSpellingEvents() {
+    if (!this.elSpellingOverlay) return;
+
+    this.elSpellingPlayBtn?.addEventListener('click', () => {
+      if (this.onSpellingPlay) this.onSpellingPlay();
+    });
+
+    this.elSpellingCheckBtn?.addEventListener('click', () => {
+      if (this.onSpellingCheck) this.onSpellingCheck(this.elSpellingInput.value);
+    });
+
+    this.elSpellingRevealBtn?.addEventListener('click', () => {
+      if (this.onSpellingReveal) this.onSpellingReveal();
+    });
+
+    this.elSpellingClose?.addEventListener('click', () => {
+      if (this.onSpellingClose) this.onSpellingClose();
+    });
+
+    this.elSpellingInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (this.onSpellingCheck) this.onSpellingCheck(this.elSpellingInput.value);
+      }
+    });
+  }
+
+  showSpellingChallenge(letter, wordObj, progressText, wordList) {
+    if (!this.elSpellingOverlay) return;
+    this.elSpellingOverlay.classList.add('active');
+    this.elSpellingBigLetter.textContent = letter.toUpperCase();
+    this.elSpellingProgress.innerHTML = progressText;
+    this.elSpellingHintCount.textContent = '';
+    this.elSpellingHintArea.textContent = '';
+    this.elSpellingInput.value = '';
+    this.elSpellingFeedback.textContent = '';
+    this.elSpellingFeedback.className = 'spelling-feedback';
+    this.elSpellingRevealBtn.style.display = 'none';
+    this.elSpellingInput.disabled = true;
+    this.elSpellingInput.focus();
+
+    // Render word list chips
+    if (this.elSpellingWordlistGrid) {
+      this.elSpellingWordlistGrid.innerHTML = '';
+      for (const w of wordList || []) {
+        const chip = document.createElement('div');
+        chip.className = 'spelling-word-chip';
+        chip.textContent = w;
+        chip.addEventListener('click', () => {
+          if (this.onSpellingPlayWord) this.onSpellingPlayWord(w);
+        });
+        this.elSpellingWordlistGrid.appendChild(chip);
+      }
+    }
+  }
+
+  hideSpellingChallenge() {
+    if (!this.elSpellingOverlay) return;
+    this.elSpellingOverlay.classList.remove('active');
+  }
+
+  enableSpellingInput() {
+    if (this.elSpellingInput) {
+      this.elSpellingInput.disabled = false;
+      this.elSpellingInput.focus();
+    }
+  }
+
+  updateSpellingHint(hintStr, countStr) {
+    if (this.elSpellingHintArea) this.elSpellingHintArea.textContent = hintStr;
+    if (this.elSpellingHintCount) this.elSpellingHintCount.textContent = countStr || '';
+  }
+
+  setSpellingRevealVisible(visible) {
+    if (this.elSpellingRevealBtn) {
+      this.elSpellingRevealBtn.style.display = visible ? 'inline-block' : 'none';
+    }
+  }
+
+  setSpellingFeedback(text, isCorrect) {
+    if (!this.elSpellingFeedback) return;
+    this.elSpellingFeedback.textContent = text;
+    this.elSpellingFeedback.className = 'spelling-feedback ' + (isCorrect ? 'correct' : 'wrong');
+  }
+
+  updateSpellingProgress(progressText) {
+    if (this.elSpellingProgress) this.elSpellingProgress.innerHTML = progressText;
   }
 
   _bindHotbar() {
@@ -185,6 +310,7 @@ export class UIManager {
     this.elCrosshair.style.display = 'block';
     this.elHotbar.style.display = 'flex';
     this.elFloorIndicator.style.display = 'block';
+    this._updatePetHud();
     if (this.elFps) this.elFps.style.display = 'block';
     if (this.elBrightness) this.elBrightness.style.display = 'flex';
     if (this.elZoom) this.elZoom.style.display = 'flex';
@@ -591,6 +717,7 @@ export class UIManager {
         if (u) this._updateUpgradeButton(u, btn);
       }
     });
+    this._renderPetDen();
   }
 
   hideCamp() {
@@ -602,9 +729,142 @@ export class UIManager {
     if (this.elBrightness) this.elBrightness.style.display = 'flex';
     if (this.elZoom) this.elZoom.style.display = 'flex';
     if (this.elFps) this.elFps.style.display = 'block';
+    this._updatePetHud();
   }
 
   setFPS(fps) {
     if (this.elFps) this.elFps.textContent = fps + ' FPS';
+  }
+
+  // ===== Pet Den UI =====
+
+  _bindPetDen() {
+    if (this.elPetOverlayClose) {
+      this.elPetOverlayClose.addEventListener('click', () => this.hidePetDenOverlay());
+    }
+  }
+
+  togglePetDen() {
+    if (this.petDenOpen) {
+      this.hidePetDenOverlay();
+    } else {
+      this.showPetDenOverlay();
+    }
+  }
+
+  showPetDenOverlay() {
+    if (!this.elPetDenOverlay || this.petDenOpen) return;
+    this.petDenOpen = true;
+    this.elPetDenOverlay.classList.add('active');
+    this._renderPetDenOverlay();
+  }
+
+  hidePetDenOverlay() {
+    if (!this.elPetDenOverlay || !this.petDenOpen) return;
+    this.elPetDenOverlay.classList.remove('active');
+    this.petDenOpen = false;
+    SFXMapper.uiClick();
+  }
+
+  _renderPetDen() {
+    this._renderPetPanel(
+      this.elPetEquippedLetter, this.elPetEquippedLevel,
+      this.elPetLetterGrid, this.elPetProgressFill, this.elPetProgressText
+    );
+  }
+
+  _renderPetDenOverlay() {
+    if (!this.petDenOpen) return;
+    this._renderPetPanel(
+      this.elPetOverlayLetter, this.elPetOverlayLevel,
+      this.elPetOverlayGrid, this.elPetOverlayProgressFill, this.elPetOverlayProgressText
+    );
+  }
+
+  _renderPetPanel(letterEl, levelEl, gridEl, fillEl, textEl) {
+    const pm = this.game.petManager;
+    if (!pm || !gridEl) return;
+
+    const equipped = pm.getEquippedPet();
+    const pets = pm.getAllPets();
+
+    // Update equipped display
+    if (equipped) {
+      const cfg = PET_LEVELS.find(l => l.level === equipped.level) || PET_LEVELS[0];
+      if (letterEl) {
+        letterEl.textContent = equipped.letter;
+        letterEl.style.color = '#' + cfg.color.toString(16).padStart(6, '0');
+      }
+      if (levelEl) {
+        levelEl.textContent = `Lv.${equipped.level} ${cfg.label}`;
+      }
+      // Progress bar
+      const nextReq = pm.getCapturesForNextLevel(equipped.captures);
+      const prevReq = equipped.level > 1
+        ? (PET_LEVELS.find(l => l.level === equipped.level - 1)?.capturesRequired || 0)
+        : 0;
+      const progress = equipped.level >= 7 ? 100
+        : Math.min(100, ((equipped.captures - prevReq) / (nextReq - prevReq)) * 100);
+      if (fillEl) fillEl.style.width = progress + '%';
+      if (textEl) {
+        textEl.textContent = equipped.level >= 7
+          ? `${equipped.captures} captures — MAX LEVEL`
+          : `${equipped.captures} / ${nextReq} to Lv.${equipped.level + 1}`;
+      }
+    } else {
+      if (letterEl) {
+        letterEl.textContent = '?';
+        letterEl.style.color = '#666';
+      }
+      if (levelEl) levelEl.textContent = 'No pet equipped';
+      if (fillEl) fillEl.style.width = '0%';
+      if (textEl) textEl.textContent = '';
+    }
+
+    // Render letter grid
+    gridEl.innerHTML = '';
+    for (const pet of pets) {
+      const card = document.createElement('div');
+      card.className = 'pet-letter-card';
+      card.textContent = pet.letter;
+
+      if (!pet.unlocked) {
+        card.classList.add('locked');
+      } else {
+        const cfg = PET_LEVELS.find(l => l.level === pet.level) || PET_LEVELS[0];
+        const colorHex = '#' + cfg.color.toString(16).padStart(6, '0');
+        card.style.color = colorHex;
+        card.style.background = colorHex + '22';
+        card.style.boxShadow = `inset 0 0 8px ${colorHex}33`;
+        if (equipped && equipped.letter === pet.letter) {
+          card.classList.add('equipped');
+        }
+        card.addEventListener('click', () => {
+          pm.equip(pet.letter);
+          SFXMapper.uiClick();
+          this._renderPetDen();
+          this._renderPetDenOverlay();
+          this._updatePetHud();
+          // Spawn pet immediately if mid-run
+          if (this.game.state === 'playing') {
+            this.game._spawnPet();
+          }
+        });
+      }
+      gridEl.appendChild(card);
+    }
+  }
+
+  _updatePetHud() {
+    const pm = this.game.petManager;
+    if (!pm || !this.elPetHud) return;
+    const equipped = pm.getEquippedPet();
+    if (equipped) {
+      this.elPetHud.classList.add('active');
+      if (this.elPetHudLetter) this.elPetHudLetter.textContent = equipped.letter;
+      if (this.elPetHudLevel) this.elPetHudLevel.textContent = `Lv.${equipped.level}`;
+    } else {
+      this.elPetHud.classList.remove('active');
+    }
   }
 }

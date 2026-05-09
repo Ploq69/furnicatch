@@ -234,6 +234,19 @@ export const ENEMY_LOOT_TABLES = {
   space:   { always: [{type:'coin',count:3}], common:[{type:'coin',count:2}], uncommon:[{type:'energy_orb',count:1}], rare:[{type:'crystal',count:1}], veryRare:[{type:'gem_pink',count:2}] },
 };
 
+export const PET_LEVELS = [
+  { level: 1, capturesRequired: 1,  style: 'typed',   color: 0xffd45a, label: 'Apprentice' },
+  { level: 2, capturesRequired: 5,  style: 'correct', color: 0x78f7a5, label: 'Adept' },
+  { level: 3, capturesRequired: 12, style: 'combo',   color: 0x7dd3fc, label: 'Skilled' },
+  { level: 4, capturesRequired: 25, style: 'level',   color: 0xc084fc, label: 'Expert' },
+  { level: 5, capturesRequired: 45, style: 'reward',  color: 0xfacc15, label: 'Master' },
+  { level: 6, capturesRequired: 75, style: 'ruby',    color: 0xf87171, label: 'Champion' },
+  { level: 7, capturesRequired: 120, style: 'evolved', color: 0xffffff, label: 'Legend' },
+];
+
+export const PET_ATTACK_RANGE = 3.5;
+export const PET_ATTACK_INTERVAL = 1.2;
+
 export const UPGRADES = {
   pickaxe: [
     { id: 'pick_tier', name: 'Upgrade Pickaxe', max: 4, cost: (lvl) => 50 * Math.pow(2, lvl), desc: 'Mine faster and harder blocks' },

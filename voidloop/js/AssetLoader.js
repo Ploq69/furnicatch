@@ -1,4 +1,5 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 
@@ -9,6 +10,7 @@ class AssetLoader {
     this.total = 0;
     this.loaded = 0;
     this.loader = new GLTFLoader();
+    this.fbxLoader = new FBXLoader();
   }
 
   async loadGLTF(path) {
@@ -29,6 +31,29 @@ class AssetLoader {
         resolve(gltf);
       }, undefined, (err) => {
         console.warn('Failed to load:', path, err);
+        reject(err);
+      });
+    });
+  }
+
+  async loadFBX(path) {
+    if (this.cache.has(path)) {
+      return this.cache.get(path);
+    }
+    const fullPath = '../../' + path;
+    return new Promise((resolve, reject) => {
+      this.fbxLoader.load(fullPath, (object) => {
+        // Normalize: enable shadows on all meshes
+        object.traverse(c => {
+          if (c.isMesh) {
+            c.castShadow = true;
+            c.receiveShadow = true;
+          }
+        });
+        this.cache.set(path, object);
+        resolve(object);
+      }, undefined, (err) => {
+        console.warn('Failed to load FBX:', path, err);
         reject(err);
       });
     });

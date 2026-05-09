@@ -11,11 +11,18 @@ import { SFXMapper } from './SFXMapper.js';
 import { LootDrop, LOOT_CONFIG } from './LootDrop.js';
 import { GAME, BIOMES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES } from './constants.js';
 import { getKayKitPaths } from './KayKitLoadout.js';
+import { LetterPool, SPELLING_WORDS } from './SpellingData.js';
+import { SpellingChallenge } from './SpellingEngine.js';
+import { LetterDrop } from './LetterDrop.js';
+import { glyph3D } from '../../js/Glyph3DManager.js';
+import { PetManager } from './PetManager.js';
+import { PetLetter } from './PetLetter.js';
 
 const STATES = {
   LOADING: 'loading',
   PLAYING: 'playing',
   CAMP: 'camp',
+  SPELLING: 'spelling',
 };
 
 export class Game {
@@ -88,6 +95,12 @@ export class Game {
       this.cameraZoom = val;
       this._updateCameraZoom();
     };
+    // Spelling UI callbacks
+    this.ui.onSpellingPlay = () => this._onSpellingPlay();
+    this.ui.onSpellingCheck = (input) => this._onSpellingCheck(input);
+    this.ui.onSpellingReveal = () => this._onSpellingReveal();
+    this.ui.onSpellingClose = () => this._onSpellingClose();
+    this.ui.onSpellingPlayWord = (word) => this._onSpellingPlayWord(word);
 
     // Timer — countdown
     this.floorTimer = GAME.COUNTDOWN_BASE;
@@ -98,6 +111,17 @@ export class Game {
 
     // Loot
     this.loot = new LootDrop(this.scene);
+
+    // Spelling / Letter drops
+    this.letterPool = new LetterPool();
+    this.letterDrops = new LetterDrop(this.scene);
+    this.spellingChallenge = null;
+    this.spellingGlyphMesh = null;
+
+    // Pet system
+    this.petManager = new PetManager();
+    this.pet = null;
+    this.evolvedPrototypes = new Map();
 
     // Screen shake
     this.shakeIntensity = 0;
@@ -134,6 +158,12 @@ export class Game {
     await this.particles.preloadTextures();
     // Preload loot models
     await this.loot.preloadModels();
+    // Preload alphabet glyphs for letter drops
+    await glyph3D.load();
+    await this.letterDrops.preload();
+
+    // Preload evolved alphabet FBX
+    await this._loadEvolvedAlphabet();
 
     this._initAudioOnInteraction();
     await this.player.spawn();
@@ -154,8 +184,15 @@ export class Game {
     this.floorTimer = Math.max(15, GAME.COUNTDOWN_BASE + (floorNum - 1) * GAME.COUNTDOWN_PER_FLOOR);
     this.killCount = 0;
     this.loot.clear();
-    this.ui.setFloorText(`FLOOR ${floorNum} — ${this.world.biome.name.toUpperCase()}`);
+    this.letterDrops.clear();
+    this._clearPet();
+    // Advance letter pool for new floor
+    if (floorNum === 1) this.letterPool.reset();
+    else this.letterPool.advanceLevel();
+    const letters = this.letterPool.getCurrentLetters().join(' ');
+    this.ui.setFloorText(`FLOOR ${floorNum} — ${this.world.biome.name.toUpperCase()} — Letters: ${letters}`);
     this.ui.showExitOpen(false);
+    this._spawnPet();
     this._updateTorches();
   }
 
@@ -217,8 +254,33 @@ export class Game {
         this.ui.hideLoadout();
       }
 
-      if (!this.ui.loadoutOpen) {
+      if (input.pressed('KeyP')) {
+        this.ui.togglePetDen();
+      } else if (this.ui.petDenOpen && input.pressed('Escape')) {
+        this.ui.hidePetDenOverlay();
+      }
+
+      if (!this.ui.loadoutOpen && !this.ui.petDenOpen) {
         this._updatePlaying(dt);
+      }
+    }
+
+    if (this.state === STATES.SPELLING) {
+      if (input.pressed('Escape')) {
+        this._onSpellingClose();
+      }
+      // Camera still follows player but no gameplay updates
+      const offset = 20 / this.cameraZoom;
+      this.camera.position.set(
+        this.player.position.x + offset,
+        this.player.position.y + offset,
+        this.player.position.z + offset
+      );
+      this.camera.lookAt(this.player.position.x, this.player.position.y, this.player.position.z);
+      // Bob the 3D glyph mesh if present
+      if (this.spellingGlyphMesh) {
+        this.spellingGlyphMesh.position.y = 1.5 + Math.sin(Date.now() * 0.003) * 0.15;
+        this.spellingGlyphMesh.rotation.y += dt * 1.5;
       }
     }
 
@@ -304,6 +366,14 @@ export class Game {
             if (table) {
               this.loot.spawnFromTable(blockPos, table);
             }
+            // Letter drop chance (~25%)
+            if (Math.random() < 0.25) {
+              const letter = this.letterPool.pickRandomLetter();
+              if (letter) {
+                this.letterDrops.spawn(blockPos, letter);
+                this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+              }
+            }
             // timeBonus for mining
             this.floorTimer += GAME.TIME_BONUS_MINING;
             SFXMapper.collectOre();
@@ -337,6 +407,17 @@ export class Game {
       this._onLootCollect(type, value, color);
     });
 
+    // Letter drops update
+    const collectedLetter = this.letterDrops.update(dt, this.player.position);
+    if (collectedLetter) {
+      this._enterSpellingChallenge(collectedLetter);
+    }
+
+    // Pet update
+    if (this.pet) {
+      this.pet.update(dt, this.player, this.world);
+    }
+
     // Check enemy deaths and spawn loot
     for (const enemy of this.world.enemies) {
       if (enemy.justDied) {
@@ -353,10 +434,11 @@ export class Game {
       }
     }
 
-    // Check if all enemies dead → open exit
+    // Check if all enemies dead AND all letters spelled → open exit
     if (!this.exitOpen && this.world.enemies.length > 0) {
       const allDead = this.world.enemies.every(e => e.dead);
-      if (allDead) {
+      const allLettersSpelled = this.letterPool.allSpelledForLevel();
+      if (allDead && allLettersSpelled) {
         this.exitOpen = true;
         this.ui.showExitOpen(true);
         SFXMapper.floorComplete();
@@ -498,6 +580,176 @@ export class Game {
     SFXMapper.collectOre();
   }
 
+  // ==========================================
+  // Spelling Challenge Methods
+  // ==========================================
+
+  _enterSpellingChallenge(letter) {
+    if (this.state === STATES.SPELLING) return;
+    const wordObj = this.letterPool.pickWordForLetter(letter);
+    if (!wordObj) return;
+
+    this.state = STATES.SPELLING;
+    this.spellingChallenge = new SpellingChallenge(wordObj);
+
+    // Spawn a 3D glyph floating above the player
+    if (this.spellingGlyphMesh) {
+      this.scene.remove(this.spellingGlyphMesh);
+      this.spellingGlyphMesh = null;
+    }
+    const glyph = glyph3D.createGlyph(letter, 'reward');
+    if (glyph) {
+      glyph.scale.setScalar(1.2);
+      glyph.position.set(this.player.position.x, 1.5, this.player.position.z);
+      this.scene.add(glyph);
+      this.spellingGlyphMesh = glyph;
+    }
+
+    // Build progress text
+    const progressText = this.letterPool.getProgressText()
+      .split(' ')
+      .map(token => {
+        const isSpelled = token.includes('✓');
+        return `<span class="${isSpelled ? 'spelled' : 'pending'}">${token}</span>`;
+      })
+      .join(' ');
+
+    // Build word list for current level (all words for current letters)
+    const currentLetters = this.letterPool.getCurrentLetters();
+    const wordList = [];
+    for (const l of currentLetters) {
+      const words = SPELLING_WORDS[l];
+      if (words) {
+        for (const w of words) wordList.push(w.word);
+      }
+    }
+
+    this.ui.showSpellingChallenge(letter, wordObj, progressText, wordList);
+
+    // Auto-play audio after short delay
+    setTimeout(() => {
+      this._onSpellingPlay();
+    }, 400);
+  }
+
+  async _onSpellingPlay() {
+    if (!this.spellingChallenge) return;
+    this.ui.elSpellingPlayBtn.disabled = true;
+    await this.spellingChallenge.playAudio();
+    this.ui.elSpellingPlayBtn.disabled = false;
+    this.ui.enableSpellingInput();
+  }
+
+  _onSpellingPlayWord(word) {
+    // Play audio for a specific word from the preview list
+    const path = `audio/spelling/${word.toLowerCase().replace(/[^a-z0-9]/g, '_')}_en_word.wav`;
+    const player = new Audio(path);
+    player.play().catch(() => {
+      if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(word);
+        u.rate = 0.9;
+        window.speechSynthesis.speak(u);
+      }
+    });
+  }
+
+  _onSpellingCheck(input) {
+    if (!this.spellingChallenge) return;
+    const correct = this.spellingChallenge.checkAnswer(input);
+    if (correct) {
+      this.ui.setSpellingFeedback('Correct! 🎉', true);
+      this.ui.setSpellingRevealVisible(false);
+      SFXMapper.collectOre(); // reuse positive sound
+      // Confetti / floating text
+      this.ui.showFloatingText('SPELLED!', 0x4ade80);
+      setTimeout(() => this._exitSpellingChallenge(true), 1200);
+    } else {
+      this.ui.setSpellingFeedback('Try again!', false);
+      SFXMapper.swingMiss(); // reuse negative sound
+      const hintLevel = this.spellingChallenge.getCurrentHintLevel();
+      if (hintLevel >= 1) {
+        this.ui.updateSpellingHint(
+          this.spellingChallenge.getHintDisplay(),
+          this.spellingChallenge.getLetterCountHint()
+        );
+        this.ui.setSpellingRevealVisible(this.spellingChallenge.canRevealMore());
+      }
+      // Shake the input
+      this.ui.elSpellingInput.style.animation = 'none';
+      this.ui.elSpellingInput.offsetHeight;
+      this.ui.elSpellingInput.style.animation = 'shake 0.3s';
+    }
+  }
+
+  _onSpellingReveal() {
+    if (!this.spellingChallenge) return;
+    const revealed = this.spellingChallenge.revealNextLetter();
+    if (revealed) {
+      this.ui.updateSpellingHint(
+        this.spellingChallenge.getHintDisplay(),
+        this.spellingChallenge.getLetterCountHint()
+      );
+      this.ui.setSpellingRevealVisible(this.spellingChallenge.canRevealMore());
+    }
+  }
+
+  _onSpellingClose() {
+    if (!this.spellingChallenge) return;
+    this._exitSpellingChallenge(false);
+  }
+
+  _exitSpellingChallenge(success) {
+    if (this.spellingChallenge) {
+      this.spellingChallenge.stopAudio();
+      if (success) {
+        const letter = this.spellingChallenge.word[0].toUpperCase();
+        this.letterPool.markSpelled(letter);
+        // Pet capture
+        const result = this.petManager.recordCapture(letter);
+        if (result.unlocked) {
+          this.ui.showFloatingText(`Pet ${letter} unlocked!`, 0xfacc15);
+        }
+        if (result.levelUp && this.pet && this.pet.letter === letter) {
+          this.pet.setLevel(result.newLevel);
+          this.pet.playLevelUp();
+          this.ui.showFloatingText(`Pet ${letter} ➜ Lv${result.newLevel}!`, 0x4ade80);
+          // If evolved to level 7, set the evolved prototype
+          if (result.newLevel >= 7) {
+            const evolved = this.evolvedPrototypes.get(letter);
+            if (evolved) {
+              this.pet.setEvolvedPrototype(evolved);
+              this.pet.setEvolvedMesh(evolved);
+            }
+          }
+        }
+        // Bonus rewards
+        this.player.coins += 10;
+        this.floorTimer += 5;
+        this.ui.showTimeBonus('+5s SPELLING!');
+        this.ui.showFloatingText('+10 💰', 0xfacc15);
+      }
+      this.spellingChallenge = null;
+    }
+
+    if (this.spellingGlyphMesh) {
+      this.scene.remove(this.spellingGlyphMesh);
+      this.spellingGlyphMesh.traverse((child) => {
+        if (child.isMesh && child.material && child.material.dispose) {
+          child.material.dispose();
+        }
+      });
+      this.spellingGlyphMesh = null;
+    }
+
+    this.ui.hideSpellingChallenge();
+    this.state = STATES.PLAYING;
+
+    // Update progress text on HUD if needed
+    if (this.letterPool.allSpelledForLevel()) {
+      this.ui.showFloatingText('All letters found!', 0x4ade80);
+    }
+  }
+
   _onResize() {
     const aspect = window.innerWidth / window.innerHeight;
     const d = this.baseD / this.cameraZoom;
@@ -508,5 +760,124 @@ export class Game {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.ui.preview?.resize();
+  }
+
+  // ===== Pet System =====
+
+  async _loadEvolvedAlphabet() {
+    try {
+      const fbxScene = await assetLoader.loadFBX('alpfabet.FBX');
+      if (!fbxScene) return;
+
+      // Inspect and log all object names for debugging
+      const names = [];
+      fbxScene.traverse((node) => {
+        if (node.name) names.push(node.name);
+      });
+      console.log('[Pet] alpfabet.FBX object names:', [...new Set(names)].sort());
+
+      // Try to find letter meshes by name
+      const letterMap = new Map();
+      fbxScene.traverse((node) => {
+        if (!node.isMesh) return;
+        const name = node.name;
+        // Try patterns: exact single letter, "A_text", "letter_A", etc.
+        const exactMatch = name.match(/^([A-Z])$/);
+        const textMatch = name.match(/([A-Z])_text/);
+        const letterMatch = name.match(/letter_?([A-Z])/i);
+        const meshMatch = name.match(/^Mesh(\d+)$/);
+
+        let key = null;
+        if (exactMatch) key = exactMatch[1];
+        else if (textMatch) key = textMatch[1];
+        else if (letterMatch) key = letterMatch[1].toUpperCase();
+
+        if (key && !letterMap.has(key)) {
+          letterMap.set(key, node);
+        }
+      });
+
+      // Build normalized prototypes
+      for (const [key, mesh] of letterMap) {
+        const wrapper = new THREE.Group();
+        const geometry = mesh.geometry.clone();
+        geometry.applyMatrix4(mesh.matrixWorld);
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          emissive: 0xa5f3fc,
+          emissiveIntensity: 0.6,
+          roughness: 0.4,
+          metalness: 0.2,
+        });
+        const clone = new THREE.Mesh(geometry, mat);
+        wrapper.add(clone);
+
+        const box = new THREE.Box3().setFromObject(wrapper);
+        if (box.isEmpty()) continue;
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        geometry.translate(-center.x, -box.min.y, -center.z);
+
+        const maxAxis = Math.max(size.x, size.y, size.z, 0.001);
+        wrapper.scale.setScalar(1.0 / maxAxis);
+        wrapper.userData.evolvedLetter = key;
+        this.evolvedPrototypes.set(key, wrapper);
+      }
+
+      console.log('[Pet] Evolved prototypes built:', this.evolvedPrototypes.size, [...this.evolvedPrototypes.keys()].sort());
+    } catch (err) {
+      console.warn('[Pet] Failed to load evolved alphabet FBX:', err);
+    }
+  }
+
+  _spawnPet() {
+    const equipped = this.petManager.getEquippedPet();
+    if (!equipped) return;
+
+    this._clearPet();
+
+    const pet = new PetLetter(this.scene, equipped.letter, equipped.level, {
+      onBlockDestroyed: (block) => this._onPetBlockDestroyed(block),
+      initialPosition: this.player.position.clone().add(new THREE.Vector3(-1.2, 0.5, -1.2)),
+    });
+
+    // If level 7, swap to evolved mesh
+    const evolved = this.evolvedPrototypes.get(equipped.letter);
+    if (evolved) {
+      pet.setEvolvedPrototype(evolved);
+      if (equipped.level >= 7) {
+        pet.setEvolvedMesh(evolved);
+      }
+    }
+
+    this.pet = pet;
+  }
+
+  _clearPet() {
+    if (this.pet) {
+      this.pet.dispose();
+      this.pet = null;
+    }
+  }
+
+  _onPetBlockDestroyed(block) {
+    const blockPos = block.position.clone();
+    this.particles.dust(blockPos, 8);
+    this.particles.spark(blockPos, 6);
+    const drop = this.world.mineBlock(block, this.particles, audio);
+    const table = BLOCK_LOOT_TABLES[block.typeKey];
+    if (table) {
+      this.loot.spawnFromTable(blockPos, table);
+    }
+    // Letter drop chance (~25%)
+    if (Math.random() < 0.25) {
+      const letter = this.letterPool.pickRandomLetter();
+      if (letter) {
+        this.letterDrops.spawn(blockPos, letter);
+        this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+      }
+    }
+    this.floorTimer += GAME.TIME_BONUS_MINING;
+    SFXMapper.collectOre();
   }
 }
