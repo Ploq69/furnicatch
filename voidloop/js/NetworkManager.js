@@ -62,34 +62,42 @@ export class NetworkManager {
 
     // Listen for guest join requests
     const guestRef = ref(db, `voidloop-rooms/${code}/guest/connected`);
-    const unsubGuest = onValue(guestRef, (snap) => {
+    const onGuestJoin = (snap) => {
       if (snap.val() === true) {
+        console.log('[Net] Host: guest connected, emitting join_request');
         this._emit('join_request', {});
       }
-    });
-    this._unsubs.push(() => off(guestRef, 'value', unsubGuest));
+    };
+    const unsubGuest = onValue(guestRef, onGuestJoin);
+    this._unsubs.push(() => { off(guestRef, 'value', onGuestJoin); unsubGuest(); });
 
     // Listen for messages from guest
     const msgRef = ref(db, `voidloop-rooms/${code}/messages`);
-    const unsubMsg = onChildAdded(msgRef, (snap) => {
+    const onGuestMsg = (snap) => {
       const msg = snap.val();
+      console.log('[Net] Host: received msg:', msg);
       if (msg && msg.from === 'guest') {
         this._emit('data', msg.data);
       }
-    });
-    this._unsubs.push(() => off(msgRef, 'child_added', unsubMsg));
+    };
+    const unsubMsg = onChildAdded(msgRef, onGuestMsg);
+    this._unsubs.push(() => { off(msgRef, 'child_added', onGuestMsg); unsubMsg(); });
 
+    console.log('[Net] Host: room created, code:', code);
+    this._emit('host_ready', { code });
     return { code };
   }
 
   // ── Host: approve or reject guest ──
   async approve(approve) {
     if (!this.isHost || !this.roomCode) return;
+    console.log('[Net] Host: approving guest:', approve);
     const approvalRef = ref(db, `voidloop-rooms/${this.roomCode}/approval`);
     await set(approvalRef, approve ? 'approved' : 'rejected');
 
     if (approve) {
       this.connected = true;
+      console.log('[Net] Host: guest approved, emitting player_joined');
       this._emit('player_joined', {});
     }
   }
@@ -97,6 +105,7 @@ export class NetworkManager {
   // ── Guest: join a room ──
   async join(code, opts = {}) {
     if (!db) throw new Error('Firebase not initialized. Check firebase-config.js');
+    console.log('[Net] Guest: joining room:', code);
 
     const roomRef = ref(db, `voidloop-rooms/${code}`);
     const snap = await get(roomRef);
@@ -128,46 +137,59 @@ export class NetworkManager {
 
     // Listen for approval
     const approvalRef = ref(db, `voidloop-rooms/${code}/approval`);
-    const unsubApproval = onValue(approvalRef, (snap) => {
+    const onApproval = (snap) => {
       const val = snap.val();
+      console.log('[Net] Guest: approval changed to:', val);
       if (val === 'approved') {
         this.connected = true;
+        console.log('[Net] Guest: approved, emitting join_approved');
         this._emit('join_approved', {});
       } else if (val === 'rejected') {
         this._emit('join_rejected', { reason: 'Host declined your request' });
       }
-    });
-    this._unsubs.push(() => off(approvalRef, 'value', unsubApproval));
+    };
+    const unsubApproval = onValue(approvalRef, onApproval);
+    this._unsubs.push(() => { off(approvalRef, 'value', onApproval); unsubApproval(); });
 
     // Listen for messages from host
     const msgRef = ref(db, `voidloop-rooms/${code}/messages`);
-    const unsubMsg = onChildAdded(msgRef, (snap) => {
+    const onHostMsg = (snap) => {
       const msg = snap.val();
+      console.log('[Net] Guest: received msg:', msg);
       if (msg && msg.from === 'host') {
+        console.log('[Net] Guest: forwarding data to game:', msg.data);
         this._emit('data', msg.data);
       }
-    });
-    this._unsubs.push(() => off(msgRef, 'child_added', unsubMsg));
+    };
+    const unsubMsg = onChildAdded(msgRef, onHostMsg);
+    this._unsubs.push(() => { off(msgRef, 'child_added', onHostMsg); unsubMsg(); });
 
     // Listen for host disconnect
     const hostRef = ref(db, `voidloop-rooms/${code}/host/connected`);
-    const unsubHost = onValue(hostRef, (snap) => {
+    const onHostDisconnect = (snap) => {
       if (snap.val() === false) {
         this._emit('disconnected', { reason: 'Host left' });
       }
-    });
-    this._unsubs.push(() => off(hostRef, 'value', unsubHost));
+    };
+    const unsubHost = onValue(hostRef, onHostDisconnect);
+    this._unsubs.push(() => { off(hostRef, 'value', onHostDisconnect); unsubHost(); });
 
+    console.log('[Net] Guest: waiting for approval');
     return { status: 'waiting_for_approval' };
   }
 
   // ── Send message to other player ──
   async send(msg) {
-    if (!this.roomCode) return false;
+    if (!this.roomCode) {
+      console.warn('[Net] Send failed: no room code');
+      return false;
+    }
     const from = this.isHost ? 'host' : 'guest';
     const msgRef = ref(db, `voidloop-rooms/${this.roomCode}/messages`);
     try {
+      console.log('[Net] Sending msg:', msg, 'from:', from);
       await push(msgRef, { from, data: msg, timestamp: Date.now() });
+      console.log('[Net] Send succeeded');
       return true;
     } catch (e) {
       console.error('[Net] Send failed:', e);
@@ -212,6 +234,7 @@ export class NetworkManager {
   }
 
   _emit(event, data) {
+    console.log('[Net] Emitting event:', event, 'data:', data);
     const list = this._handlers.get(event);
     if (list) list.forEach(h => {
       try { h(data); } catch (e) { console.error('[Net] Handler error:', e); }
