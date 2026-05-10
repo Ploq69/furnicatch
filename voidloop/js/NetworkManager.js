@@ -38,7 +38,6 @@ export class NetworkManager {
     if (!db) throw new Error('Firebase not initialized. Check firebase-config.js');
 
     let code;
-    // Ensure code is unique
     for (let attempts = 0; attempts < 10; attempts++) {
       code = generateRoomCode();
       const snap = await get(ref(db, `voidloop-rooms/${code}`));
@@ -54,17 +53,16 @@ export class NetworkManager {
       host: { connected: true, name: opts.name || 'Host', joinedAt: Date.now() },
       guest: { connected: false },
       approval: 'pending',
+      gameStarted: false,
       createdAt: Date.now(),
     });
 
-    // Auto-cleanup when host disconnects
     onDisconnect(roomRef).remove();
 
     // Listen for guest join requests
     const guestRef = ref(db, `voidloop-rooms/${code}/guest/connected`);
     const onGuestJoin = (snap) => {
       if (snap.val() === true) {
-        console.log('[Net] Host: guest connected, emitting join_request');
         this._emit('join_request', {});
       }
     };
@@ -75,7 +73,6 @@ export class NetworkManager {
     const msgRef = ref(db, `voidloop-rooms/${code}/messages`);
     const onGuestMsg = (snap) => {
       const msg = snap.val();
-      console.log('[Net] Host: received msg:', msg);
       if (msg && msg.from === 'guest') {
         this._emit('data', msg.data);
       }
@@ -83,7 +80,6 @@ export class NetworkManager {
     const unsubMsg = onChildAdded(msgRef, onGuestMsg);
     this._unsubs.push(() => { off(msgRef, 'child_added', onGuestMsg); unsubMsg(); });
 
-    console.log('[Net] Host: room created, code:', code);
     this._emit('host_ready', { code });
     return { code };
   }
@@ -91,21 +87,27 @@ export class NetworkManager {
   // ── Host: approve or reject guest ──
   async approve(approve) {
     if (!this.isHost || !this.roomCode) return;
-    console.log('[Net] Host: approving guest:', approve);
     const approvalRef = ref(db, `voidloop-rooms/${this.roomCode}/approval`);
     await set(approvalRef, approve ? 'approved' : 'rejected');
 
     if (approve) {
       this.connected = true;
-      console.log('[Net] Host: guest approved, emitting player_joined');
       this._emit('player_joined', {});
     }
+  }
+
+  // ── Host: signal game start ──
+  async startGame() {
+    if (!this.isHost || !this.roomCode) return false;
+    // Write persistent flag so guest can detect start even if message is missed
+    await set(ref(db, `voidloop-rooms/${this.roomCode}/gameStarted`), true);
+    // Also send real-time message
+    return this.send({ _type: 'start_game' });
   }
 
   // ── Guest: join a room ──
   async join(code, opts = {}) {
     if (!db) throw new Error('Firebase not initialized. Check firebase-config.js');
-    console.log('[Net] Guest: joining room:', code);
 
     const roomRef = ref(db, `voidloop-rooms/${code}`);
     const snap = await get(roomRef);
@@ -125,24 +127,20 @@ export class NetworkManager {
     this.isHost = false;
     this.role = 'guest';
 
-    // Mark guest as connected
     await set(ref(db, `voidloop-rooms/${code}/guest`), {
       connected: true,
       name: opts.name || 'Guest',
       joinedAt: Date.now(),
     });
 
-    // Auto-cleanup on disconnect
     onDisconnect(ref(db, `voidloop-rooms/${code}/guest`)).set({ connected: false });
 
     // Listen for approval
     const approvalRef = ref(db, `voidloop-rooms/${code}/approval`);
     const onApproval = (snap) => {
       const val = snap.val();
-      console.log('[Net] Guest: approval changed to:', val);
       if (val === 'approved') {
         this.connected = true;
-        console.log('[Net] Guest: approved, emitting join_approved');
         this._emit('join_approved', {});
       } else if (val === 'rejected') {
         this._emit('join_rejected', { reason: 'Host declined your request' });
@@ -151,13 +149,21 @@ export class NetworkManager {
     const unsubApproval = onValue(approvalRef, onApproval);
     this._unsubs.push(() => { off(approvalRef, 'value', onApproval); unsubApproval(); });
 
+    // Listen for game start flag (backup mechanism)
+    const gameStartedRef = ref(db, `voidloop-rooms/${code}/gameStarted`);
+    const onGameStarted = (snap) => {
+      if (snap.val() === true) {
+        this._emit('data', { _type: 'start_game' });
+      }
+    };
+    const unsubGameStarted = onValue(gameStartedRef, onGameStarted);
+    this._unsubs.push(() => { off(gameStartedRef, 'value', onGameStarted); unsubGameStarted(); });
+
     // Listen for messages from host
     const msgRef = ref(db, `voidloop-rooms/${code}/messages`);
     const onHostMsg = (snap) => {
       const msg = snap.val();
-      console.log('[Net] Guest: received msg:', msg);
       if (msg && msg.from === 'host') {
-        console.log('[Net] Guest: forwarding data to game:', msg.data);
         this._emit('data', msg.data);
       }
     };
@@ -174,22 +180,16 @@ export class NetworkManager {
     const unsubHost = onValue(hostRef, onHostDisconnect);
     this._unsubs.push(() => { off(hostRef, 'value', onHostDisconnect); unsubHost(); });
 
-    console.log('[Net] Guest: waiting for approval');
     return { status: 'waiting_for_approval' };
   }
 
   // ── Send message to other player ──
   async send(msg) {
-    if (!this.roomCode) {
-      console.warn('[Net] Send failed: no room code');
-      return false;
-    }
+    if (!this.roomCode) return false;
     const from = this.isHost ? 'host' : 'guest';
     const msgRef = ref(db, `voidloop-rooms/${this.roomCode}/messages`);
     try {
-      console.log('[Net] Sending msg:', msg, 'from:', from);
       await push(msgRef, { from, data: msg, timestamp: Date.now() });
-      console.log('[Net] Send succeeded');
       return true;
     } catch (e) {
       console.error('[Net] Send failed:', e);
@@ -199,16 +199,13 @@ export class NetworkManager {
 
   // ── Disconnect and cleanup ──
   async disconnect() {
-    // Unsubscribe all listeners
     this._unsubs.forEach(u => u());
     this._unsubs = [];
 
     if (this.roomCode) {
       if (this.isHost) {
-        // Host leaving: delete the whole room
         await remove(ref(db, `voidloop-rooms/${this.roomCode}`));
       } else {
-        // Guest leaving: just mark as disconnected
         await set(ref(db, `voidloop-rooms/${this.roomCode}/guest`), { connected: false });
       }
     }
@@ -234,7 +231,6 @@ export class NetworkManager {
   }
 
   _emit(event, data) {
-    console.log('[Net] Emitting event:', event, 'data:', data);
     const list = this._handlers.get(event);
     if (list) list.forEach(h => {
       try { h(data); } catch (e) { console.error('[Net] Handler error:', e); }
