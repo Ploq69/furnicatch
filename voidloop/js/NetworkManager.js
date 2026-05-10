@@ -1,146 +1,156 @@
 /**
- * NetworkManager — Client-side multiplayer networking
- * Wraps Socket.io with host approval flow and game message routing.
+ * NetworkManager — PeerJS-based P2P multiplayer
+ * Zero servers. Zero terminals. Just browsers talking directly.
+ * Uses PeerJS cloud (free) for initial handshake, then WebRTC data channels.
  */
 
-// Socket.io client is loaded via CDN script tag (global `io`)
-const _io = typeof window !== 'undefined' ? window.io : null;
+const _Peer = typeof window !== 'undefined' ? window.Peer : null;
 
 export class NetworkManager {
   constructor() {
-    this.socket = null;
+    this.peer = null;        // Our PeerJS peer
+    this.conn = null;        // Active data connection to remote peer
     this.isHost = false;
-    this.roomCode = null;
+    this.remoteId = null;    // The other player's peer ID
+    this.myId = null;
     this.connected = false;
     this._handlers = new Map();
   }
 
-  // ── Connection ──
-  connect(url) {
+  // ── Host: create a peer and get an ID ──
+  host() {
     return new Promise((resolve, reject) => {
-      if (!_io) {
-        reject(new Error('Socket.io client not loaded. Add <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script> to HTML.'));
-        return;
-      }
+      if (!_Peer) { reject(new Error('PeerJS not loaded')); return; }
 
-      this.socket = _io(url, {
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+      this.peer = new Peer({
+        host: 'peerjs.com',
+        port: 443,
+        secure: true,
+        debug: 1,
       });
 
-      this.socket.on('connect', () => {
-        console.log('[Net] Connected:', this.socket.id);
-        this.connected = true;
-        this._emit('connected', { socketId: this.socket.id });
-        resolve({ socketId: this.socket.id });
+      this.peer.on('open', (id) => {
+        this.myId = id;
+        this.isHost = true;
+        console.log('[Net] Hosting as', id);
+        this._emit('host_ready', { id });
+        resolve({ id });
       });
 
-      this.socket.on('disconnect', (reason) => {
-        console.log('[Net] Disconnected:', reason);
-        this.connected = false;
-        this._emit('disconnected', { reason });
-      });
-
-      this.socket.on('connect_error', (err) => {
-        console.error('[Net] Connect error:', err.message);
+      this.peer.on('error', (err) => {
+        console.error('[Net] Peer error:', err);
+        this._emit('error', { message: err.message });
         reject(err);
       });
 
-      // ── Room / Approval events ──
-      this.socket.on('join_request', (data) => {
-        this._emit('join_request', data); // host receives this
+      // Listen for incoming connections
+      this.peer.on('connection', (conn) => {
+        console.log('[Net] Incoming connection from', conn.peer);
+        // Don't accept yet — wait for host approval
+        this._emit('join_request', { peerId: conn.peer, conn });
+      });
+    });
+  }
+
+  // ── Host: approve or reject a pending connection ──
+  approveConnection(conn, approve) {
+    if (!this.isHost) return;
+
+    if (!approve) {
+      conn.close();
+      return;
+    }
+
+    this.conn = conn;
+    this.remoteId = conn.peer;
+    this._setupConnection(conn);
+    this._emit('player_joined', { peerId: conn.peer });
+  }
+
+  // ── Client: connect to a host's peer ID ──
+  join(hostId) {
+    return new Promise((resolve, reject) => {
+      if (!_Peer) { reject(new Error('PeerJS not loaded')); return; }
+
+      this.peer = new Peer({
+        host: 'peerjs.com',
+        port: 443,
+        secure: true,
+        debug: 1,
       });
 
-      this.socket.on('join_approved', (data) => {
-        this._emit('join_approved', data);
-      });
-
-      this.socket.on('join_rejected', (data) => {
-        this._emit('join_rejected', data);
-      });
-
-      this.socket.on('player_joined', (data) => {
-        this._emit('player_joined', data);
-      });
-
-      this.socket.on('player_left', (data) => {
-        this._emit('player_left', data);
-      });
-
-      this.socket.on('host_left', (data) => {
-        this._emit('host_left', data);
+      this.peer.on('open', (id) => {
+        this.myId = id;
         this.isHost = false;
-        this.roomCode = null;
+        console.log('[Net] Joining as', id, '→ host', hostId);
+
+        const conn = this.peer.connect(hostId, {
+          reliable: true,
+          serialization: 'json',
+        });
+
+        conn.on('open', () => {
+          console.log('[Net] Connected to host!');
+          this.conn = conn;
+          this.remoteId = hostId;
+          this.connected = true;
+          this._setupConnection(conn);
+          this._emit('connected', { peerId: hostId });
+          resolve({ peerId: hostId });
+        });
+
+        conn.on('error', (err) => {
+          console.error('[Net] Connection error:', err);
+          reject(err);
+        });
       });
 
-      // ── Game messages ──
-      this.socket.on('game_msg', (payload) => {
-        this._emit('game_msg', payload);
+      this.peer.on('error', (err) => {
+        console.error('[Net] Peer error:', err);
+        this._emit('error', { message: err.message });
+        reject(err);
       });
+    });
+  }
+
+  // ── Setup data channel handlers ──
+  _setupConnection(conn) {
+    conn.on('data', (data) => {
+      this._emit('data', data);
+    });
+
+    conn.on('close', () => {
+      console.log('[Net] Connection closed');
+      this.connected = false;
+      this.conn = null;
+      this._emit('disconnected', { reason: 'Connection closed' });
+    });
+
+    conn.on('error', (err) => {
+      console.error('[Net] Data channel error:', err);
+      this._emit('error', { message: err.message });
     });
   }
 
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    if (this.conn) { this.conn.close(); this.conn = null; }
+    if (this.peer) { this.peer.destroy(); this.peer = null; }
     this.connected = false;
     this.isHost = false;
-    this.roomCode = null;
+    this.remoteId = null;
+    this.myId = null;
   }
 
-  // ── Room management ──
-  hostRoom(opts = {}) {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) { reject(new Error('Not connected')); return; }
-      this.socket.emit('host_room', opts, (res) => {
-        if (res.ok) {
-          this.isHost = true;
-          this.roomCode = res.code;
-          resolve(res);
-        } else {
-          reject(new Error(res.error || 'Failed to host room'));
-        }
-      });
-    });
-  }
-
-  joinRoom(code, password = '', name = 'Guest') {
-    return new Promise((resolve, reject) => {
-      if (!this.socket) { reject(new Error('Not connected')); return; }
-      this.socket.emit('join_request', { code, password, name }, (res) => {
-        if (res.ok) {
-          this.roomCode = code;
-          resolve(res);
-        } else {
-          reject(new Error(res.error || 'Failed to join room'));
-        }
-      });
-    });
-  }
-
-  approvePlayer(socketId, approve = true) {
-    return new Promise((resolve, reject) => {
-      if (!this.socket || !this.isHost) { reject(new Error('Not host')); return; }
-      this.socket.emit('approve_player', { socketId, approve }, (res) => {
-        if (res?.ok) resolve(res);
-        else reject(new Error(res?.error || 'Approval failed'));
-      });
-    });
-  }
-
-  // ── Game message passing ──
+  // ── Send data to remote peer ──
   send(msg) {
-    if (!this.socket || !this.connected) return;
-    this.socket.emit('game_msg', msg);
-  }
-
-  broadcast(msg) {
-    if (!this.socket || !this.connected || !this.isHost) return;
-    this.socket.emit('game_broadcast', msg);
+    if (!this.conn || !this.connected) return false;
+    try {
+      this.conn.send(msg);
+      return true;
+    } catch (e) {
+      console.error('[Net] Send failed:', e);
+      return false;
+    }
   }
 
   // ── Event system ──
@@ -165,5 +175,5 @@ export class NetworkManager {
   }
 }
 
-// Singleton instance
+// Singleton
 export const net = new NetworkManager();

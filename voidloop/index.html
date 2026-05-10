@@ -1366,16 +1366,8 @@
     <div class="lobby-title">VOIDLOOP</div>
     <div class="lobby-subtitle">Multiplayer Co-op</div>
 
-    <!-- Server URL input -->
-    <div class="lobby-panel" id="lobby-connect-panel">
-      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:700;">Relay Server URL</label>
-      <input class="lobby-input" id="lobby-url" type="text" placeholder="ws://localhost:3000" value="ws://localhost:3000" />
-      <button class="lobby-btn primary" id="lobby-connect-btn" style="width:100%;">Connect to Server</button>
-      <div class="lobby-status" id="lobby-connect-status"></div>
-    </div>
-
-    <!-- Host / Join panels (hidden until connected) -->
-    <div id="lobby-action-panels" style="display:none;flex-direction:column;gap:20px;align-items:center;width:100%;max-width:420px;">
+    <!-- Host / Join panels -->
+    <div id="lobby-action-panels" style="display:flex;flex-direction:column;gap:20px;align-items:center;width:100%;max-width:420px;">
       <!-- Host panel -->
       <div class="lobby-panel">
         <div class="lobby-divider">Host a Game</div>
@@ -1418,7 +1410,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" crossorigin="anonymous"></script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
