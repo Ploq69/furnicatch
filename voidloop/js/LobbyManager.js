@@ -28,6 +28,7 @@ export class LobbyManager {
     this.joinStatus = document.getElementById('join-status');
 
     this.startBtn = document.getElementById('lobby-start-btn');
+    this.soloBtn = document.getElementById('solo-btn');
 
     this.approvalText = document.getElementById('approval-text');
     this.approvalAccept = document.getElementById('approval-accept');
@@ -40,19 +41,29 @@ export class LobbyManager {
   }
 
   _bindEvents() {
+    // Solo play (diagnostic — bypasses all multiplayer)
+    this.soloBtn?.addEventListener('click', () => this._onSolo());
+
+    // Host
     this.hostBtn?.addEventListener('click', () => this._onHost());
+
+    // Join
     this.joinBtn?.addEventListener('click', () => this._onJoin());
 
+    // Copy code
     this.hostCodeDisplay?.addEventListener('click', () => {
       const code = this.hostCodeDisplay.textContent;
       if (code) navigator.clipboard?.writeText(code).catch(() => {});
     });
 
+    // Approval
     this.approvalAccept?.addEventListener('click', () => this._onApproval(true));
     this.approvalReject?.addEventListener('click', () => this._onApproval(false));
 
+    // Start game
     this.startBtn?.addEventListener('click', () => this._onStartGame());
 
+    // Network events
     net.on('host_ready', ({ code }) => {
       this.hostCodeDisplay.textContent = code;
       this.hostCodeRow.style.display = 'flex';
@@ -104,6 +115,29 @@ export class LobbyManager {
         this.joinStatus.className = 'lobby-status err';
       }
     });
+  }
+
+  // ── Solo play: bypass all multiplayer, start game immediately ──
+  _onSolo() {
+    if (this._hasStarted) return;
+    this.soloBtn.disabled = true;
+    this.soloBtn.textContent = 'Loading...';
+    this._hasStarted = true;
+
+    // Hide lobby
+    this.overlay.classList.add('hidden');
+    this.approvalPopup.classList.remove('active');
+    const loading = document.getElementById('loading');
+    if (loading) loading.style.display = 'flex';
+
+    try {
+      this.game = new Game(this.container);
+      this.game.isMultiplayer = false;
+      this.game.isHost = true;
+      this.game.net = null;
+    } catch (err) {
+      this._showStartError(err);
+    }
   }
 
   async _onHost() {
@@ -173,11 +207,8 @@ export class LobbyManager {
     this.startBtn.textContent = 'Starting...';
     this.hostStatus.textContent = 'Starting game...';
 
-    // Use the robust startGame method that writes a persistent flag + sends message
-    const sent = await net.startGame();
-    if (!sent) {
-      this.hostStatus.textContent = 'Failed to signal guest. Starting solo...';
-    }
+    // Signal guest via persistent flag
+    await net.startGame();
 
     this._startGame();
   }
@@ -189,22 +220,49 @@ export class LobbyManager {
   }
 
   _startGame() {
+    // Hide ALL overlays before starting
     this.overlay.classList.add('hidden');
+    this.approvalPopup.classList.remove('active');
+
     const loading = document.getElementById('loading');
     if (loading) loading.style.display = 'flex';
+
+    // Safety timeout: if game doesn't start in 10s, show error
+    const timeoutId = setTimeout(() => {
+      if (this._hasStarted && !this.game) {
+        this._showStartError(new Error('Game loading timed out. Check console for details.'));
+      }
+    }, 10000);
 
     try {
       this.game = new Game(this.container);
       this.game.isMultiplayer = true;
       this.game.isHost = net.isHost;
       this.game.net = net;
+      clearTimeout(timeoutId);
     } catch (err) {
-      console.error('[Lobby] Game start error:', err);
-      this.joinStatus.textContent = 'Failed to start game: ' + err.message;
-      this.joinStatus.className = 'lobby-status err';
-      this.overlay.classList.remove('hidden');
-      if (loading) loading.style.display = 'none';
-      this._hasStarted = false;
+      clearTimeout(timeoutId);
+      this._showStartError(err);
     }
+  }
+
+  _showStartError(err) {
+    console.error('[Lobby] Game start failed:', err);
+    const msg = err?.message || 'Unknown error';
+    const statusEl = net.isHost ? this.hostStatus : this.joinStatus;
+    statusEl.textContent = 'Failed to start: ' + msg;
+    statusEl.className = 'lobby-status err';
+
+    // Bring lobby back so user can retry
+    this.overlay.classList.remove('hidden');
+    const loading = document.getElementById('loading');
+    if (loading) loading.style.display = 'none';
+
+    // Reset buttons
+    this._hasStarted = false;
+    this.startBtn.disabled = false;
+    this.startBtn.textContent = 'Start Game';
+    this.soloBtn.disabled = false;
+    this.soloBtn.textContent = 'Play Solo';
   }
 }
