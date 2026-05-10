@@ -1,0 +1,13 @@
+{
+  "name": "voidloop-server",
+  "version": "1.0.0",
+  "description": "Relay server for Voidloop multiplayer",
+  "type": "module",
+  "scripts": {
+    "start": "node server/relay-server.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.3"
+  }
+}
