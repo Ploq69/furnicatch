@@ -36,7 +36,7 @@ class AudioManager {
 
     this.loading.add(path);
     try {
-      const res = await fetch('../../' + path);
+      const res = await fetch(path);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const buf = await res.arrayBuffer();
       const audioBuf = await this.ctx.decodeAudioData(buf);

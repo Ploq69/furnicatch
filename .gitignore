@@ -37,3 +37,30 @@ audio/
 # Generated/test files
 animation_test.html
 simple_alphabet.glb
+
+# Local Netlify folder
+.netlify
+
+# Additional 3D asset packs
+EverythingLibrary_Animals_002/
+Free Icon Pack v3.1 (Basic)/
+Helton Yan's Pixel Combat - Single Files/
+KayKit_Adventurers_2.0_FREE/
+KayKit_BlockBits_1.0_FREE/
+KayKit_Character_Animations_1.1/
+KayKit_City_Builder_Bits_1.0_FREE/
+KayKit_Forest_Nature_Pack_1.0_FREE/
+KayKit_Holiday_Bits_1.0_FREE/
+KayKit_Medieval_Hexagon_Pack_1.0_FREE/
+KayKit_Platformer_Pack_1.0_FREE/
+KayKit_RPGToolsBits_1.0_FREE/
+KayKit_ResourceBits_1.0_FREE/
+KayKit_Skeletons_1.1_FREE/
+KayKit_Space_Base_Bits_1.0_FREE/
+Styloo Guns Asset Pack GLTF FBX V1.1/
+StylooClassroomAssetPack GLTF & FBX/
+Thai_Letters_OBJ.rar
+brackeys_vfx_bundle/
+
+# Copied audio sfx (generated from Helton Yan pack)
+voidloop/audio/sfx/

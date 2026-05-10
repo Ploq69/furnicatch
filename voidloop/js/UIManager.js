@@ -94,6 +94,9 @@ export class UIManager {
     this.elPetOverlayClose = document.getElementById('pet-den-close');
     this.petDenOpen = false;
 
+    // Touch controls
+    this.elTouchControls = document.getElementById('touch-controls');
+
     // Spelling overlay elements
     this.elSpellingOverlay = document.getElementById('spelling-overlay');
     this.elSpellingProgress = document.getElementById('spelling-progress');
@@ -169,6 +172,7 @@ export class UIManager {
 
   showSpellingChallenge(letter, wordObj, progressText, wordList) {
     if (!this.elSpellingOverlay) return;
+    this._setTouchControlsVisible(false);
     this.elSpellingOverlay.classList.add('active');
     this.elSpellingBigLetter.textContent = letter.toUpperCase();
     this.elSpellingProgress.innerHTML = progressText;
@@ -199,6 +203,7 @@ export class UIManager {
   hideSpellingChallenge() {
     if (!this.elSpellingOverlay) return;
     this.elSpellingOverlay.classList.remove('active');
+    this._setTouchControlsVisible(true);
   }
 
   enableSpellingInput() {
@@ -306,6 +311,12 @@ export class UIManager {
     this.elLoadingText.textContent = `Loading assets... ${current}/${total}`;
   }
 
+  _setTouchControlsVisible(visible) {
+    if (this.elTouchControls) {
+      this.elTouchControls.style.display = visible ? 'block' : 'none';
+    }
+  }
+
   hideLoading() {
     this.elLoading.style.display = 'none';
     this.elHud.style.display = 'block';
@@ -329,6 +340,7 @@ export class UIManager {
 
   async showLoadout() {
     if (!this.elLoadout || this.loadoutOpen || this.loadoutBusy) return;
+    this._setTouchControlsVisible(false);
     this.loadoutBusy = true;
     this.loadoutState = cloneLoadout(this.game.player.loadout || DEFAULT_LOADOUT);
     this._renderLoadout();
@@ -352,6 +364,7 @@ export class UIManager {
 
   async hideLoadout() {
     if (!this.elLoadout || !this.loadoutOpen || this.loadoutBusy) return;
+    this._setTouchControlsVisible(true);
     this.loadoutBusy = true;
     await this.game.player.applyLoadout(this.loadoutState);
     this.elLoadout.classList.remove('active');
@@ -700,6 +713,7 @@ export class UIManager {
   showCamp(fromDeath = false) {
     this._campFromDeath = fromDeath;
     if (document.pointerLockElement) document.exitPointerLock();
+    this._setTouchControlsVisible(false);
     this.elCamp.classList.add('active');
     this.elHud.style.display = 'none';
     this.elCrosshair.style.display = 'none';
@@ -724,6 +738,7 @@ export class UIManager {
 
   hideCamp() {
     this.elCamp.classList.remove('active');
+    this._setTouchControlsVisible(true);
     this.elHud.style.display = 'block';
     this.elCrosshair.style.display = 'block';
     this.elHotbar.style.display = 'flex';
@@ -756,6 +771,7 @@ export class UIManager {
 
   showPetDenOverlay() {
     if (!this.elPetDenOverlay || this.petDenOpen) return;
+    this._setTouchControlsVisible(false);
     this.petDenOpen = true;
     this.elPetDenOverlay.classList.add('active');
     this._renderPetDenOverlay();
@@ -765,6 +781,7 @@ export class UIManager {
     if (!this.elPetDenOverlay || !this.petDenOpen) return;
     this.elPetDenOverlay.classList.remove('active');
     this.petDenOpen = false;
+    this._setTouchControlsVisible(true);
     SFXMapper.uiClick();
   }
 

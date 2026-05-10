@@ -39,11 +39,15 @@ export class TouchControls {
     // Hotbar
     this.hotbar = document.getElementById('touch-hotbar');
 
+    // Loadout
+    this.loadoutBtn = document.getElementById('touch-loadout');
+
     this._bindJoystick();
     this._bindSprint();
     this._bindAttack();
     this._bindBlock();
     this._bindHotbar();
+    this._bindLoadout();
   }
 
   _bindJoystick() {
@@ -197,5 +201,19 @@ export class TouchControls {
         });
       }, { passive: false });
     });
+  }
+
+  _bindLoadout() {
+    const btn = this.loadoutBtn;
+    if (!btn) return;
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      input.keys['KeyI'] = true;
+      btn.style.transform = 'scale(0.92)';
+      requestAnimationFrame(() => {
+        input.keys['KeyI'] = false;
+        btn.style.transform = 'scale(1)';
+      });
+    }, { passive: false });
   }
 }

@@ -26,6 +26,7 @@ export class LobbyManager {
     this.joinName = document.getElementById('join-name');
     this.joinBtn = document.getElementById('join-btn');
     this.joinStatus = document.getElementById('join-status');
+    this._joinOriginalText = this.joinBtn?.textContent || 'Join Room';
 
     this.startBtn = document.getElementById('lobby-start-btn');
     this.soloBtn = document.getElementById('solo-btn');
@@ -49,6 +50,11 @@ export class LobbyManager {
 
     // Join
     this.joinBtn?.addEventListener('click', () => this._onJoin());
+
+    // Enter key in join code input
+    this.joinCode?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this._onJoin();
+    });
 
     // Copy code
     this.hostCodeDisplay?.addEventListener('click', () => {
@@ -124,9 +130,11 @@ export class LobbyManager {
     this.soloBtn.textContent = 'Loading...';
     this._hasStarted = true;
 
-    // Hide lobby
+    // Hide lobby and touch controls
     this.overlay.classList.add('hidden');
     this.approvalPopup.classList.remove('active');
+    const tc = document.getElementById('touch-controls');
+    if (tc) tc.style.display = 'none';
     const loading = document.getElementById('loading');
     if (loading) loading.style.display = 'flex';
 
@@ -162,26 +170,59 @@ export class LobbyManager {
   async _onJoin() {
     const code = this.joinCode.value.trim().toUpperCase();
     if (!code) {
-      this.joinStatus.textContent = 'Enter the code from dad';
-      this.joinStatus.className = 'lobby-status err';
+      this._showJoinError('Enter the room code');
       return;
     }
 
-    this.joinStatus.textContent = 'Connecting...';
-    this.joinStatus.className = 'lobby-status warn';
-    this.joinBtn.disabled = true;
+    this._setJoinState('connecting');
 
     try {
-      const res = await net.join(code, { name: this.joinName.value.trim() || 'Guest' });
+      // Race against a 10s timeout so the user never hangs forever
+      const res = await this._joinWithTimeout(code, 10000);
       if (res.status === 'waiting_for_approval') {
-        this.joinStatus.textContent = 'Waiting for dad to approve...';
-        this.joinStatus.className = 'lobby-status warn';
+        this._setJoinState('waiting');
       }
     } catch (err) {
-      this.joinStatus.textContent = 'Failed: ' + err.message;
-      this.joinStatus.className = 'lobby-status err';
-      this.joinBtn.disabled = false;
+      this._setJoinState('idle');
+      this._showJoinError(err.message || 'Could not connect');
     }
+  }
+
+  _joinWithTimeout(code, ms) {
+    return Promise.race([
+      net.join(code, { name: this.joinName.value.trim() || 'Guest' }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection timed out — check internet or room code')), ms)
+      ),
+    ]);
+  }
+
+  _setJoinState(state) {
+    if (state === 'connecting') {
+      this.joinStatus.textContent = 'Connecting to room...';
+      this.joinStatus.className = 'lobby-status warn';
+      this.joinBtn.disabled = true;
+      this.joinBtn.textContent = 'Joining...';
+      this.joinBtn.classList.add('lobby-btn-loading');
+    } else if (state === 'waiting') {
+      this.joinStatus.textContent = 'Waiting for host to approve...';
+      this.joinStatus.className = 'lobby-status ok';
+      this.joinBtn.disabled = true;
+      this.joinBtn.textContent = 'Pending...';
+      this.joinBtn.classList.remove('lobby-btn-loading');
+    } else {
+      // idle / error
+      this.joinBtn.disabled = false;
+      this.joinBtn.textContent = this._joinOriginalText;
+      this.joinBtn.classList.remove('lobby-btn-loading');
+    }
+  }
+
+  _showJoinError(msg) {
+    this.joinStatus.textContent = msg;
+    this.joinStatus.className = 'lobby-status err';
+    this.joinBtn.classList.add('lobby-btn-shake');
+    setTimeout(() => this.joinBtn.classList.remove('lobby-btn-shake'), 500);
   }
 
   _showApproval() {
@@ -223,6 +264,8 @@ export class LobbyManager {
     // Hide ALL overlays before starting
     this.overlay.classList.add('hidden');
     this.approvalPopup.classList.remove('active');
+    const tc = document.getElementById('touch-controls');
+    if (tc) tc.style.display = 'none';
 
     const loading = document.getElementById('loading');
     if (loading) loading.style.display = 'flex';
@@ -257,6 +300,9 @@ export class LobbyManager {
     this.overlay.classList.remove('hidden');
     const loading = document.getElementById('loading');
     if (loading) loading.style.display = 'none';
+    // Hide touch controls so they don't block the lobby
+    const tc = document.getElementById('touch-controls');
+    if (tc) tc.style.display = 'none';
 
     // Reset buttons
     this._hasStarted = false;

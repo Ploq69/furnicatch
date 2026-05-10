@@ -18,6 +18,7 @@ import { LetterDrop } from './LetterDrop.js';
 import { glyph3D } from '../../js/Glyph3DManager.js';
 import { PetManager } from './PetManager.js';
 import { PetLetter } from './PetLetter.js';
+import { RemotePlayer } from './RemotePlayer.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -149,6 +150,14 @@ export class Game {
     // Touch controls for iPad/tablet
     this.touchControls = new TouchControls();
 
+    // Multiplayer sync state
+    this.isMultiplayer = false;
+    this.isHost = false;
+    this.net = null;
+    this._worldSeed = null;
+    this._syncSendTimer = 0;
+    this._remotePlayer = null;
+
     // Start loading
     this._loadAssets();
   }
@@ -185,10 +194,32 @@ export class Game {
     await this.player.spawn();
     await this.player.equipWeapon(1); // Sync functional weapon with sword visual
 
+    // Multiplayer: host generates and shares world seed, guest waits for it
+    if (this.isMultiplayer && this.net) {
+      if (this.isHost) {
+        this._worldSeed = Math.floor(Math.random() * 1000000);
+        this.net.syncWorldSeed(this._worldSeed);
+      } else {
+        try {
+          this._worldSeed = await this._waitForWorldSeed();
+        } catch (err) {
+          console.error('[Game] Failed to get world seed:', err);
+        }
+      }
+      // Set up network listeners
+      this.net.onPlayerState((state) => this._updateRemotePlayer(state));
+      this.net.onEvent(({ type, data }) => this._handleNetEvent(type, data));
+    }
+
     if (this.playtestKey) {
       await this._loadPlaytestLevel();
     } else {
-      await this._generateFloor(1);
+      await this._generateFloor(1, this._worldSeed);
+    }
+
+    // Create remote player for multiplayer
+    if (this.isMultiplayer) {
+      this._createRemotePlayer();
     }
 
     this.ui.hideLoading();
@@ -196,10 +227,21 @@ export class Game {
     this.renderer.setAnimationLoop(() => this._loop());
   }
 
-  async _generateFloor(floorNum) {
+  async _waitForWorldSeed(timeout = 15000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const seed = await this.net.getWorldSeed();
+      if (seed != null) return seed;
+      await new Promise(r => setTimeout(r, 500));
+    }
+    throw new Error('Timed out waiting for world seed from host');
+  }
+
+  async _generateFloor(floorNum, seed) {
     this._clearExitPortal();
     this.world.setFloor(floorNum);
-    await this.world.generateFloor();
+    const floorSeed = seed != null ? seed + floorNum * 7919 : null;
+    await this.world.generateFloor(floorSeed);
     if (this.world.startPosition) {
       this.player.position.copy(this.world.startPosition);
     } else {
@@ -317,7 +359,11 @@ export class Game {
       this.totalTime = 0;
       await this._generateFloor(1);
     } else {
-      await this._generateFloor(this.world.floor + 1);
+      const nextFloor = this.world.floor + 1;
+      if (this.isHost && this.net) {
+        this.net.syncEvent('floor_changed', { floorNum: nextFloor, seed: this._worldSeed });
+      }
+      await this._generateFloor(nextFloor, this._worldSeed);
     }
   }
 
@@ -369,6 +415,21 @@ export class Game {
   }
 
   _updatePlaying(dt) {
+    // Multiplayer: send player state every 100ms
+    if (this.isMultiplayer && this.net) {
+      this._syncSendTimer += dt;
+      if (this._syncSendTimer >= 0.1) {
+        this._syncSendTimer = 0;
+        this.net.syncPlayerState({
+          x: this.player.position.x,
+          y: this.player.position.y,
+          z: this.player.position.z,
+          r: this.player.rotation,
+          characterId: this.player.loadout?.characterId || 'ranger',
+        });
+      }
+    }
+
     // Timer — countdown
     this.floorTimer -= dt;
     this.totalTime += dt;
@@ -407,6 +468,11 @@ export class Game {
     // Player update
     this.player.update(dt, input);
 
+    // Update remote player animation
+    if (this._remotePlayer) {
+      this._remotePlayer.update(dt);
+    }
+
     // Update weapon cooldowns
     for (const w of this.player.weapons) w.update(dt);
 
@@ -441,6 +507,15 @@ export class Game {
           this.particles.spark(blockPos, 3);
           const destroyed = nearestBlock.takeDamage(this.player.mineDamage);
           if (destroyed) {
+            // Sync block destruction in multiplayer
+            if (this.isMultiplayer && this.net) {
+              this.net.syncEvent('block_broken', {
+                x: nearestBlock.position.x,
+                y: nearestBlock.position.y,
+                z: nearestBlock.position.z,
+              });
+            }
+
             // Combo tracking
             if (this.mineComboTimer > 0) {
               this.mineCombo++;
@@ -532,6 +607,10 @@ export class Game {
     for (const enemy of this.world.enemies) {
       if (enemy.justDied) {
         enemy.justDied = false;
+        // Sync enemy death in multiplayer
+        if (this.isMultiplayer && this.net && enemy._netId != null) {
+          this.net.syncEvent('enemy_died', { id: enemy._netId });
+        }
         this.killCount++;
         // timeBonus for kill
         this.floorTimer += GAME.TIME_BONUS_KILL;
@@ -703,6 +782,78 @@ export class Game {
   _screenShake(intensity, duration) {
     this.shakeIntensity = intensity;
     this.shakeDuration = duration;
+  }
+
+  // ===== Multiplayer Remote Player =====
+
+  async _createRemotePlayer() {
+    this._remotePlayer = new RemotePlayer(this.scene);
+    await this._remotePlayer.init('ranger');
+
+    // Nametag sprite
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 256;
+    canvas.height = 64;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 256, 64, 16);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.isHost ? 'Guest' : 'Dad', 128, 42);
+    const tex = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: tex });
+    const label = new THREE.Sprite(spriteMat);
+    label.scale.set(2, 0.5, 1);
+    label.position.y = 2.2;
+    this._remotePlayer.mesh.add(label);
+  }
+
+  _updateRemotePlayer(state) {
+    if (!this._remotePlayer) return;
+    this._remotePlayer.setState(state);
+    if (state.characterId && state.characterId !== this._remotePlayer.characterId) {
+      this._remotePlayer.setCharacter(state.characterId);
+    }
+  }
+
+  _handleNetEvent(type, data) {
+    if (type === 'block_broken') {
+      const key = `${Math.round(data.x)},${Math.round(data.y)},${Math.round(data.z)}`;
+      const block = this.world.blocks.get(key);
+      if (block && !block.destroyed) {
+        block.destroy(this.scene, this.particles);
+        this.world.blocks.delete(key);
+        // Recompute column height
+        const colKey = `${block.position.x},${block.position.z}`;
+        let maxY = -999;
+        for (const [bk, b] of this.world.blocks) {
+          if (b.position.x === block.position.x && b.position.z === block.position.z) {
+            const top = b.position.y + 1;
+            if (top > maxY) maxY = top;
+          }
+        }
+        if (maxY > -999) {
+          this.world.columnHeights.set(colKey, maxY);
+        } else {
+          this.world.columnHeights.delete(colKey);
+        }
+      }
+    } else if (type === 'enemy_died') {
+      const enemy = this.world.enemies.find(e => e._netId === data.id);
+      if (enemy && !enemy.dead) {
+        enemy.hp = 0;
+        enemy.dead = true;
+        enemy.justDied = true;
+      }
+    } else if (type === 'floor_changed') {
+      if (!this.isHost && data.floorNum && data.seed != null) {
+        this._worldSeed = data.seed;
+        this._generateFloor(data.floorNum, this._worldSeed);
+      }
+    }
   }
 
   _onLootCollect(type, value, color) {
@@ -889,14 +1040,17 @@ export class Game {
   }
 
   _onResize() {
-    const aspect = window.innerWidth / window.innerHeight;
+    // Use documentElement clientWidth/Height for more stable sizing on iOS Safari
+    const w = document.documentElement.clientWidth || window.innerWidth;
+    const h = document.documentElement.clientHeight || window.innerHeight;
+    const aspect = w / h;
     const d = this.baseD / this.cameraZoom;
     this.camera.left = -d * aspect;
     this.camera.right = d * aspect;
     this.camera.top = d;
     this.camera.bottom = -d;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(w, h);
     this.ui.preview?.resize();
   }
 

@@ -5,6 +5,7 @@ import { Enemy } from './Enemy.js';
 import { SFXMapper } from './SFXMapper.js';
 import { assetLoader } from './AssetLoader.js';
 import { getBlockTypeForTile, PROP_CATALOG } from './levelbuilder/LevelCatalog.js';
+import { SeededRNG } from './SeededRNG.js';
 
 // Biome-specific floating block types for procedural generation
 const FLOAT_BLOCK_TYPES = {
@@ -28,6 +29,8 @@ export class World {
     this.startPosition = null;
     this.authoredMode = false;
     this.authoredDoc = null;
+    this.rng = null;
+    this._nextEnemyId = 1;
   }
 
   setFloor(floorNum) {
@@ -41,8 +44,10 @@ export class World {
     SFXMapper.ambientBiome(this.biome.name);
   }
 
-  async generateFloor() {
+  async generateFloor(seed) {
     this.clear();
+    this.rng = seed != null ? new SeededRNG(seed) : null;
+    const rng = this.rng || { random: () => Math.random(), rangeInt: (a, b) => a + Math.floor(Math.random() * (b - a + 1)), choice: (arr) => arr[Math.floor(Math.random() * arr.length)], shuffle: (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; } };
 
     const size = GAME.FLOOR_SIZE;
     const types = this.biome.blocks;
@@ -64,10 +69,10 @@ export class World {
           grid[gz * gridSize + gx] = 1;
         } else if (dist >= size - 1) {
           // Near boundary: 90% wall
-          grid[gz * gridSize + gx] = Math.random() < 0.9 ? 1 : 0;
+          grid[gz * gridSize + gx] = rng.random() < 0.9 ? 1 : 0;
         } else {
           // Interior: 65% wall chance
-          grid[gz * gridSize + gx] = Math.random() < 0.65 ? 1 : 0;
+          grid[gz * gridSize + gx] = rng.random() < 0.65 ? 1 : 0;
         }
       }
     }
@@ -119,7 +124,7 @@ export class World {
           const worldZ = gz - size;
           // Skip exact center for player spawn
           if (Math.abs(worldX) <= 1 && Math.abs(worldZ) <= 1) continue;
-          const type = types[Math.floor(Math.random() * types.length)];
+          const type = rng.choice(types);
           await this._placeBlock(type, worldX, 0, worldZ);
         }
       }
@@ -149,27 +154,28 @@ export class World {
     const enemyCount = Math.min(3 + Math.floor(this.floor / 3), 12);
     const enemyTypes = this.biome.enemies;
     for (let i = 0; i < enemyCount; i++) {
-      const et = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+      const et = rng.choice(enemyTypes);
       // Pick a spot that's not blocked (avoid walls)
       let ex, ez, attempts = 0;
       do {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 4 + Math.random() * (size - 7);
+        const angle = rng.random() * Math.PI * 2;
+        const dist = 4 + rng.random() * (size - 7);
         ex = Math.cos(angle) * dist;
         ez = Math.sin(angle) * dist;
         attempts++;
       } while (this.getBlock(ex, 0, ez) && attempts < 20);
       const enemy = new Enemy(et, ex, ez);
       enemy.world = this;
+      enemy._netId = this._nextEnemyId++;
       await enemy.spawn(this.scene);
       this.enemies.push(enemy);
     }
 
     // Spawn floating blocks for kids to mine
-    await this._spawnFloatingBlocks(size, this.floor);
+    await this._spawnFloatingBlocks(size, this.floor, rng);
 
     // Exit position (random edge)
-    const exitAngle = Math.random() * Math.PI * 2;
+    const exitAngle = rng.random() * Math.PI * 2;
     const exitDist = size - 1;
     this.exitPosition = new THREE.Vector3(
       Math.cos(exitAngle) * exitDist,
@@ -178,7 +184,7 @@ export class World {
     );
   }
 
-  async _spawnFloatingBlocks(floorSize, floorNum) {
+  async _spawnFloatingBlocks(floorSize, floorNum, rng) {
     const types = FLOAT_BLOCK_TYPES[this.biome.name] || ['crystal'];
     // Number of clusters scales with floor but capped low for performance
     const clusterCount = Math.min(5 + Math.floor(floorNum / 2), 12);
@@ -197,31 +203,28 @@ export class World {
     }
 
     // Shuffle and pick N random empty columns
-    for (let i = emptyColumns.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [emptyColumns[i], emptyColumns[j]] = [emptyColumns[j], emptyColumns[i]];
-    }
+    rng.shuffle(emptyColumns);
     const selected = emptyColumns.slice(0, clusterCount);
 
     for (const col of selected) {
       // Single floating block per column — no vertical stacking
-      const y = 2 + Math.floor(Math.random() * 3); // y=2 to y=4
+      const y = 2 + Math.floor(rng.random() * 3); // y=2 to y=4
       // Skip if something already here
       if (this.getBlock(col.x, y, col.z)) continue;
 
-      const type = types[Math.floor(Math.random() * types.length)];
+      const type = rng.choice(types);
       // Slight random offset for visual variety
-      const offsetX = (Math.random() - 0.5) * 0.3;
-      const offsetZ = (Math.random() - 0.5) * 0.3;
+      const offsetX = (rng.random() - 0.5) * 0.3;
+      const offsetZ = (rng.random() - 0.5) * 0.3;
 
       await this._placeFloatingBlock({
         x: col.x + offsetX,
         y,
         z: col.z + offsetZ,
         type,
-        rotation: Math.random() * 360,
-        scale: 0.8 + Math.random() * 0.4, // 0.8 - 1.2
-      });
+        rotation: rng.random() * 360,
+        scale: 0.8 + rng.random() * 0.4, // 0.8 - 1.2
+      }, rng);
     }
   }
 
@@ -251,6 +254,7 @@ export class World {
     for (const e of levelDoc.enemies) {
       const enemy = new Enemy(e.type, e.x, e.z);
       enemy.world = this;
+      enemy._netId = this._nextEnemyId++;
       await enemy.spawn(this.scene);
       const topY = this.getColumnTop(e.x, e.z);
       enemy.position.y = topY > -999 ? topY : 0;
@@ -295,12 +299,12 @@ export class World {
     this.authoredDoc = levelDoc;
   }
 
-  async _placeFloatingBlock(fb) {
+  async _placeFloatingBlock(fb, rng) {
     const key = `${fb.x},${fb.y},${fb.z}`;
     if (this.blocks.has(key)) return;
     const block = new Block(fb.type, fb.x, fb.y, fb.z);
     block.isFloating = true;
-    block.bobPhase = fb.bobPhase ?? Math.random() * Math.PI * 2;
+    block.bobPhase = fb.bobPhase ?? (rng ? rng.random() * Math.PI * 2 : Math.random() * Math.PI * 2);
     await block.createMesh(this.scene, { noCloneMaterials: true });
     if (block.mesh) {
       block.mesh.rotation.y = (fb.rotation || 0) * (Math.PI / 180);

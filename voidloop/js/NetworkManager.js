@@ -179,6 +179,63 @@ export class NetworkManager {
     }
   }
 
+  // ── Sync: player state (position, rotation, etc.) ──
+  syncPlayerState(state) {
+    if (!this.roomCode) return;
+    const role = this.isHost ? 'host' : 'guest';
+    set(ref(db, `voidloop-rooms/${this.roomCode}/players/${role}/state`), {
+      ...state,
+      t: Date.now(),
+    }).catch(() => {});
+  }
+
+  onPlayerState(callback) {
+    if (!this.roomCode) return () => {};
+    const otherRole = this.isHost ? 'guest' : 'host';
+    const playerRef = ref(db, `voidloop-rooms/${this.roomCode}/players/${otherRole}/state`);
+    const onState = (snap) => {
+      const val = snap.val();
+      if (val) callback(val);
+    };
+    const unsub = onValue(playerRef, onState);
+    this._unsubs.push(() => { off(playerRef, 'value', onState); unsub(); });
+    return () => { off(playerRef, 'value', onState); unsub(); };
+  }
+
+  // ── Sync: world seed (host writes, guest reads) ──
+  syncWorldSeed(seed) {
+    if (!this.isHost || !this.roomCode) return;
+    set(ref(db, `voidloop-rooms/${this.roomCode}/worldSeed`), seed).catch(() => {});
+  }
+
+  async getWorldSeed() {
+    if (this.isHost || !this.roomCode) return null;
+    const snap = await get(ref(db, `voidloop-rooms/${this.roomCode}/worldSeed`));
+    return snap.exists() ? snap.val() : null;
+  }
+
+  // ── Sync: one-off gameplay events ──
+  syncEvent(type, data) {
+    if (!this.roomCode) return;
+    const from = this.isHost ? 'host' : 'guest';
+    const eventsRef = ref(db, `voidloop-rooms/${this.roomCode}/events`);
+    push(eventsRef, { from, type, data, t: Date.now() }).catch(() => {});
+  }
+
+  onEvent(callback) {
+    if (!this.roomCode) return () => {};
+    const eventsRef = ref(db, `voidloop-rooms/${this.roomCode}/events`);
+    const onEventAdded = (snap) => {
+      const val = snap.val();
+      if (val && val.from !== (this.isHost ? 'host' : 'guest')) {
+        callback({ type: val.type, data: val.data });
+      }
+    };
+    const unsub = onChildAdded(eventsRef, onEventAdded);
+    this._unsubs.push(() => { off(eventsRef, 'child_added', onEventAdded); unsub(); });
+    return () => { off(eventsRef, 'child_added', onEventAdded); unsub(); };
+  }
+
   // ── Disconnect and cleanup ──
   async disconnect() {
     this._unsubs.forEach(u => u());

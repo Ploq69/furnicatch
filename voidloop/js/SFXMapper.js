@@ -6,14 +6,14 @@
 
 import { audio } from './AudioManager.js';
 
-const SFX_DIR = "Helton Yan's Pixel Combat - Single Files";
+const SFX_DIR = 'audio/sfx';
 
 function variantPath(prefix, baseName, n) {
   return `${SFX_DIR}/${prefix}_${baseName}_HY_PC-00${n}.wav`;
 }
 
 function playVariant(prefix, baseName, opts = {}) {
-  const n = Math.floor(Math.random() * 6) + 1;
+  const n = Math.floor(Math.random() * 2) + 1; // only variants 1-2 are shipped
   const path = variantPath(prefix, baseName, n);
   audio.playPath(path, opts);
 }
