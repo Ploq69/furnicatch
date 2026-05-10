@@ -665,6 +665,83 @@
     }
     .pet-progress-text { font-size: 12px; color: #aaa; text-align: center; }
 
+    .pet-preview-levels {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .pet-preview-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      width: 100%;
+      text-align: center;
+      margin-bottom: 2px;
+    }
+    .pet-level-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.06);
+      color: #ccc;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .pet-level-btn:hover {
+      transform: scale(1.15);
+      border-color: rgba(255,255,255,0.5);
+    }
+    .pet-level-btn.active {
+      border-color: #fff;
+      color: #fff;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .pet-level-btn.actual {
+      outline: 2px solid rgba(255,255,255,0.4);
+      outline-offset: 1px;
+    }
+    .pet-level-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .pet-restore-btn {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #888;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-left: 4px;
+    }
+    .pet-restore-btn:hover {
+      border-color: rgba(255,255,255,0.5);
+      color: #fff;
+    }
+    .pet-restore-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .pet-preview-hint {
+      font-size: 11px;
+      color: #666;
+      text-align: center;
+      width: 100%;
+    }
+
     /* Pet Den Overlay (in-game) */
     #pet-den-overlay {
       position: fixed;
@@ -1066,6 +1143,7 @@
       <div class="pet-letter-grid" id="pet-overlay-grid"></div>
       <div class="pet-progress-bar"><div id="pet-overlay-progress-fill"></div></div>
       <div class="pet-progress-text" id="pet-overlay-progress-text"></div>
+      <div class="pet-preview-levels" id="pet-overlay-preview"></div>
     </div>
   </div>
 
@@ -1094,6 +1172,7 @@
         <div class="pet-letter-grid" id="pet-letter-grid"></div>
         <div class="pet-progress-bar"><div id="pet-progress-fill"></div></div>
         <div class="pet-progress-text" id="pet-progress-text"></div>
+        <div class="pet-preview-levels" id="pet-preview"></div>
       </div>
     </div>
     <button id="btn-descend">DESCEND</button>

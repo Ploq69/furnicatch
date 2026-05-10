@@ -54,6 +54,7 @@ export const WEAPON_ATTACK_ANIMS = {
   bow_withString: { animKey: 'BowShoot',      duration: 0.50 },
   smokebomb:      { animKey: 'Throw',         duration: 0.50 },
   staff:          { animKey: 'Melee2HSlice',  duration: 0.83 },
+  pickaxe:        { animKey: 'Melee2HChop',   duration: 0.67 },
 };
 
 export const KAYKIT_CHARACTERS = [
@@ -103,6 +104,7 @@ export const KAYKIT_ITEMS = [
   { id: 'sword_2handed', name: 'Great Sword', model: A + 'sword_2handed.gltf', slots: LONG_BACK, kind: 'melee' },
   { id: 'sword_2handed_color', name: 'Great Sword Color', model: A + 'sword_2handed_color.gltf', slots: LONG_BACK, kind: 'melee' },
   { id: 'wand', name: 'Wand', model: A + 'wand.gltf', slots: HANDHELD, kind: 'magic' },
+  { id: 'pickaxe', name: 'Pickaxe', model: 'KayKit_RPGToolsBits_1.0_FREE/Assets/gltf/pickaxe.gltf', slots: HANDHELD, kind: 'tool' },
 ];
 
 export const DEFAULT_LOADOUT = {
@@ -113,7 +115,7 @@ export const DEFAULT_LOADOUT = {
 };
 
 export const HOTBAR_LOADOUTS = {
-  pickaxe: { rightHand: 'axe_1handed', leftHand: null, back: null },
+  pickaxe: { rightHand: 'pickaxe', leftHand: null, back: null },
   sword: { rightHand: 'sword_1handed', leftHand: null, back: null },
   pistol: { rightHand: 'crossbow_1handed', leftHand: null, back: 'arrow_crossbow_bundle' },
   grenade: { rightHand: 'smokebomb', leftHand: null, back: null },
@@ -180,6 +182,10 @@ export const KAYKIT_ITEM_GRIP_PRESETS = {
     rightHand: { x: 0, y: -0.12, z: 0, rx: 0, ry: 0, rz: 0, scale: 1 },
     leftHand: { x: 0, y: -0.12, z: 0, rx: 0, ry: 0, rz: 0, scale: 1 },
     back: { ...ZERO_OFFSET },
+  },
+  pickaxe: {
+    rightHand: { x: 0, y: -0.08, z: 0, rx: 0, ry: 0, rz: 0, scale: 1 },
+    leftHand: { x: 0, y: -0.08, z: 0, rx: 0, ry: 0, rz: 0, scale: 1 },
   },
 };
 

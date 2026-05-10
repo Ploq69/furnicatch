@@ -45,31 +45,39 @@ export const GAME = {
 };
 
 export const PICKAXE_TIERS = [
-  { name: 'Wood', damage: 1, speed: 1.0, model: 'Cube World - Aug 2023/Tools/glTF/Pickaxe_Wood.gltf', sfx: 'DSGNTonl_USABLE-Generic Item' },
-  { name: 'Stone', damage: 2, speed: 1.1, model: 'Cube World - Aug 2023/Tools/glTF/Pickaxe_Stone.gltf', sfx: 'DSGNTonl_USABLE-Metallic Item' },
-  { name: 'Iron', damage: 2, speed: 1.3, model: 'Cube World - Aug 2023/Tools/glTF/Pickaxe_Stone.gltf', sfx: 'FGHTImpt_MELEE-Clap Slapper' },
-  { name: 'Gold', damage: 3, speed: 1.5, model: 'Cube World - Aug 2023/Tools/glTF/Pickaxe_Gold.gltf', sfx: 'MAGSpel_CAST-Zap Up' },
-  { name: 'Diamond', damage: 3, speed: 2.0, model: 'Cube World - Aug 2023/Tools/glTF/Pickaxe_Diamond.gltf', sfx: 'DSGNSynth_BUFF-Bonus Crit Chance' },
+  { name: 'Wood', damage: 1, speed: 1.0, model: 'KayKit_RPGToolsBits_1.0_FREE/Assets/gltf/pickaxe.gltf', sfx: 'DSGNTonl_USABLE-Generic Item' },
+  { name: 'Stone', damage: 2, speed: 1.1, model: 'KayKit_RPGToolsBits_1.0_FREE/Assets/gltf/pickaxe.gltf', sfx: 'DSGNTonl_USABLE-Metallic Item' },
+  { name: 'Iron', damage: 2, speed: 1.3, model: 'KayKit_RPGToolsBits_1.0_FREE/Assets/gltf/axe.gltf', sfx: 'FGHTImpt_MELEE-Clap Slapper' },
+  { name: 'Gold', damage: 3, speed: 1.5, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/axe_1handed.gltf', sfx: 'MAGSpel_CAST-Zap Up' },
+  { name: 'Diamond', damage: 3, speed: 2.0, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/axe_2handed.gltf', sfx: 'DSGNSynth_BUFF-Bonus Crit Chance' },
 ];
 
 export const WEAPONS = [
-  { id: 'pickaxe', name: 'Hand Axe', type: 'melee', slot: 0, damage: 10, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/axe_1handed.gltf', sfx: 'DSGNTonl_USABLE-Generic Item', icon: '🪓' },
+  { id: 'pickaxe', name: 'Pickaxe', type: 'melee', slot: 0, damage: 10, model: 'KayKit_RPGToolsBits_1.0_FREE/Assets/gltf/pickaxe.gltf', sfx: 'DSGNTonl_USABLE-Generic Item', icon: '⛏️' },
   { id: 'sword', name: 'Sword', type: 'melee', slot: 1, damage: 15, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/sword_1handed.gltf', sfx: 'DSGNTonl_MELEE-Sword Critical', icon: '⚔' },
   { id: 'pistol', name: 'Hand Crossbow', type: 'ranged', slot: 2, damage: 12, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/crossbow_1handed.gltf', sfx: 'DSGNImpt_EXPLOSION-Smaller Flare', icon: '🏹' },
   { id: 'grenade', name: 'Smokebomb', type: 'thrown', slot: 3, damage: 40, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/smokebomb.gltf', sfx: 'DSGNImpt_EXPLOSION-Thud', icon: '●' },
 ];
 
 export const BLOCK_TYPES = {
-  dirt: { hp: 1, color: 0x8B6914, drop: 'dirt', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Dirt.gltf' },
-  grass: { hp: 1, color: 0x4a8f29, drop: 'dirt', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Grass.gltf' },
-  stone: { hp: 2, color: 0x777777, drop: 'stone', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Stone.gltf' },
-  brick: { hp: 2, color: 0xa0522d, drop: 'stone', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Brick.gltf' },
-  coal: { hp: 2, color: 0x222222, drop: 'coal', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Coal.gltf' },
-  metal: { hp: 3, color: 0x8899aa, drop: 'metal', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Metal.gltf' },
-  crystal: { hp: 3, color: 0x22ccff, drop: 'crystal', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Crystal.gltf' },
-  diamond: { hp: 3, color: 0x00ffff, drop: 'diamond', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Diamond.gltf' },
-  ice: { hp: 1, color: 0xaaddff, drop: 'ice', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Ice.gltf' },
-  snow: { hp: 1, color: 0xeeeeee, drop: 'snow', model: 'Cube World - Aug 2023/Blocks/glTF/Block_Snow.gltf' },
+  dirt: { hp: 1, color: 0x8B6914, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt.gltf' },
+  grass: { hp: 1, color: 0x4a8f29, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt_with_grass.gltf' },
+  stone: { hp: 2, color: 0x777777, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone.gltf' },
+  brick: { hp: 2, color: 0xa0522d, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_A.gltf' },
+  bricks_B: { hp: 2, color: 0x8a4525, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_B.gltf' },
+  coal: { hp: 2, color: 0x222222, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf' },
+  metal: { hp: 3, color: 0x8899aa, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/metal.gltf' },
+  crystal: { hp: 3, color: 0x22ccff, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
+  diamond: { hp: 3, color: 0x00ffff, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
+  ice: { hp: 1, color: 0xaaddff, drop: 'ice', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/glass.gltf' },
+  snow: { hp: 1, color: 0xeeeeee, drop: 'snow', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/snow.gltf' },
+  lava: { hp: 3, color: 0xff4422, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/lava.gltf' },
+  water: { hp: 1, color: 0x4488ff, drop: 'ice', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/water.gltf' },
+  wood: { hp: 1, color: 0x8B5a2b, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf' },
+  stone_dark: { hp: 2, color: 0x333333, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf' },
+  decorative_block_blue: { hp: 3, color: 0x22ccff, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
+  decorative_block_red: { hp: 3, color: 0xff4444, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_red.gltf' },
+  stone_with_gold: { hp: 3, color: 0xffd700, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_gold.gltf' },
 };
 
 export const BIOMES = [
@@ -116,7 +124,7 @@ export const BIOMES = [
 ];
 
 // Animation name mappings per model pack
-const ANIM_CUBEWORLD = { idle: 'Idle', walk: 'Walk', run: 'Run', attack: 'Attack', hit: 'HitRecieve', death: 'Death' };
+const ANIM_KAYKIT_ENEMY = { idle: 'Idle_A', walk: 'Walking_A', run: 'Running_A', attack: 'Melee_1H_Attack_Slice_Horizontal', hit: 'Hit_A', death: 'Death_A' };
 const ANIM_ULTIMATE_CHAR = { idle: 'Idle', walk: 'Walk', run: 'Run', attack: 'Punch', hit: 'RecieveHit', death: 'Death' };
 const ANIM_BLOB = { idle: 'Idle', walk: 'Walk', run: 'Walk', attack: 'Bite_Front', hit: 'HitRecieve', death: 'Death' };
 const ANIM_GHOST = { idle: 'Flying_Idle', walk: 'Fast_Flying', run: 'Fast_Flying', attack: 'Headbutt', hit: 'HitReact', death: 'Death' };
@@ -135,18 +143,18 @@ export const ENEMY_TYPES = {
   goblin: {
     name: 'Goblin Scout',
     hp: 45, damage: 8, speed: 4, attackCooldown: 1.5,
-    model: 'Cube World - Aug 2023/Enemies/glTF/Goblin.gltf',
+    model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue.glb',
     scale: 0.8,
     sfx: { hurt: 'FGHTImpt_HIT-Smack', death: 'DSGNImpt_EXPLOSION-Forced Interruption' },
-    animMap: ANIM_CUBEWORLD,
+    animMap: ANIM_KAYKIT_ENEMY,
   },
   skeleton: {
     name: 'Skeleton Warrior',
     hp: 50, damage: 10, speed: 3, attackCooldown: 1.5,
-    model: 'Cube World - Aug 2023/Enemies/glTF/Skeleton.gltf',
+    model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue_Hooded.glb',
     scale: 0.85,
     sfx: { hurt: 'FGHTImpt_HIT-Strong Punch', death: 'DSGNImpt_EXPLOSION-Forced Interruption' },
-    animMap: ANIM_CUBEWORLD,
+    animMap: ANIM_KAYKIT_ENEMY,
   },
   bat: {
     name: 'Cave Bat',
@@ -160,18 +168,18 @@ export const ENEMY_TYPES = {
   demon: {
     name: 'Demon Brute',
     hp: 80, damage: 14, speed: 2.5, attackCooldown: 1.8,
-    model: 'Cube World - Aug 2023/Enemies/glTF/Demon.gltf',
+    model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb',
     scale: 1.0,
     sfx: { hurt: 'FGHTImpt_HIT-Strong Smack', death: 'DSGNImpt_EXPLOSION-Crunchy Burst' },
-    animMap: ANIM_CUBEWORLD,
+    animMap: ANIM_KAYKIT_ENEMY,
   },
   yeti: {
     name: 'Yeti Guard',
     hp: 100, damage: 18, speed: 2, attackCooldown: 2.0,
-    model: 'Cube World - Aug 2023/Enemies/glTF/Yeti.gltf',
-    scale: 1.1,
+    model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb',
+    scale: 1.2,
     sfx: { hurt: 'FGHTImpt_MELEE-Clap Slapper', death: 'DSGNImpt_EXPLOSION-Bass Hit' },
-    animMap: ANIM_CUBEWORLD,
+    animMap: ANIM_KAYKIT_ENEMY,
   },
   pirate: {
     name: 'Pirate Raider',

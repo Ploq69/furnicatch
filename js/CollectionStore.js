@@ -19,14 +19,16 @@ export class CollectionStore {
           words: this.records,
           letters: {},
           props: {},
+          resources: {},
         };
       }
       this.records.words ||= {};
       this.records.letters ||= {};
       this.records.props ||= {};
+      this.records.resources ||= {};
     } catch (err) {
       console.warn('Could not load collection data:', err);
-      this.records = { words: {}, letters: {} };
+      this.records = { words: {}, letters: {}, props: {}, resources: {} };
     }
   }
 
@@ -145,6 +147,25 @@ export class CollectionStore {
     record.level = this._levelForCaptures(record.captures);
     this._save();
     return record;
+  }
+
+  addResources(drops = [], multiplier = 1) {
+    const earned = {};
+    for (const drop of drops) {
+      if (!drop?.resource) continue;
+      const min = Number.isFinite(drop.min) ? drop.min : 0;
+      const max = Number.isFinite(drop.max) ? drop.max : min;
+      const amount = Math.max(0, Math.floor((min + Math.floor(Math.random() * (max - min + 1))) * multiplier));
+      if (amount <= 0) continue;
+      this.records.resources[drop.resource] = (this.records.resources[drop.resource] || 0) + amount;
+      earned[drop.resource] = (earned[drop.resource] || 0) + amount;
+    }
+    if (Object.keys(earned).length) this._save();
+    return earned;
+  }
+
+  getResources() {
+    return { ...this.records.resources };
   }
 
   getUniquePropCount() {

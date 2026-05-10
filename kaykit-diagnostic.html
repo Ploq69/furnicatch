@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KayKit Diagnostic</title>
+  <style>
+    body { margin: 0; background: #0a0a1a; color: #e0e0e0; font-family: monospace; font-size: 12px; }
+    #canvas-container { width: 100vw; height: 60vh; }
+    #log { padding: 10px; height: 40vh; overflow-y: auto; background: #111; }
+    .log-line { margin: 2px 0; }
+    .log-ok { color: #4ade80; }
+    .log-warn { color: #fbbf24; }
+    .log-err { color: #ef4444; }
+    .log-info { color: #60a5fa; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="log"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const logEl = document.getElementById('log');
+    function log(msg, type = 'info') {
+      const div = document.createElement('div');
+      div.className = `log-line log-${type}`;
+      div.textContent = `[${type.toUpperCase()}] ${msg}`;
+      logEl.appendChild(div);
+      console.log(`[${type}] ${msg}`);
+    }
+
+    async function run() {
+      log('Starting diagnostic...', 'info');
+
+      // Setup renderer
+      const container = document.getElementById('canvas-container');
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a1a);
+
+      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 50);
+      camera.position.set(2, 2, 3);
+      camera.lookAt(0, 0.5, 0);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+      log(`Renderer created: ${renderer.domElement.width}x${renderer.domElement.height}`, 'ok');
+
+      // Lights
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const key = new THREE.DirectionalLight(0xfff5e6, 1.5);
+      key.position.set(3, 5, 3);
+      scene.add(key);
+
+      // Ground
+      const ground = new THREE.Mesh(
+        new THREE.CircleGeometry(2, 64),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a3e })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+      log('Ground added', 'ok');
+
+      // Debug cube
+      const debugCube = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xff0000 })
+      );
+      debugCube.position.set(0, 1, 0);
+      scene.add(debugCube);
+      log('Red debug cube added at (0,1,0)', 'ok');
+
+      // Render once
+      renderer.render(scene, camera);
+      log('Initial render complete', 'ok');
+
+      // Load character
+      log('Loading Barbarian character...', 'info');
+      const loader = new GLTFLoader();
+      const charGltf = await new Promise((resolve, reject) =>
+        loader.load('KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb', resolve, undefined, reject)
+      );
+      log('Barbarian GLB loaded', 'ok');
+
+      const charMesh = charGltf.scene;
+
+      // Log bones BEFORE any renaming
+      const bones = [];
+      charMesh.traverse(c => {
+        if (c.isBone) bones.push(c.name);
+      });
+      log(`Bones found (${bones.length}): ${bones.join(', ')}`, 'info');
+
+      // Normalize scale
+      const box = new THREE.Box3().setFromObject(charMesh);
+      const height = box.max.y - box.min.y;
+      const scale = 0.55 / height;
+      charMesh.scale.setScalar(scale);
+      charMesh.updateMatrixWorld(true);
+      const box2 = new THREE.Box3().setFromObject(charMesh);
+      const cx = (box2.min.x + box2.max.x) * 0.5;
+      const cz = (box2.min.z + box2.max.z) * 0.5;
+      charMesh.position.set(-cx, -box2.min.y, -cz);
+      log(`Character scaled by ${scale.toFixed(3)}, height=${height.toFixed(3)}`, 'info');
+
+      // Load animation
+      log('Loading General animation file...', 'info');
+      const animGltf = await new Promise((resolve, reject) =>
+        loader.load('KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_General.glb', resolve, undefined, reject)
+      );
+      log(`Animation file loaded, ${animGltf.animations.length} clips`, 'ok');
+
+      // Log track names BEFORE sanitization
+      for (const clip of animGltf.animations) {
+        log(`Clip "${clip.name}": ${clip.tracks.length} tracks`, 'info');
+        for (const track of clip.tracks) {
+          log(`  Track: "${track.name}"`, 'info');
+        }
+        // Only log first clip fully
+        break;
+      }
+
+      // SANITIZE: rename bones in character
+      charMesh.traverse(c => {
+        if (c.isBone && c.name.includes('.')) {
+          const oldName = c.name;
+          c.name = c.name.replace(/\./g, '_');
+          log(`Renamed bone: ${oldName} -> ${c.name}`, 'warn');
+        }
+      });
+
+      // SANITIZE: rename tracks in clips
+      for (const clip of animGltf.animations) {
+        for (const track of clip.tracks) {
+          const lastDot = track.name.lastIndexOf('.');
+          if (lastDot > 0) {
+            const nodePart = track.name.substring(0, lastDot);
+            const propPart = track.name.substring(lastDot);
+            const sanitized = nodePart.replace(/\./g, '_') + propPart;
+            if (sanitized !== track.name) {
+              log(`Sanitized track: "${track.name}" -> "${sanitized}"`, 'warn');
+              track.name = sanitized;
+            }
+          }
+        }
+      }
+
+      // Add character to scene
+      charMesh.traverse(c => { if (c.isMesh) { c.castShadow = true; } });
+      scene.add(charMesh);
+      log('Character added to scene', 'ok');
+
+      // Create mixer with sanitized clips
+      const mixer = new THREE.AnimationMixer(charMesh);
+      const clipActions = new Map();
+      for (const clip of animGltf.animations) {
+        const action = mixer.clipAction(clip);
+        action.clampWhenFinished = true;
+        clipActions.set(clip.name, action);
+      }
+      log(`Mixer created with ${clipActions.size} actions`, 'ok');
+
+      // Play idle
+      if (clipActions.has('Idle_A')) {
+        clipActions.get('Idle_A').play();
+        log('Playing Idle_A', 'ok');
+      } else if (clipActions.has('Idle')) {
+        clipActions.get('Idle').play();
+        log('Playing Idle', 'ok');
+      }
+
+      // Animation loop
+      const clock = new THREE.Clock();
+      renderer.setAnimationLoop(() => {
+        const dt = clock.getDelta();
+        mixer.update(dt);
+        debugCube.rotation.y += dt;
+        renderer.render(scene, camera);
+      });
+      log('Animation loop started', 'ok');
+
+      // Catch console warnings/errors
+      const origWarn = console.warn;
+      console.warn = (...args) => {
+        const msg = args.join(' ');
+        if (msg.includes('PropertyBinding') || msg.includes('handslot')) {
+          log(`WARN: ${msg}`, 'warn');
+        }
+        origWarn.apply(console, args);
+      };
+    }
+
+    run().catch(err => {
+      log(`FATAL: ${err.message}`, 'err');
+      console.error(err);
+    });
+  </script>
+</body>
+</html>

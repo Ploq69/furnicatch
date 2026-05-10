@@ -87,6 +87,7 @@ export class Game {
     this.flipbooks = new FlipbookVFX(this.scene);
     this.world = new World(this.scene);
     this.player = new Player(this.scene);
+    this.player.world = this.world;
     this.ui = new UIManager(this);
     this.ui.onBrightnessChange = (val) => {
       this.renderer.toneMappingExposure = 1.5 * val;
@@ -129,21 +130,36 @@ export class Game {
     // Resize
     window.addEventListener('resize', () => this._onResize());
 
+    // Playtest mode detection
+    const params = new URLSearchParams(location.search);
+    this.playtestKey = params.get('playtest');
+    this.isTimedMode = !!this.playtestKey;
+
+    // Score tracking for timed mode
+    this.lettersCollected = 0;
+    this.blocksMined = 0;
+    this.enemiesDefeated = 0;
+    this.tokensGathered = 0;
+
+    // Mining combo system
+    this.mineCombo = 0;
+    this.mineComboTimer = 0;
+
     // Start loading
     this._loadAssets();
   }
 
   async _loadAssets() {
     const priority = [
-      'Cube World - Aug 2023/Blocks/glTF/Block_Dirt.gltf',
-      'Cube World - Aug 2023/Blocks/glTF/Block_Stone.gltf',
-      'Cube World - Aug 2023/Blocks/glTF/Block_Grass.gltf',
-      'Cube World - Aug 2023/Blocks/glTF/Block_Coal.gltf',
-      'Cube World - Aug 2023/Blocks/glTF/Block_Metal.gltf',
-      'Cube World - Aug 2023/Blocks/glTF/Block_Crystal.gltf',
-      'Cube World - Aug 2023/Enemies/glTF/Goblin.gltf',
-      'Cube World - Aug 2023/Enemies/glTF/Skeleton.gltf',
-      'Cube World - Aug 2023/Enemies/glTF/Demon.gltf',
+      'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt.gltf',
+      'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone.gltf',
+      'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt_with_grass.gltf',
+      'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf',
+      'KayKit_BlockBits_1.0_FREE/Assets/gltf/metal.gltf',
+      'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf',
+      'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue.glb',
+      'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue_Hooded.glb',
+      'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb',
       ...getKayKitPaths(),
     ];
 
@@ -163,7 +179,13 @@ export class Game {
 
     this._initAudioOnInteraction();
     await this.player.spawn();
-    await this._generateFloor(1);
+    await this.player.equipWeapon(1); // Sync functional weapon with sword visual
+
+    if (this.playtestKey) {
+      await this._loadPlaytestLevel();
+    } else {
+      await this._generateFloor(1);
+    }
 
     this.ui.hideLoading();
     this.state = STATES.PLAYING;
@@ -174,7 +196,11 @@ export class Game {
     this._clearExitPortal();
     this.world.setFloor(floorNum);
     await this.world.generateFloor();
-    this.player.position.set(0, 0, 0);
+    if (this.world.startPosition) {
+      this.player.position.copy(this.world.startPosition);
+    } else {
+      this.player.position.set(0, 0, 0);
+    }
     this.player.hp = this.player.maxHp;
     this.exitOpen = false;
     this.floorTimer = Math.max(15, GAME.COUNTDOWN_BASE + (floorNum - 1) * GAME.COUNTDOWN_PER_FLOOR);
@@ -190,6 +216,57 @@ export class Game {
     this.ui.showExitOpen(false);
     this._spawnPet();
     this._updateTorches();
+  }
+
+  async _loadPlaytestLevel() {
+    this._clearExitPortal();
+    // Load draft from localStorage
+    const draftKey = `voidloopLevelBuilderDraft:${this.playtestKey}`;
+    const draftJson = localStorage.getItem(draftKey);
+    if (!draftJson) {
+      console.error('[Game] Playtest draft not found:', this.playtestKey);
+      // Fall back to procedural
+      await this._generateFloor(1);
+      return;
+    }
+    let levelDoc;
+    try {
+      levelDoc = JSON.parse(draftJson);
+    } catch (e) {
+      console.error('[Game] Failed to parse playtest draft:', e);
+      await this._generateFloor(1);
+      return;
+    }
+
+    await this.world.loadAuthoredLevel(levelDoc, { scene: this.scene, letterDrop: this.letterDrops });
+
+    // Spawn player at authored start position
+    if (this.world.startPosition) {
+      this.player.position.copy(this.world.startPosition);
+    } else {
+      this.player.position.set(0, 0, 0);
+    }
+    this.player.hp = this.player.maxHp;
+    this.exitOpen = false;
+    this.floorTimer = levelDoc.gameplay?.timerSeconds || 120;
+    this.killCount = 0;
+    this.loot.clear();
+    this.letterDrops.clear();
+    this._clearPet();
+
+    // Reset score tracking
+    this.lettersCollected = 0;
+    this.blocksMined = 0;
+    this.enemiesDefeated = 0;
+    this.tokensGathered = 0;
+    this.mineCombo = 0;
+    this.mineComboTimer = 0;
+
+    this.letterPool.reset();
+    const letters = this.letterPool.getCurrentLetters().join(' ');
+    this.ui.setFloorText(`PLAYTEST — ${levelDoc.title || 'Custom Level'} — Letters: ${letters}`);
+    this.ui.showExitOpen(false);
+    this._spawnPet();
   }
 
   _updateTorches() {
@@ -297,6 +374,14 @@ export class Game {
     }
     this.ui.setTimer(this.floorTimer);
 
+    // Combo timer decay
+    if (this.mineComboTimer > 0) {
+      this.mineComboTimer -= dt;
+      if (this.mineComboTimer <= 0) {
+        this.mineCombo = 0;
+      }
+    }
+
     // Camera hard follow with screen shake
     const offset = 20 / this.cameraZoom;
     let shakeX = 0, shakeY = 0, shakeZ = 0;
@@ -340,7 +425,7 @@ export class Game {
         weapon.cooldown = GAME.ATTACK_COOLDOWN;
       } else {
         // Mine nearest block
-        const nearestBlock = this._findNearestBlock(GAME.MINE_RANGE);
+        const nearestBlock = this._findMineableBlock(GAME.MINE_RANGE);
         if (nearestBlock && !nearestBlock.destroyed) {
           // Use the same weapon attack animation for mining
           this.player.playAttackAnim();
@@ -352,16 +437,28 @@ export class Game {
           this.particles.spark(blockPos, 3);
           const destroyed = nearestBlock.takeDamage(this.player.mineDamage);
           if (destroyed) {
-            // Block break VFX + screen shake
-            this.particles.dust(blockPos, 8);
-            this.particles.spark(blockPos, 6);
-            this._screenShake(0.5, 0.25);
+            // Combo tracking
+            if (this.mineComboTimer > 0) {
+              this.mineCombo++;
+            } else {
+              this.mineCombo = 1;
+            }
+            this.mineComboTimer = 2.0;
+            this.blocksMined++;
+
+            // Block break VFX + screen shake (stronger for floating blocks)
+            const isFloat = nearestBlock.isFloating;
+            this.particles.dust(blockPos, isFloat ? 10 : 8);
+            this.particles.spark(blockPos, isFloat ? 8 : 6);
+            this._screenShake(isFloat ? 0.8 : 0.5, 0.25);
             const drop = this.world.mineBlock(nearestBlock, this.particles, audio);
+
             // enemyLoot: spawn loot on enemy death from block table
             const table = BLOCK_LOOT_TABLES[nearestBlock.typeKey];
             if (table) {
               this.loot.spawnFromTable(blockPos, table);
             }
+
             // Letter drop chance (~10%)
             if (Math.random() < 0.10) {
               const letter = this.letterPool.pickRandomLetter();
@@ -370,8 +467,21 @@ export class Game {
                 this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
               }
             }
-            // timeBonus for mining
-            this.floorTimer += GAME.TIME_BONUS_MINING;
+
+            // Score popup + combo text for floating blocks
+            if (isFloat) {
+              const basePoints = 10;
+              const points = basePoints * this.mineCombo;
+              this.ui.showFloatingText(`+${points}`, 0xfacc15);
+              if (this.mineCombo >= 2) {
+                const comboColors = { 2: 0xfacc15, 3: 0xffaa00, 4: 0xff6600, 5: 0xff2200 };
+                const comboColor = comboColors[Math.min(this.mineCombo, 5)] || 0xff0000;
+                this.ui.showFloatingText(`×${this.mineCombo} COMBO!`, comboColor);
+              }
+            }
+
+            // timeBonus for mining (combo bonus)
+            this.floorTimer += GAME.TIME_BONUS_MINING + (isFloat ? this.mineCombo : 0);
             SFXMapper.collectOre();
           }
         } else {
@@ -494,18 +604,53 @@ export class Game {
     return nearest;
   }
 
-  _findNearestBlock(range) {
+  _findMineableBlock(range) {
     let nearest = null;
     let nearestDist = range;
+    const playerPos = this.player.position;
+    const forward = new THREE.Vector3(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation));
+
+    const weaponId = this.player.weapons[this.player.currentSlot]?.data?.id || 'unknown';
+    const isPickaxe = weaponId === 'pickaxe';
+
     for (const block of this.world.blocks.values()) {
       if (block.destroyed) continue;
-      const dist = this.player.position.distanceTo(block.position);
+
+      // Ground blocks are only mineable with the pickaxe
+      const blockIsFloating = block.isFloating === true;
+      if (!blockIsFloating && !isPickaxe) {
+        console.log(`[MineGuard] ${weaponId} → skipping ground block at ${block.position.x},${block.position.y},${block.position.z}`);
+        continue;
+      }
+
+      // Forward cone check — only blocks in front of the player
+      const toBlock = block.position.clone().sub(playerPos);
+      toBlock.y = 0;
+      const dist = toBlock.length();
+      if (dist > range) continue;
+
+      toBlock.normalize();
+      const dot = Math.max(-1, Math.min(1, forward.dot(toBlock)));
+      const angle = Math.acos(dot);
+      if (angle > Math.PI / 2.5) continue; // ~72° forward cone
+
+      // Block must be at or above ankle level
+      if (block.position.y + 0.5 < playerPos.y - 0.5) continue;
+
       if (dist < nearestDist) {
         nearestDist = dist;
         nearest = block;
       }
     }
+    if (nearest) {
+      console.log(`[MineGuard] ${weaponId} → targeting ${nearest.isFloating ? 'floating' : 'ground'} block at ${nearest.position.x},${nearest.position.y},${nearest.position.z}`);
+    }
     return nearest;
+  }
+
+  _findNearestBlock(range) {
+    // Deprecated: kept for compatibility, delegates to _findMineableBlock
+    return this._findMineableBlock(range);
   }
 
   _clearExitPortal() {

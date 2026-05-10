@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KayKit Animation + Weapon Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 20px;
+      background: #1a1a3e;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+    .top-bar h1 {
+      font-size: 18px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #c084fc, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      white-space: nowrap;
+    }
+    .char-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+    .char-btn {
+      padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: #e0e0e0; font-size: 13px;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .char-btn:hover { background: #222250; border-color: #6366f1; }
+    .char-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+    .status-text { margin-left: auto; font-size: 12px; color: #888; white-space: nowrap; }
+
+    .weapon-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 20px; background: #151530;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0; overflow-x: auto;
+    }
+    .weapon-btn {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: #e0e0e0; font-size: 12px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .weapon-btn:hover { background: #222250; border-color: #6366f1; }
+    .weapon-btn.active { background: rgba(99,102,241,0.25); border-color: #6366f1; }
+
+    .main { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 96px); }
+    .sidebar-left {
+      width: 280px; background: #1a1a3e;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .search-box { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .search-box input {
+      width: 100%; padding: 6px 10px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.25); color: #e0e0e0; font-size: 13px; outline: none;
+    }
+    .anim-list { flex: 1; overflow-y: auto; padding: 6px; }
+    .category { margin-bottom: 2px; }
+    .cat-header {
+      display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+      border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; color: #888;
+    }
+    .cat-header:hover { background: rgba(255,255,255,0.04); }
+    .cat-clips { display: flex; flex-direction: column; gap: 1px; padding: 1px 0 2px 14px; }
+    .clip-btn {
+      display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+      border-radius: 4px; border: 1px solid transparent; background: transparent;
+      color: #e0e0e0; font-size: 11px; cursor: pointer; text-align: left;
+    }
+    .clip-btn:hover { background: rgba(255,255,255,0.05); }
+    .clip-btn.active { background: rgba(99,102,241,0.2); border-color: #6366f1; }
+    .clip-btn.rec { border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.06); }
+    .clip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .clip-dur { font-size: 10px; color: #888; }
+
+    .preview-wrap { flex: 1; display: flex; flex-direction: column; position: relative; }
+    #canvas-container { flex: 1; position: relative; min-height: 0; background: #0a0a1a; }
+    #canvas-container canvas { display: block; width: 100%; height: 100%; }
+
+    .controls-bar {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      background: #1a1a3e; border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .ctrl-btn {
+      padding: 5px 12px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.05); color: #e0e0e0; font-size: 12px;
+      cursor: pointer;
+    }
+    .ctrl-btn:hover { background: #222250; }
+    .ctrl-btn.primary { background: #6366f1; border-color: #6366f1; }
+    .ctrl-label { font-size: 11px; color: #888; }
+    .speed-slider { width: 70px; }
+    .clip-info { margin-left: auto; font-size: 11px; color: #888; text-align: right; }
+
+    .sidebar-right {
+      width: 200px; background: #1a1a3e;
+      border-left: 1px solid rgba(255,255,255,0.08);
+      display: flex; flex-direction: column; overflow: hidden;
+      padding: 10px; font-size: 12px;
+    }
+    .sidebar-right h3 { font-size: 12px; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
+    .rec-chip {
+      display: inline-block; padding: 2px 6px; border-radius: 4px;
+      background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3);
+      font-size: 10px; color: #a5b4fc; margin: 2px; cursor: pointer;
+    }
+    .rec-chip:hover { background: rgba(99,102,241,0.3); }
+
+    .loading-overlay {
+      position: fixed; inset: 0; background: #0a0a1a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; z-index: 1000;
+    }
+    .loading-overlay.hidden { display: none; }
+    .loading-spinner {
+      width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #6366f1; border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div style="font-size:13px;color:#888">Loading...</div>
+  </div>
+
+  <div class="top-bar">
+    <h1>🎬 KayKit Preview</h1>
+    <div class="char-picker" id="char-picker"></div>
+    <div class="status-text" id="status-text">Loading...</div>
+  </div>
+
+  <div class="weapon-bar" id="weapon-bar">
+    <span style="font-size:11px;color:#888;margin-right:4px">Weapons:</span>
+  </div>
+
+  <div class="main">
+    <div class="sidebar-left">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search animations...">
+      </div>
+      <div class="anim-list" id="anim-list"></div>
+    </div>
+
+    <div class="preview-wrap">
+      <div id="canvas-container"></div>
+      <div class="controls-bar">
+        <button class="ctrl-btn primary" id="btn-play">▶ Play</button>
+        <button class="ctrl-btn" id="btn-pause">⏸</button>
+        <button class="ctrl-btn" id="btn-stop">⏹</button>
+        <span class="ctrl-label">Speed</span>
+        <input type="range" class="speed-slider" id="speed-slider" min="0.1" max="2" step="0.1" value="1">
+        <span class="ctrl-label" id="speed-label">1.0x</span>
+        <div class="clip-info" id="clip-info">
+          <span id="clip-info-name">—</span><br>
+          <span id="clip-info-meta">Select an animation</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-right" id="sidebar-right">
+      <h3>Weapon</h3>
+      <div id="weapon-info-name" style="font-weight:700;margin-bottom:4px">None</div>
+      <div id="weapon-recs" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // ============================================================
+    // HARD-CODED KAYKIT ADVENTURERS WEAPONS ONLY
+    // ============================================================
+    const KAYKIT_WEAPONS = [
+      { id: 'sword_1h', name: 'Sword (1H)', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/sword_1handed.gltf', slot: 'right', scale: 0.25 },
+      { id: 'sword_2h', name: 'Sword (2H)', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/sword_2handed.gltf', slot: 'right', scale: 0.28 },
+      { id: 'axe_1h', name: 'Axe (1H)', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/axe_1handed.gltf', slot: 'right', scale: 0.25 },
+      { id: 'axe_2h', name: 'Axe (2H)', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/axe_2handed.gltf', slot: 'right', scale: 0.28 },
+      { id: 'dagger', name: 'Dagger', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/dagger.gltf', slot: 'right', scale: 0.22 },
+      { id: 'bow', name: 'Bow', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/bow.gltf', slot: 'left', scale: 0.3 },
+      { id: 'staff', name: 'Staff', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/staff.gltf', slot: 'right', scale: 0.28 },
+      { id: 'shield', name: 'Shield', model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/shield.gltf', slot: 'left', scale: 0.25 },
+    ];
+
+    // Map weapon -> recommended animations
+    const WEAPON_ANIMS = {
+      'sword_1h': ['Melee_1H_Attack_Slice_Horizontal', 'Melee_1H_Attack_Chop', 'Melee_1H_Attack_Stab', 'Melee_Blocking', 'Melee_2H_Idle'],
+      'sword_2h': ['Melee_2H_Attack_Slice', 'Melee_2H_Attack_Chop', 'Melee_2H_Attack_Spin', 'Melee_Blocking', 'Melee_2H_Idle'],
+      'axe_1h': ['Melee_1H_Attack_Chop', 'Melee_1H_Attack_Slice_Horizontal', 'Melee_Blocking', 'Melee_2H_Idle'],
+      'axe_2h': ['Melee_2H_Attack_Chop', 'Melee_2H_Attack_Slice', 'Melee_Blocking', 'Melee_2H_Idle'],
+      'dagger': ['Melee_1H_Attack_Stab', 'Melee_1H_Attack_Slice_Horizontal', 'Melee_2H_Idle'],
+      'bow': ['Ranged_Bow_Attack_Shoot', 'Ranged_Bow_Attack_Shoot_Quick', 'Ranged_Bow_Draw', 'Ranged_Bow_Idle'],
+      'staff': ['Melee_2H_Attack_Slice', 'Magic_Staff_Attack', 'Magic_Staff_Idle', 'Magic_Staff_Heal'],
+      'shield': ['Melee_Blocking', 'Melee_Block_Hit', 'Melee_Block_Attack', 'Melee_2H_Idle'],
+    };
+
+    const CHARACTERS = [
+      { key: 'barbarian', name: 'Barbarian', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb' },
+      { key: 'knight', name: 'Knight', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Knight.glb' },
+      { key: 'mage', name: 'Mage', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Mage.glb' },
+      { key: 'ranger', name: 'Ranger', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Ranger.glb' },
+      { key: 'rogue', name: 'Rogue', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue.glb' },
+      { key: 'rogue_hooded', name: 'Rogue Hooded', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue_Hooded.glb' },
+    ];
+
+    const ANIM_FILES = [
+      { category: 'General', color: '#6b7280', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_General.glb' },
+      { category: 'Movement Basic', color: '#3b82f6', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb' },
+      { category: 'Movement Advanced', color: '#3b82f6', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementAdvanced.glb' },
+      { category: 'Combat Melee', color: '#ef4444', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_CombatMelee.glb' },
+      { category: 'Combat Ranged', color: '#ef4444', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_CombatRanged.glb' },
+      { category: 'Simulation', color: '#22c55e', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Simulation.glb' },
+      { category: 'Tools', color: '#f97316', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Tools.glb' },
+      { category: 'Special', color: '#a855f7', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Special.glb' },
+    ];
+
+    let scene, camera, renderer, mixer, clock;
+    let currentMesh = null;
+    let currentCharIndex = 0;
+    let currentClipName = null;
+    let currentAction = null;
+    let isPlaying = false;
+    let animClips = [];
+    let clipActions = new Map();
+    let speed = 1.0;
+    let currentWeaponId = null;
+    let currentWeaponMesh = null;
+    let handBoneR = null;
+    let handBoneL = null;
+
+    async function init() {
+      clock = new THREE.Clock();
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a1a);
+
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 50);
+      camera.position.set(2, 2, 3);
+      camera.lookAt(0, 0.5, 0);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const key = new THREE.DirectionalLight(0xfff5e6, 1.5);
+      key.position.set(3, 5, 3);
+      scene.add(key);
+
+      const ground = new THREE.Mesh(
+        new THREE.CircleGeometry(2, 64),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a3e })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+
+      const debugCube = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xff0000 })
+      );
+      debugCube.position.set(0, 1, 0);
+      scene.add(debugCube);
+
+      renderer.render(scene, camera);
+
+      setupUI();
+      await loadAnimations();
+      await loadCharacter(0);
+
+      renderer.setAnimationLoop(() => {
+        const dt = clock.getDelta();
+        if (mixer) mixer.update(dt);
+        debugCube.rotation.y += dt;
+        renderer.render(scene, camera);
+      });
+
+      document.getElementById('loading-overlay').classList.add('hidden');
+    }
+
+    async function loadAnimations() {
+      const loader = new GLTFLoader();
+      const seen = new Set();
+      animClips = [];
+      for (const file of ANIM_FILES) {
+        try {
+          const gltf = await new Promise((resolve, reject) =>
+            loader.load(file.path, resolve, undefined, reject)
+          );
+          for (const clip of gltf.animations) {
+            if (seen.has(clip.name)) continue;
+            seen.add(clip.name);
+            animClips.push({ name: clip.name, duration: clip.duration || 0, category: file.category, color: file.color, isPose: clip.duration < 0.01, clip });
+          }
+        } catch (err) {
+          console.warn('Anim load failed:', file.path, err.message);
+        }
+      }
+      const catOrder = ['General','Movement Basic','Movement Advanced','Combat Melee','Combat Ranged','Simulation','Tools','Special'];
+      animClips.sort((a, b) => {
+        const ci = catOrder.indexOf(a.category) - catOrder.indexOf(b.category);
+        return ci !== 0 ? ci : a.name.localeCompare(b.name);
+      });
+      renderAnimList();
+      updateStatus(`${animClips.length} animations loaded`);
+    }
+
+    async function loadCharacter(index) {
+      const char = CHARACTERS[index];
+      updateStatus(`Loading ${char.name}...`);
+
+      if (currentMesh) { scene.remove(currentMesh); currentMesh = null; }
+      if (mixer) { mixer.stopAllAction(); mixer = null; }
+      clipActions.clear();
+
+      const loader = new GLTFLoader();
+      const gltf = await new Promise((resolve, reject) =>
+        loader.load(char.path, resolve, undefined, reject)
+      );
+      currentMesh = gltf.scene;
+
+      const box = new THREE.Box3().setFromObject(currentMesh);
+      const height = box.max.y - box.min.y;
+      const scale = 0.55 / height;
+      currentMesh.scale.setScalar(scale);
+      currentMesh.updateMatrixWorld(true);
+      const box2 = new THREE.Box3().setFromObject(currentMesh);
+      const cx = (box2.min.x + box2.max.x) * 0.5;
+      const cz = (box2.min.z + box2.max.z) * 0.5;
+      currentMesh.position.set(-cx, -box2.min.y, -cz);
+
+      handBoneR = null;
+      handBoneL = null;
+      currentMesh.traverse(c => {
+        if (c.isMesh) c.castShadow = true;
+        if (c.isBone) {
+          const n = c.name.toLowerCase();
+          if (n === 'handslotr') handBoneR = c;
+          if (n === 'handslotl') handBoneL = c;
+        }
+      });
+      console.log('Hand bones:', handBoneR?.name, handBoneL?.name);
+
+      scene.add(currentMesh);
+
+      mixer = new THREE.AnimationMixer(currentMesh);
+      for (const anim of animClips) {
+        const action = mixer.clipAction(anim.clip);
+        action.clampWhenFinished = true;
+        clipActions.set(anim.name, action);
+      }
+
+      currentCharIndex = index;
+      updateCharButtons();
+
+      if (currentWeaponId) await loadWeapon(currentWeaponId);
+      if (clipActions.has('Idle_A')) playClip('Idle_A');
+
+      updateStatus(`${char.name} ready — ${animClips.length} clips`);
+    }
+
+    async function loadWeapon(weaponId) {
+      const weapon = KAYKIT_WEAPONS.find(w => w.id === weaponId);
+      if (!weapon) return;
+
+      if (currentWeaponMesh) {
+        if (currentWeaponMesh.parent) currentWeaponMesh.parent.remove(currentWeaponMesh);
+        currentWeaponMesh = null;
+      }
+
+      const loader = new GLTFLoader();
+      try {
+        const gltf = await new Promise((resolve, reject) =>
+          loader.load(weapon.model, resolve, undefined, reject)
+        );
+        currentWeaponMesh = gltf.scene.clone();
+        currentWeaponMesh.scale.setScalar(weapon.scale);
+        currentWeaponMesh.rotation.set(0, 0, -Math.PI / 2);
+
+        const parentBone = weapon.slot === 'left' ? handBoneL : handBoneR;
+        if (parentBone) {
+          parentBone.add(currentWeaponMesh);
+        } else {
+          currentMesh.add(currentWeaponMesh);
+          currentWeaponMesh.position.set(0, 0.3, 0.2);
+        }
+
+        currentWeaponId = weaponId;
+        updateWeaponButtons();
+        updateWeaponInfo();
+        renderAnimList(document.getElementById('search-input').value.toLowerCase());
+        updateStatus(`${weapon.name} equipped`);
+      } catch (err) {
+        console.warn('Weapon load failed:', err.message);
+      }
+    }
+
+    function clearWeapon() {
+      if (currentWeaponMesh) {
+        if (currentWeaponMesh.parent) currentWeaponMesh.parent.remove(currentWeaponMesh);
+        currentWeaponMesh = null;
+      }
+      currentWeaponId = null;
+      updateWeaponButtons();
+      updateWeaponInfo();
+      renderAnimList(document.getElementById('search-input').value.toLowerCase());
+      updateStatus('Weapon cleared');
+    }
+
+    function updateWeaponButtons() {
+      document.querySelectorAll('.weapon-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.wid === currentWeaponId);
+      });
+    }
+
+    function updateWeaponInfo() {
+      const nameEl = document.getElementById('weapon-info-name');
+      const recsEl = document.getElementById('weapon-recs');
+      if (!currentWeaponId) {
+        nameEl.textContent = 'None';
+        recsEl.innerHTML = '';
+        return;
+      }
+      const weapon = KAYKIT_WEAPONS.find(w => w.id === currentWeaponId);
+      nameEl.textContent = weapon.name;
+      const recs = WEAPON_ANIMS[currentWeaponId] || [];
+      recsEl.innerHTML = recs.map(r =>
+        `<span class="rec-chip" data-anim="${r}">${r}</span>`
+      ).join('');
+      recsEl.querySelectorAll('.rec-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const anim = chip.dataset.anim;
+          if (clipActions.has(anim)) playClip(anim);
+        });
+      });
+    }
+
+    function playClip(name) {
+      const action = clipActions.get(name);
+      if (!action) return;
+      if (currentAction && currentAction !== action) currentAction.fadeOut(0.15);
+      const anim = animClips.find(a => a.name === name);
+      action.reset();
+      action.loop = THREE.LoopRepeat;
+      action.timeScale = speed;
+      action.fadeIn(0.1).play();
+      currentAction = action;
+      currentClipName = name;
+      isPlaying = true;
+      document.getElementById('clip-info-name').textContent = anim.name;
+      document.getElementById('clip-info-meta').textContent = `${anim.duration.toFixed(2)}s · ${anim.category}`;
+      updateClipButtons();
+      updatePlayButtons();
+    }
+
+    function pausePlayback() {
+      if (currentAction) { currentAction.paused = true; isPlaying = false; updatePlayButtons(); }
+    }
+    function resumePlayback() {
+      if (currentAction) { currentAction.paused = false; isPlaying = true; updatePlayButtons(); }
+    }
+    function stopPlayback() {
+      if (currentAction) { currentAction.fadeOut(0.2); currentAction = null; currentClipName = null; isPlaying = false; }
+      updateClipButtons(); updatePlayButtons();
+      document.getElementById('clip-info-name').textContent = '—';
+      document.getElementById('clip-info-meta').textContent = 'Select an animation';
+    }
+    function setSpeed(val) {
+      speed = parseFloat(val);
+      if (currentAction) currentAction.timeScale = speed;
+      document.getElementById('speed-label').textContent = speed.toFixed(1) + 'x';
+    }
+
+    function setupUI() {
+      const picker = document.getElementById('char-picker');
+      CHARACTERS.forEach((char, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'char-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = char.name;
+        btn.addEventListener('click', () => loadCharacter(i));
+        picker.appendChild(btn);
+      });
+
+      const wbar = document.getElementById('weapon-bar');
+      for (const w of KAYKIT_WEAPONS) {
+        const btn = document.createElement('button');
+        btn.className = 'weapon-btn';
+        btn.dataset.wid = w.id;
+        btn.textContent = w.name;
+        btn.addEventListener('click', () => loadWeapon(w.id));
+        wbar.appendChild(btn);
+      }
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'weapon-btn';
+      clearBtn.textContent = '✕ None';
+      clearBtn.addEventListener('click', clearWeapon);
+      wbar.appendChild(clearBtn);
+
+      document.getElementById('search-input').addEventListener('input', (e) => renderAnimList(e.target.value.toLowerCase()));
+      document.getElementById('btn-play').addEventListener('click', () => {
+        if (currentAction && currentAction.paused) resumePlayback();
+        else if (currentClipName) playClip(currentClipName);
+        else if (animClips.length > 0) playClip(animClips[0].name);
+      });
+      document.getElementById('btn-pause').addEventListener('click', pausePlayback);
+      document.getElementById('btn-stop').addEventListener('click', stopPlayback);
+      document.getElementById('speed-slider').addEventListener('input', (e) => setSpeed(e.target.value));
+    }
+
+    function renderAnimList(filter = '') {
+      const list = document.getElementById('anim-list');
+      list.innerHTML = '';
+      const recs = new Set(currentWeaponId ? (WEAPON_ANIMS[currentWeaponId] || []) : []);
+      const grouped = {};
+      for (const anim of animClips) {
+        if (filter && !anim.name.toLowerCase().includes(filter)) continue;
+        if (!grouped[anim.category]) grouped[anim.category] = [];
+        grouped[anim.category].push(anim);
+      }
+      const catOrder = ['General','Movement Basic','Movement Advanced','Combat Melee','Combat Ranged','Simulation','Tools','Special'];
+      for (const cat of catOrder) {
+        const clips = grouped[cat];
+        if (!clips) continue;
+        const catEl = document.createElement('div');
+        catEl.className = 'category';
+        const header = document.createElement('div');
+        header.className = 'cat-header';
+        header.innerHTML = `<span style="color:${clips[0].color}">●</span> ${cat} <span style="font-size:10px;color:#666;margin-left:4px">${clips.length}</span>`;
+        const clipsContainer = document.createElement('div');
+        clipsContainer.className = 'cat-clips';
+        header.addEventListener('click', () => {
+          clipsContainer.style.display = clipsContainer.style.display === 'none' ? 'flex' : 'none';
+        });
+        for (const anim of clips) {
+          const isRec = recs.has(anim.name);
+          const btn = document.createElement('button');
+          btn.className = 'clip-btn' + (anim.name === currentClipName ? ' active' : '') + (isRec ? ' rec' : '');
+          btn.innerHTML = `<span class="clip-name">${anim.name}</span>${isRec ? '<span style="color:#fbbf24;font-size:10px">★</span>' : ''}<span class="clip-dur">${anim.isPose ? 'POSE' : anim.duration.toFixed(1) + 's'}</span>`;
+          btn.addEventListener('click', () => playClip(anim.name));
+          clipsContainer.appendChild(btn);
+        }
+        catEl.appendChild(header);
+        catEl.appendChild(clipsContainer);
+        list.appendChild(catEl);
+      }
+    }
+
+    function updateCharButtons() {
+      document.querySelectorAll('.char-btn').forEach((btn, i) => btn.classList.toggle('active', i === currentCharIndex));
+    }
+    function updateClipButtons() {
+      document.querySelectorAll('.clip-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.querySelector('.clip-name').textContent === currentClipName);
+      });
+    }
+    function updatePlayButtons() {
+      document.getElementById('btn-play').classList.toggle('primary', !isPlaying);
+      document.getElementById('btn-pause').classList.toggle('primary', isPlaying);
+    }
+    function updateStatus(text) {
+      document.getElementById('status-text').textContent = text;
+    }
+
+    window.addEventListener('resize', () => {
+      const container = document.getElementById('canvas-container');
+      if (!camera || !renderer) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    init().catch(err => {
+      console.error('Init failed:', err);
+      document.querySelector('#loading-overlay div:last-child').textContent = 'Error: ' + err.message;
+    });
+  </script>
+</body>
+</html>

@@ -23,8 +23,12 @@ export class PropCreature {
     this.entityType = 'prop';
     this.propKey = propConfig.key;
     this.word = propConfig.word;
+    this.ttsWord = propConfig.ttsWord || propConfig.word;
+    this.biome = propConfig.biome || 'farm_garden';
+    this.resourceDrops = propConfig.resourceDrops || [];
     this.collectionKey = propConfig.word;
     this.assetKey = options.assetOverride || propConfig.asset;
+    this.assetPath = propConfig.assetPath || null;
     this.tier = PROP_TIER;
     this.level = options.level || 1;
     this.variant = options.variant || (Math.random() < 0.02 ? 'shiny' : 'normal');
@@ -49,15 +53,21 @@ export class PropCreature {
   }
 
   async _loadModel() {
-    const path = ASSETS.environment[this.assetKey];
+    const path = this.assetPath || ASSETS.environment[this.assetKey];
     if (!path) {
       console.warn('Prop asset not found:', this.assetKey);
       this._fallback();
       return;
     }
     try {
-      const gltf = await assetLoader.loadGLTF(path);
-      this.mesh = gltf.scene.clone(true);
+      const lower = path.toLowerCase();
+      if (lower.endsWith('.obj')) {
+        const obj = await assetLoader.loadOBJ(path);
+        this.mesh = obj.clone(true);
+      } else {
+        const gltf = await assetLoader.loadGLTF(path);
+        this.mesh = gltf.scene.clone(true);
+      }
       this._normalizeMesh();
       this._applyMaterials();
       this.container = new THREE.Group();

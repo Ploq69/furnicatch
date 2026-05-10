@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voidloop — Mining Roguelite</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      overflow: hidden;
+      background: #0a0a0a;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+    canvas { display: block; }
+
+    /* HUD Container */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      display: none;
+    }
+
+    /* Top-left: HP + Coins */
+    .hud-topleft {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .hp-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hp-heart {
+      font-size: 22px;
+      filter: drop-shadow(0 0 4px rgba(239,68,68,0.6));
+    }
+    .hp-bar-wrapper {
+      width: 120px;
+      height: 14px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 7px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .hp-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ef4444, #f87171);
+      border-radius: 7px;
+      transition: width 0.2s;
+      box-shadow: 0 0 8px rgba(239,68,68,0.4);
+    }
+    .hp-text {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.8);
+      margin-top: 2px;
+    }
+    .coin-display {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .coin-icon { font-size: 20px; filter: drop-shadow(0 0 4px rgba(251,191,36,0.5)); }
+    .coin-rate {
+      font-size: 13px;
+      color: #4ade80;
+      font-weight: 600;
+    }
+
+    /* Top-center: Floor + Exit */
+    .hud-topcenter {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    #floor-indicator {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      color: #fff;
+    }
+    #exit-open {
+      display: none;
+      font-size: 18px;
+      font-weight: 900;
+      color: #4ade80;
+      text-shadow: 0 0 12px rgba(74,222,128,0.6);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+
+    /* Top-right: Timer + Stats */
+    .hud-topright {
+      position: absolute;
+      top: 12px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    #timer-display {
+      font-size: 20px;
+      font-weight: 800;
+      font-family: monospace;
+      color: #fbbf24;
+      text-shadow: 0 0 8px rgba(251,191,36,0.4);
+    }
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .stat-icon { font-size: 16px; }
+
+    /* Crosshair */
+    .crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 12px; height: 12px;
+      transform: translate(-50%, -50%);
+      border: 2px solid rgba(255,255,255,0.7);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .crosshair::after {
+      content: ''; position: absolute;
+      top: 50%; left: 50%;
+      width: 2px; height: 2px;
+      background: #fff;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+    }
+
+    /* Weapon hotbar */
+    #hotbar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .hotbar-slot {
+      width: 56px; height: 56px;
+      background: rgba(0,0,0,0.6);
+      border: 2px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .hotbar-slot.active {
+      border-color: #a855f7;
+      box-shadow: 0 0 16px rgba(168,85,247,0.5);
+      background: rgba(168,85,247,0.2);
+    }
+    .hotbar-slot .slot-key {
+      position: absolute;
+      top: 2px; left: 4px;
+      font-size: 10px;
+      opacity: 0.6;
+      font-weight: 700;
+    }
+
+    /* Damage numbers */
+    .damage-number {
+      position: fixed;
+      font-size: 20px;
+      font-weight: 900;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      pointer-events: none;
+      z-index: 20;
+      animation: floatUp 1s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-60px) scale(1.2); }
+    }
+
+    /* Floating loot text */
+    .floating-loot {
+      position: fixed;
+      font-size: 18px;
+      font-weight: 900;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      pointer-events: none;
+      z-index: 20;
+      white-space: nowrap;
+    }
+
+    /* FPS counter */
+    #fps-display {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      font-size: 12px;
+      font-family: monospace;
+      color: rgba(255,255,255,0.5);
+      background: rgba(0,0,0,0.4);
+      padding: 4px 8px;
+      border-radius: 6px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Slider controls panel */
+    #slider-controls {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 10;
+    }
+    .slider-control {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 120px;
+    }
+    .slider-control input[type=range] {
+      width: 100%;
+      accent-color: #a855f7;
+    }
+
+    /* Loading screen */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      gap: 16px;
+    }
+    #loading h1 { font-size: 32px; letter-spacing: 4px; }
+    #loading-bar {
+      width: 300px; height: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    #loading-bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #a855f7, #22c55e);
+      transition: width 0.3s;
+    }
+
+    /* Camp UI */
+    #camp-ui {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,10,0.97);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 40px;
+      overflow-y: auto;
+    }
+    #camp-ui.active { display: flex; }
+    .camp-title { font-size: 36px; margin-bottom: 8px; }
+    .camp-subtitle { opacity: 0.6; margin-bottom: 32px; }
+    .camp-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 900px;
+      width: 100%;
+    }
+    .camp-panel {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .camp-panel h3 {
+      margin-bottom: 12px;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .upgrade-btn {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      text-align: left;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .upgrade-btn:hover:not(:disabled) {
+      background: rgba(168,85,247,0.2);
+      border-color: #a855f7;
+    }
+    .upgrade-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    #btn-descend {
+      margin-top: 32px;
+      padding: 14px 48px;
+      font-size: 18px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #a855f7, #7c3aed);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    #btn-descend:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 24px rgba(168,85,247,0.5);
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    .thai-hud {
+      position: fixed;
+      left: 16px;
+      bottom: 86px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .thai-chip {
+      min-width: 92px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.58);
+      border: 1px solid rgba(168,85,247,0.3);
+      border-radius: 8px;
+      box-shadow: 0 0 14px rgba(168,85,247,0.16);
+    }
+    .thai-chip small { display:block; opacity:0.58; font-size:10px; text-transform:uppercase; }
+    .thai-chip b { color:#fbbf24; font-size:18px; }
+    .camp-panel.wide {
+      grid-column: span 3;
+    }
+    .thai-camp-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr 1fr;
+      gap: 14px;
+    }
+    .thai-collection-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+      gap: 6px;
+      max-height: 220px;
+      overflow: auto;
+    }
+    .thai-collection-cell {
+      min-height: 44px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.28);
+      border-radius: 6px;
+      font-size: 22px;
+    }
+    .thai-collection-cell.owned {
+      color: #fff;
+      border-color: rgba(74,222,128,0.45);
+      background: rgba(74,222,128,0.1);
+    }
+    .thai-collection-cell small {
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      color: #4ade80;
+      font-size: 10px;
+    }
+    .thai-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0,0,0,0.74);
+      backdrop-filter: blur(8px);
+    }
+    .thai-overlay.active { display: flex; }
+    .thai-modal {
+      width: min(820px, 96vw);
+      max-height: 92vh;
+      overflow: auto;
+      padding: 24px;
+      border: 1px solid rgba(168,85,247,0.4);
+      border-radius: 12px;
+      background: rgba(8,8,13,0.96);
+      box-shadow: 0 0 40px rgba(168,85,247,0.28);
+      text-align: center;
+    }
+    .thai-modal h2 { margin: 0 0 6px; color:#fbbf24; }
+    .thai-modal p { opacity: 0.68; }
+    .thai-modal .primary {
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #a855f7, #7c3aed);
+      color: white;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .thai-quiz-choices {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .thai-quiz-choice {
+      min-height: 220px;
+      display: grid;
+      grid-template-rows: auto 126px auto auto;
+      gap: 5px;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      color: white;
+      cursor: pointer;
+    }
+    .thai-quiz-choice:hover {
+      border-color: #fbbf24;
+      box-shadow: 0 0 18px rgba(251,191,36,0.24);
+    }
+    .thai-quiz-choice span { font-size: 28px; }
+    .thai-quiz-choice small { opacity:0.65; }
+    .thai-model-preview {
+      width: 100%;
+      min-height: 126px;
+    }
+    .thai-model-preview-canvas {
+      display: block;
+      width: 100%;
+      height: 126px;
+    }
+    .survey-row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin: 8px 0;
+      padding: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+    }
+    .survey-row span { color:#fbbf24; font-size:26px; }
+    @media (max-width: 760px) {
+      .thai-hud { flex-wrap: wrap; right: 16px; }
+      .thai-camp-grid, .thai-quiz-choices { grid-template-columns: 1fr; }
+      .camp-panel.wide { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <h1>VOIDLOOP</h1>
+    <div id="loading-bar"><div id="loading-bar-fill"></div></div>
+    <div id="loading-text" style="opacity:0.6">Loading assets...</div>
+  </div>
+
+  <div id="hud">
+    <!-- Top-left: HP + Coins -->
+    <div class="hud-topleft">
+      <div class="hp-container">
+        <span class="hp-heart">❤️</span>
+        <div>
+          <div class="hp-bar-wrapper"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
+          <div class="hp-text" id="hp-text">100/100</div>
+        </div>
+      </div>
+      <div class="coin-display">
+        <span class="coin-icon">🪙</span>
+        <span id="coin-display">0</span>
+        <span class="coin-rate" id="coin-rate">+0</span>
+      </div>
+    </div>
+
+    <!-- Top-center: Floor + Exit -->
+    <div class="hud-topcenter">
+      <div id="floor-indicator" style="display:none;">FLOOR 1</div>
+      <div id="exit-open">EXIT OPEN!</div>
+    </div>
+
+    <!-- Top-right: Timer + Stats -->
+    <div class="hud-topright">
+      <div id="timer-display">00:00</div>
+      <div class="stat-row">
+        <span class="stat-icon">⭐</span>
+        <span id="level-display">1</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-icon">💀</span>
+        <span id="kills-display">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="crosshair" id="crosshair" style="display:none;"></div>
+
+  <div id="fps-display" style="display:none;">-- FPS</div>
+
+  <div id="slider-controls">
+    <div class="slider-control" id="brightness-control">
+      <div style="font-size:11px; text-align:center; opacity:0.7;">Brightness</div>
+      <input type="range" id="brightness-slider" min="0.2" max="3.0" step="0.1" value="1.0">
+    </div>
+    <div class="slider-control" id="zoom-control">
+      <div style="font-size:11px; text-align:center; opacity:0.7;">Zoom</div>
+      <input type="range" id="zoom-slider" min="0.3" max="3.0" step="0.1" value="1.0">
+    </div>
+  </div>
+
+  <div id="hotbar" style="display:none;">
+    <div class="hotbar-slot active" data-slot="0"><span class="slot-key">1</span>⛏</div>
+    <div class="hotbar-slot" data-slot="1"><span class="slot-key">2</span>⚔</div>
+    <div class="hotbar-slot" data-slot="2"><span class="slot-key">3</span>🔫</div>
+    <div class="hotbar-slot" data-slot="3"><span class="slot-key">4</span>💣</div>
+  </div>
+
+  <div class="thai-hud" id="thai-hud">
+    <div class="thai-chip"><small>Trash</small><b id="thai-trash-count">0</b></div>
+    <div class="thai-chip"><small>Queued</small><b id="thai-queue-count">0</b></div>
+    <div class="thai-chip"><small>Pets</small><b id="thai-pet-count">0/1</b></div>
+    <div class="thai-chip"><small>Arc</small><b id="thai-stage-name" style="font-size:13px;">Scrappy Quarry</b></div>
+  </div>
+
+  <div id="camp-ui">
+    <div class="camp-title">🏕️ Camp</div>
+    <div class="camp-subtitle">Upgrade your gear before the next descent</div>
+    <div class="camp-grid">
+      <div class="camp-panel">
+        <h3>⛏ Blacksmith</h3>
+        <div id="blacksmith-upgrades"></div>
+      </div>
+      <div class="camp-panel">
+        <h3>⚔ Combat</h3>
+        <div id="combat-upgrades"></div>
+      </div>
+      <div class="camp-panel">
+        <h3>🔮 Spirit</h3>
+        <div id="spirit-upgrades"></div>
+      </div>
+      <div class="camp-panel wide">
+        <h3>🇹🇭 Thai Miner Progression</h3>
+        <div class="thai-camp-grid">
+          <div>
+            <div style="font-size:12px; opacity:0.55; margin-bottom:8px;">Upgrades</div>
+            <div id="thai-upgrades"></div>
+          </div>
+          <div>
+            <div style="font-size:12px; opacity:0.55; margin-bottom:8px;">Study Chests</div>
+            <div id="thai-study-chests"></div>
+            <button class="upgrade-btn" id="thai-prestige-btn" disabled><strong>Tone Prestige</strong><br><small style="opacity:0.7">Unlocks after Thai script mastery</small></button>
+          </div>
+          <div>
+            <div style="font-size:12px; opacity:0.55; margin-bottom:8px;">Collection</div>
+            <div class="thai-collection-grid" id="thai-collection-grid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button id="btn-descend">DESCEND</button>
+  </div>
+
+  <div class="thai-overlay" id="thai-quiz">
+    <div class="thai-modal">
+      <h2 id="thai-quiz-title">Thai Quiz</h2>
+      <p id="thai-quiz-subtitle">Listen and choose the matching 3D model.</p>
+      <button class="primary" id="thai-replay-audio">Replay Audio</button>
+      <div class="thai-quiz-choices" id="thai-quiz-choices"></div>
+    </div>
+  </div>
+
+  <div class="thai-overlay" id="thai-survey">
+    <div class="thai-modal">
+      <h2>Survey Report</h2>
+      <p>Queued discoveries are bundled here. Overflow goes to Study Chests so mining power never becomes quiz spam.</p>
+      <div id="thai-survey-list"></div>
+      <button class="primary" id="thai-close-survey">Back To Camp</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

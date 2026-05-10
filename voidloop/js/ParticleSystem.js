@@ -110,6 +110,42 @@ class ParticleSystem {
     this.spawn({ pos, count, color: 0xa855f7, speed: 3, life: 0.6, size: 0.2 });
   }
 
+  debris(pos, color = 0x888888) {
+    // Spawn 3-4 small cube fragments that fly outward with gravity
+    const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+    for (let i = 0; i < 4; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(pos);
+      mesh.position.x += (Math.random() - 0.5) * 0.3;
+      mesh.position.y += (Math.random() - 0.5) * 0.3;
+      mesh.position.z += (Math.random() - 0.5) * 0.3;
+      const vel = new THREE.Vector3(
+        (Math.random() - 0.5) * 6,
+        Math.random() * 4 + 2,
+        (Math.random() - 0.5) * 6
+      );
+      this.scene.add(mesh);
+      // Animate and remove
+      let life = 0.5;
+      const animate = () => {
+        life -= 0.016;
+        if (life <= 0) {
+          this.scene.remove(mesh);
+          mat.dispose();
+          return;
+        }
+        mesh.position.addScaledVector(vel, 0.016);
+        vel.y -= 9.8 * 0.016;
+        mesh.rotation.x += 0.1;
+        mesh.rotation.z += 0.08;
+        mat.opacity = life / 0.5;
+        requestAnimationFrame(animate);
+      };
+      animate();
+    }
+  }
+
   // Preload common textures
   async preloadTextures() {
     const keys = Object.keys(TEXTURE_MAP);

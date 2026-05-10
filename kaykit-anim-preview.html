@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>KayKit Animation + Weapon Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f0c29;
+      --bg-panel: #1a1a3e;
+      --bg-panel-hover: #222250;
+      --border: rgba(255,255,255,0.08);
+      --text: #e0e0e0;
+      --text-dim: #888;
+      --accent: #6366f1;
+      --accent-hover: #7c3aed;
+      --cat-general: #6b7280;
+      --cat-movement: #3b82f6;
+      --cat-combat: #ef4444;
+      --cat-simulation: #22c55e;
+      --cat-tools: #f97316;
+      --cat-special: #a855f7;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 20px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .top-bar h1 {
+      font-size: 18px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #c084fc, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      white-space: nowrap;
+    }
+    .char-picker {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .char-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .char-btn:hover { background: var(--bg-panel-hover); border-color: var(--accent); }
+    .char-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .status-text {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    /* Main Layout */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* Left Sidebar — Animation Browser */
+    .sidebar-left {
+      width: 300px;
+      min-width: 240px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .search-box {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-box input {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .search-box input:focus { border-color: var(--accent); }
+    .search-box input::placeholder { color: var(--text-dim); }
+    .anim-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .category {
+      margin-bottom: 4px;
+    }
+    .cat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .cat-header:hover { background: rgba(255,255,255,0.04); }
+    .cat-header .cat-indicator {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .cat-header .cat-chevron {
+      margin-left: auto;
+      font-size: 10px;
+      transition: transform 0.2s;
+      color: var(--text-dim);
+    }
+    .cat-header.collapsed .cat-chevron { transform: rotate(-90deg); }
+    .cat-clips {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 2px 0 4px 18px;
+    }
+    .cat-clips.hidden { display: none; }
+    .clip-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.1s;
+      position: relative;
+    }
+    .clip-btn:hover { background: rgba(255,255,255,0.05); }
+    .clip-btn.active {
+      background: rgba(99,102,241,0.2);
+      border-color: var(--accent);
+    }
+    .clip-btn .clip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .clip-btn .clip-dur {
+      font-size: 10px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .clip-btn .clip-note {
+      font-size: 10px;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+    .clip-btn.pose .clip-dur { color: #fbbf24; font-weight: 700; }
+    .clip-count {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-left: 4px;
+    }
+
+    /* Center — 3D Preview */
+    .preview-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: #0a0a1a;
+    }
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: var(--text-dim);
+      background: rgba(0,0,0,0.5);
+      padding: 4px 12px;
+      border-radius: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .preview-area:hover .overlay-hint { opacity: 1; }
+
+    /* Playback Controls */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ctrl-btn:hover { background: var(--bg-panel-hover); }
+    .ctrl-btn.primary { background: var(--accent); border-color: var(--accent); }
+    .ctrl-btn.primary:hover { background: var(--accent-hover); }
+    .ctrl-btn.toggle-on { background: rgba(34,197,94,0.2); border-color: #22c55e; color: #4ade80; }
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ctrl-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .speed-slider {
+      width: 80px;
+      accent-color: var(--accent);
+    }
+    .clip-info {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: right;
+    }
+    .clip-info .clip-info-name {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Right Sidebar — Notes */
+    .sidebar-right {
+      width: 260px;
+      min-width: 200px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .notes-header {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .notes-header h3 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .export-btn {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .export-btn:hover { background: var(--bg-panel-hover); }
+    .notes-context {
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+    }
+    .notes-textarea {
+      flex: 1;
+      width: 100%;
+      resize: none;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 12px;
+      font-family: inherit;
+    }
+    .notes-textarea::placeholder { color: var(--text-dim); }
+    .notes-footer {
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+      text-align: right;
+    }
+
+    /* Loading overlay */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 1000;
+      transition: opacity 0.3s;
+    }
+    .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .loading-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 13px; color: var(--text-dim); }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .sidebar-right { display: none; }
+      .sidebar-left { width: 260px; min-width: 200px; }
+    }
+    /* Weapon Bar */
+    .weapon-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 20px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .weapon-cat-tabs {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .weapon-cat-tab {
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .weapon-cat-tab:hover { background: var(--bg-panel-hover); }
+    .weapon-cat-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .weapon-picker {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+    .weapon-btn {
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .weapon-btn:hover { background: var(--bg-panel-hover); border-color: var(--accent); }
+    .weapon-btn.active { background: rgba(99,102,241,0.25); border-color: var(--accent); }
+    .weapon-btn .weapon-icon { font-size: 14px; }
+    .weapon-info {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .weapon-info-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .weapon-info-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+    .weapon-info-clips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .weapon-info-chip {
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(99,102,241,0.15);
+      border: 1px solid rgba(99,102,241,0.3);
+      font-size: 11px;
+      color: #a5b4fc;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .weapon-info-chip:hover { background: rgba(99,102,241,0.3); }
+    .clip-btn.recommended {
+      border-color: rgba(251,191,36,0.4);
+      background: rgba(251,191,36,0.08);
+    }
+    .clip-btn .rec-badge {
+      font-size: 10px;
+      margin-left: 4px;
+      color: #fbbf24;
+    }
+    .clear-weapon-btn {
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .clear-weapon-btn:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+
+    @media (max-width: 640px) {
+      .sidebar-left { position: absolute; z-index: 20; width: 80%; max-width: 300px; height: 100%; transform: translateX(-100%); transition: transform 0.2s; }
+      .sidebar-left.open { transform: translateX(0); }
+      .top-bar h1 { font-size: 14px; }
+      .char-btn { padding: 4px 10px; font-size: 11px; }
+      .weapon-bar { padding: 6px 12px; }
+      .weapon-btn { padding: 3px 8px; font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-text">Loading animations...</div>
+  </div>
+
+  <div class="top-bar">
+    <h1>🎬 KayKit Animation Preview</h1>
+    <div class="char-picker" id="char-picker"></div>
+    <div class="status-text" id="status-text">Loading...</div>
+  </div>
+
+  <div class="weapon-bar" id="weapon-bar">
+    <div class="weapon-cat-tabs" id="weapon-cat-tabs"></div>
+    <div class="weapon-picker" id="weapon-picker"></div>
+    <button class="clear-weapon-btn" id="btn-clear-weapon" title="Unequip weapon">✕ Clear</button>
+  </div>
+
+  <div class="main">
+    <div class="sidebar-left" id="sidebar-left">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search animations...">
+      </div>
+      <div class="anim-list" id="anim-list"></div>
+    </div>
+
+    <div class="preview-area">
+      <div id="canvas-container"></div>
+      <div class="overlay-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+      <div class="controls-bar">
+        <div class="ctrl-group">
+          <button class="ctrl-btn primary" id="btn-play">▶ Play</button>
+          <button class="ctrl-btn" id="btn-pause">⏸ Pause</button>
+          <button class="ctrl-btn" id="btn-stop">⏹ Stop</button>
+        </div>
+        <div class="ctrl-group">
+          <span class="ctrl-label">Loop</span>
+          <button class="ctrl-btn toggle-on" id="btn-loop">On</button>
+        </div>
+        <div class="ctrl-group">
+          <span class="ctrl-label">Speed</span>
+          <input type="range" class="speed-slider" id="speed-slider" min="0.1" max="2.0" step="0.1" value="1.0">
+          <span class="ctrl-label" id="speed-label">1.0x</span>
+        </div>
+        <div class="clip-info" id="clip-info">
+          <span class="clip-info-name">—</span><br>
+          <span id="clip-info-meta">Select an animation</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-right" id="sidebar-right">
+      <div class="weapon-info" id="weapon-info" style="display:none;">
+        <div class="weapon-info-name" id="weapon-info-name">—</div>
+        <div class="weapon-info-meta" id="weapon-info-meta">Select a weapon to see recommended animations</div>
+        <div class="weapon-info-clips" id="weapon-info-clips"></div>
+      </div>
+      <div class="notes-header">
+        <h3>Notes</h3>
+        <button class="export-btn" id="btn-export">Export</button>
+      </div>
+      <div class="notes-context" id="notes-context">No animation selected</div>
+      <textarea class="notes-textarea" id="notes-textarea" placeholder="Write notes about this animation..."></textarea>
+      <div class="notes-footer">Auto-saved to localStorage</div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import {
+      WEAPON_CATEGORIES, WEAPON_ANIMATION_MAP,
+      getWeaponById, getWeaponsByCategory, getAllCategories,
+      getAnimationForWeapon, getRecommendedClips, getHandConfig,
+    } from './js/WeaponAnimationMap.js';
+
+    // ============================================================
+    // CONFIG
+    // ============================================================
+    const CHARACTERS = [
+      { key: 'mannequin', name: 'Mannequin', path: 'KayKit_Character_Animations_1.1/Mannequin Character/characters/Mannequin_Medium.glb' },
+      { key: 'barbarian', name: 'Barbarian', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb' },
+      { key: 'knight', name: 'Knight', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Knight.glb' },
+      { key: 'mage', name: 'Mage', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Mage.glb' },
+      { key: 'ranger', name: 'Ranger', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Ranger.glb' },
+      { key: 'rogue', name: 'Rogue', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue.glb' },
+      { key: 'rogue_hooded', name: 'Rogue Hooded', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue_Hooded.glb' },
+    ];
+
+    const ANIM_FILES = [
+      { category: 'General', color: 'var(--cat-general)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_General.glb' },
+      { category: 'Movement Basic', color: 'var(--cat-movement)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb' },
+      { category: 'Movement Advanced', color: 'var(--cat-movement)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementAdvanced.glb' },
+      { category: 'Combat Melee', color: 'var(--cat-combat)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_CombatMelee.glb' },
+      { category: 'Combat Ranged', color: 'var(--cat-combat)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_CombatRanged.glb' },
+      { category: 'Simulation', color: 'var(--cat-simulation)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Simulation.glb' },
+      { category: 'Tools', color: 'var(--cat-tools)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Tools.glb' },
+      { category: 'Special', color: 'var(--cat-special)', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Special.glb' },
+    ];
+
+    const NOTES_KEY_PREFIX = 'kaykit_anim_notes_';
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    let scene, camera, renderer, mixer, clock;
+    let currentMesh = null;
+    let currentCharIndex = 0;
+    let currentClipName = null;
+    let currentAction = null;
+    let isLooping = true;
+    let speed = 1.0;
+    let isPlaying = false;
+    let animClips = []; // { name, duration, category, sourceFile }
+    let clipActions = new Map(); // name -> AnimationAction
+    let orbit = { theta: 0.3, phi: 0.4, radius: 3.5, target: new THREE.Vector3(0, 0.4, 0) };
+    let currentWeaponId = null;
+    let currentWeaponMesh = null;
+    let handBoneR = null;
+    let handBoneL = null;
+    let weaponCatFilter = 'all';
+    let isDragging = false;
+    let dragButton = 0;
+    let lastMouse = { x: 0, y: 0 };
+    let notesDebounce = null;
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    async function init() {
+      clock = new THREE.Clock();
+      setupScene();
+      setupUI();
+      await loadAnimations();
+      await loadCharacter(0);
+      setupEventListeners();
+      startRenderLoop();
+      hideLoading();
+    }
+
+    function setupScene() {
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a1a);
+      scene.fog = new THREE.Fog(0x0a0a1a, 8, 20);
+
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 50);
+      updateCamera();
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      container.appendChild(renderer.domElement);
+
+      // Ground
+      const groundGeo = new THREE.CircleGeometry(2, 64);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a3e, roughness: 0.8, metalness: 0.1 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Grid ring
+      const gridHelper = new THREE.PolarGridHelper(2, 16, 8, 64, 0x333355, 0x222244);
+      gridHelper.position.y = 0.001;
+      scene.add(gridHelper);
+
+      // Lighting
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambient);
+
+      const key = new THREE.DirectionalLight(0xfff5e6, 1.5);
+      key.position.set(3, 5, 3);
+      key.castShadow = true;
+      key.shadow.mapSize.set(512, 512);
+      scene.add(key);
+
+      const fill = new THREE.DirectionalLight(0xc7d2fe, 0.5);
+      fill.position.set(-3, 3, 2);
+      scene.add(fill);
+
+      const rim = new THREE.DirectionalLight(0xffffff, 0.6);
+      rim.position.set(0, 3, -4);
+      scene.add(rim);
+    }
+
+    function updateCamera() {
+      const x = orbit.target.x + orbit.radius * Math.sin(orbit.theta) * Math.cos(orbit.phi);
+      const y = orbit.target.y + orbit.radius * Math.sin(orbit.phi);
+      const z = orbit.target.z + orbit.radius * Math.cos(orbit.theta) * Math.cos(orbit.phi);
+      camera.position.set(x, y, z);
+      camera.lookAt(orbit.target);
+    }
+
+    // ============================================================
+    // LOADING
+    // ============================================================
+    async function loadAnimations() {
+      const loader = new GLTFLoader();
+      const seen = new Set();
+      animClips = [];
+
+      for (const file of ANIM_FILES) {
+        try {
+          const gltf = await new Promise((resolve, reject) => loader.load(file.path, resolve, undefined, reject));
+          for (const clip of gltf.animations) {
+            if (seen.has(clip.name)) continue;
+            seen.add(clip.name);
+            const duration = clip.duration || 0;
+            animClips.push({
+              name: clip.name,
+              duration,
+              category: file.category,
+              color: file.color,
+              isPose: duration < 0.01,
+              clip,
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to load animation file:', file.path, err);
+        }
+      }
+
+      // Sort by category then name
+      const catOrder = ['General','Movement Basic','Movement Advanced','Combat Melee','Combat Ranged','Simulation','Tools','Special'];
+      animClips.sort((a, b) => {
+        const ci = catOrder.indexOf(a.category) - catOrder.indexOf(b.category);
+        return ci !== 0 ? ci : a.name.localeCompare(b.name);
+      });
+
+      renderAnimList();
+      updateStatus(`${animClips.length} animations loaded`);
+    }
+
+    async function loadCharacter(index) {
+      const char = CHARACTERS[index];
+      updateStatus(`Loading ${char.name}...`);
+
+      // Remove old mesh
+      if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) {
+            if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+            else c.material.dispose();
+          }
+        });
+        currentMesh = null;
+      }
+
+      // Dispose old mixer
+      if (mixer) {
+        mixer.stopAllAction();
+        mixer = null;
+      }
+      clipActions.clear();
+
+      // Load new character
+      const loader = new GLTFLoader();
+      const gltf = await new Promise((resolve, reject) => loader.load(char.path, resolve, undefined, reject));
+      currentMesh = gltf.scene;
+
+      // Normalize scale
+      const box = new THREE.Box3().setFromObject(currentMesh);
+      const height = box.max.y - box.min.y;
+      const targetHeight = 0.55;
+      const scale = targetHeight / height;
+      currentMesh.scale.setScalar(scale);
+      currentMesh.updateMatrixWorld(true);
+
+      // Center and ground
+      const box2 = new THREE.Box3().setFromObject(currentMesh);
+      const cx = (box2.min.x + box2.max.x) * 0.5;
+      const cz = (box2.min.z + box2.max.z) * 0.5;
+      currentMesh.position.set(-cx, -box2.min.y, -cz);
+
+      currentMesh.traverse(c => {
+        if (c.isMesh) {
+          c.castShadow = true;
+          c.receiveShadow = true;
+        }
+      });
+
+      scene.add(currentMesh);
+
+      // Find hand bones for weapon attachment
+      // KayKit GLB files use sanitized names: handslotr, handslotl (no dots)
+      handBoneR = null;
+      handBoneL = null;
+      currentMesh.traverse(c => {
+        if (c.isBone) {
+          const n = c.name.toLowerCase();
+          if (n === 'handslotr' || n.includes('hand.r') || n.includes('righthand') || n.includes('hand_r')) {
+            handBoneR = c;
+          }
+          if (n === 'handslotl' || n.includes('hand.l') || n.includes('lefthand') || n.includes('hand_l')) {
+            handBoneL = c;
+          }
+        }
+      });
+
+      // Create mixer and clip actions
+      mixer = new THREE.AnimationMixer(currentMesh);
+      for (const anim of animClips) {
+        const action = mixer.clipAction(anim.clip);
+        action.clampWhenFinished = true;
+        clipActions.set(anim.name, action);
+      }
+
+      currentCharIndex = index;
+      updateCharButtons();
+      updateNotesContext();
+
+      // Re-attach weapon if one was equipped
+      if (currentWeaponId) {
+        await loadWeapon(currentWeaponId);
+      }
+
+      // Auto-play idle if available
+      if (clipActions.has('Idle_A')) {
+        playClip('Idle_A');
+      }
+
+      updateStatus(`${char.name} ready — ${animClips.length} clips`);
+    }
+
+    // ============================================================
+    // WEAPON SYSTEM
+    // ============================================================
+    async function loadWeapon(weaponId) {
+      const weapon = getWeaponById(weaponId);
+      if (!weapon) return;
+
+      // Remove old weapon
+      if (currentWeaponMesh) {
+        if (currentWeaponMesh.parent) currentWeaponMesh.parent.remove(currentWeaponMesh);
+        currentWeaponMesh.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) {
+            if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+            else c.material.dispose();
+          }
+        });
+        currentWeaponMesh = null;
+      }
+
+      // Load new weapon model
+      const loader = new GLTFLoader();
+      try {
+        const gltf = await new Promise((resolve, reject) => loader.load(weapon.model, resolve, undefined, reject));
+        currentWeaponMesh = gltf.scene.clone();
+
+        // Apply hand config
+        const cfg = getHandConfig(weaponId) || { scale: 0.25 };
+        currentWeaponMesh.scale.setScalar(cfg.scale || 0.25);
+        currentWeaponMesh.position.set(cfg.x || 0, cfg.y || 0, cfg.z || 0);
+        currentWeaponMesh.rotation.set(cfg.rx || 0, cfg.ry || 0, cfg.rz || 0);
+
+        // Attach to appropriate bone
+        const slot = weapon.categoryDef?.slot || 'rightHand';
+        let parentBone = null;
+        if (slot === 'rightHand' && handBoneR) parentBone = handBoneR;
+        else if (slot === 'leftHand' && handBoneL) parentBone = handBoneL;
+        else if (slot === 'bothHands' && handBoneR) parentBone = handBoneR;
+        else if (slot === 'back') {
+          // Find spine/back bone
+          currentMesh.traverse(c => {
+            if (c.isBone && !parentBone) {
+              const n = c.name.toLowerCase();
+              if (n.includes('spine') || n.includes('back') || n.includes('chest')) parentBone = c;
+            }
+          });
+        }
+
+        if (parentBone) {
+          parentBone.add(currentWeaponMesh);
+        } else {
+          // Fallback: attach to character root
+          currentMesh.add(currentWeaponMesh);
+          currentWeaponMesh.position.set(0, 0.3, 0.2);
+        }
+
+        currentWeaponId = weaponId;
+        updateWeaponButtons();
+        updateWeaponInfo();
+        renderAnimList(document.getElementById('search-input').value.toLowerCase());
+        updateStatus(`${weapon.name} equipped`);
+      } catch (err) {
+        console.warn('Failed to load weapon:', weaponId, err);
+        updateStatus(`Failed to load ${weapon.name}`);
+      }
+    }
+
+    function clearWeapon() {
+      if (currentWeaponMesh) {
+        if (currentWeaponMesh.parent) currentWeaponMesh.parent.remove(currentWeaponMesh);
+        currentWeaponMesh.traverse(c => {
+          if (c.geometry) c.geometry.dispose();
+          if (c.material) {
+            if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+            else c.material.dispose();
+          }
+        });
+        currentWeaponMesh = null;
+      }
+      currentWeaponId = null;
+      updateWeaponButtons();
+      updateWeaponInfo();
+      renderAnimList(document.getElementById('search-input').value.toLowerCase());
+      updateStatus('Weapon unequipped');
+    }
+
+    function updateWeaponButtons() {
+      document.querySelectorAll('.weapon-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.weaponId === currentWeaponId);
+      });
+    }
+
+    function updateWeaponInfo() {
+      const infoEl = document.getElementById('weapon-info');
+      const nameEl = document.getElementById('weapon-info-name');
+      const metaEl = document.getElementById('weapon-info-meta');
+      const clipsEl = document.getElementById('weapon-info-clips');
+
+      if (!currentWeaponId) {
+        infoEl.style.display = 'none';
+        return;
+      }
+
+      const weapon = getWeaponById(currentWeaponId);
+      if (!weapon) {
+        infoEl.style.display = 'none';
+        return;
+      }
+
+      infoEl.style.display = 'block';
+      nameEl.textContent = `${weapon.icon || '🔧'} ${weapon.name}`;
+      metaEl.textContent = `${weapon.categoryDef?.label || weapon.category} · ${weapon.sourcePack}${weapon.notes ? ' · ' + weapon.notes : ''}`;
+
+      // Show recommended animation chips
+      const recs = getRecommendedClips(currentWeaponId);
+      clipsEl.innerHTML = '';
+      for (const rec of recs.slice(0, 8)) {
+        const chip = document.createElement('span');
+        chip.className = 'weapon-info-chip';
+        chip.textContent = rec.action;
+        chip.title = `Primary: ${rec.clip}`;
+        chip.addEventListener('click', () => {
+          if (clipActions.has(rec.clip)) playClip(rec.clip);
+          else if (rec.fallbacks.length && clipActions.has(rec.fallbacks[0])) playClip(rec.fallbacks[0]);
+        });
+        clipsEl.appendChild(chip);
+      }
+      if (recs.length > 8) {
+        const more = document.createElement('span');
+        more.className = 'weapon-info-chip';
+        more.style.opacity = '0.6';
+        more.textContent = `+${recs.length - 8} more`;
+        clipsEl.appendChild(more);
+      }
+    }
+
+    function setupWeaponUI() {
+      const catTabs = document.getElementById('weapon-cat-tabs');
+      const picker = document.getElementById('weapon-picker');
+
+      // Build category tabs
+      const categories = [{ key: 'all', label: 'All' }, ...getAllCategories().map(c => ({ key: c.key, label: c.label }))];
+      for (const cat of categories) {
+        const tab = document.createElement('button');
+        tab.className = 'weapon-cat-tab' + (cat.key === 'all' ? ' active' : '');
+        tab.textContent = cat.label;
+        tab.addEventListener('click', () => {
+          weaponCatFilter = cat.key;
+          document.querySelectorAll('.weapon-cat-tab').forEach(t => t.classList.toggle('active', t === tab));
+          renderWeaponPicker();
+        });
+        catTabs.appendChild(tab);
+      }
+
+      // Clear weapon button
+      document.getElementById('btn-clear-weapon').addEventListener('click', clearWeapon);
+
+      renderWeaponPicker();
+    }
+
+    function renderWeaponPicker() {
+      const picker = document.getElementById('weapon-picker');
+      picker.innerHTML = '';
+
+      const weapons = weaponCatFilter === 'all'
+        ? WEAPON_ANIMATION_MAP
+        : getWeaponsByCategory(weaponCatFilter);
+
+      for (const weapon of weapons) {
+        const btn = document.createElement('button');
+        btn.className = 'weapon-btn' + (weapon.id === currentWeaponId ? ' active' : '');
+        btn.dataset.weaponId = weapon.id;
+        btn.innerHTML = `<span class="weapon-icon">${weapon.icon || '🔧'}</span> ${weapon.name}`;
+        btn.title = `${weapon.name} — ${weapon.sourcePack}\n${weapon.notes || ''}`;
+        btn.addEventListener('click', () => loadWeapon(weapon.id));
+        picker.appendChild(btn);
+      }
+    }
+
+    // ============================================================
+    // PLAYBACK
+    // ============================================================
+    function playClip(name) {
+      const action = clipActions.get(name);
+      if (!action) return;
+
+      // Fade out current
+      if (currentAction && currentAction !== action) {
+        currentAction.fadeOut(0.15);
+      }
+
+      const anim = animClips.find(a => a.name === name);
+      action.reset();
+      action.loop = isLooping ? THREE.LoopRepeat : THREE.LoopOnce;
+      action.timeScale = speed;
+      action.fadeIn(0.1).play();
+
+      currentAction = action;
+      currentClipName = name;
+      isPlaying = true;
+
+      updateClipInfo(anim);
+      updateClipButtons();
+      updatePlayButtons();
+      updateNotesContext();
+      loadNotes();
+    }
+
+    function pausePlayback() {
+      if (currentAction) {
+        currentAction.paused = true;
+        isPlaying = false;
+        updatePlayButtons();
+      }
+    }
+
+    function resumePlayback() {
+      if (currentAction) {
+        currentAction.paused = false;
+        isPlaying = true;
+        updatePlayButtons();
+      }
+    }
+
+    function stopPlayback() {
+      if (currentAction) {
+        currentAction.fadeOut(0.2);
+        currentAction = null;
+        currentClipName = null;
+        isPlaying = false;
+      }
+      updateClipButtons();
+      updatePlayButtons();
+      updateClipInfo(null);
+      updateNotesContext();
+      document.getElementById('notes-textarea').value = '';
+    }
+
+    function setLooping(loop) {
+      isLooping = loop;
+      if (currentAction) {
+        currentAction.loop = isLooping ? THREE.LoopRepeat : THREE.LoopOnce;
+      }
+      updateLoopButton();
+    }
+
+    function setSpeed(val) {
+      speed = parseFloat(val);
+      if (currentAction) {
+        currentAction.timeScale = speed;
+      }
+      document.getElementById('speed-label').textContent = speed.toFixed(1) + 'x';
+    }
+
+    // ============================================================
+    // UI RENDERING
+    // ============================================================
+    function setupUI() {
+      // Character buttons
+      const picker = document.getElementById('char-picker');
+      CHARACTERS.forEach((char, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'char-btn';
+        btn.textContent = char.name;
+        btn.addEventListener('click', () => loadCharacter(i));
+        picker.appendChild(btn);
+      });
+
+      // Weapon UI
+      setupWeaponUI();
+
+      // Search
+      document.getElementById('search-input').addEventListener('input', (e) => {
+        renderAnimList(e.target.value.toLowerCase());
+      });
+
+      // Playback buttons
+      document.getElementById('btn-play').addEventListener('click', () => {
+        if (currentAction && currentAction.paused) {
+          resumePlayback();
+        } else if (currentClipName) {
+          playClip(currentClipName);
+        } else if (animClips.length > 0) {
+          playClip(animClips[0].name);
+        }
+      });
+      document.getElementById('btn-pause').addEventListener('click', pausePlayback);
+      document.getElementById('btn-stop').addEventListener('click', stopPlayback);
+      document.getElementById('btn-loop').addEventListener('click', () => setLooping(!isLooping));
+      document.getElementById('speed-slider').addEventListener('input', (e) => setSpeed(e.target.value));
+
+      // Notes
+      document.getElementById('notes-textarea').addEventListener('input', onNotesInput);
+      document.getElementById('btn-export').addEventListener('click', exportNotes);
+    }
+
+    function renderAnimList(filter = '') {
+      const list = document.getElementById('anim-list');
+      list.innerHTML = '';
+
+      // Get recommended clip names for current weapon
+      const recommendedClips = new Set();
+      if (currentWeaponId) {
+        const recs = getRecommendedClips(currentWeaponId);
+        for (const rec of recs) {
+          recommendedClips.add(rec.clip);
+          for (const fb of rec.fallbacks) recommendedClips.add(fb);
+        }
+      }
+
+      const grouped = {};
+      for (const anim of animClips) {
+        if (filter && !anim.name.toLowerCase().includes(filter)) continue;
+        if (!grouped[anim.category]) grouped[anim.category] = [];
+        grouped[anim.category].push(anim);
+      }
+
+      const catOrder = ['General','Movement Basic','Movement Advanced','Combat Melee','Combat Ranged','Simulation','Tools','Special'];
+      for (const cat of catOrder) {
+        const clips = grouped[cat];
+        if (!clips) continue;
+
+        const catEl = document.createElement('div');
+        catEl.className = 'category';
+
+        const firstColor = clips[0]?.color || 'var(--text-dim)';
+        const header = document.createElement('div');
+        header.className = 'cat-header';
+        header.innerHTML = `
+          <span class="cat-indicator" style="background:${firstColor}"></span>
+          <span>${cat}</span>
+          <span class="clip-count">${clips.length}</span>
+          <span class="cat-chevron">▼</span>
+        `;
+
+        const clipsContainer = document.createElement('div');
+        clipsContainer.className = 'cat-clips';
+
+        header.addEventListener('click', () => {
+          header.classList.toggle('collapsed');
+          clipsContainer.classList.toggle('hidden');
+        });
+
+        for (const anim of clips) {
+          const isRec = recommendedClips.has(anim.name);
+          const btn = document.createElement('button');
+          btn.className = 'clip-btn' + (anim.isPose ? ' pose' : '') + (anim.name === currentClipName ? ' active' : '') + (isRec ? ' recommended' : '');
+          btn.dataset.clipName = anim.name;
+          const hasNote = !!loadNoteRaw(currentCharIndex, anim.name);
+          btn.innerHTML = `
+            <span class="clip-name" title="${anim.name}">${anim.name}</span>
+            ${isRec ? '<span class="rec-badge">★</span>' : ''}
+            <span class="clip-dur">${anim.isPose ? 'POSE' : anim.duration.toFixed(2) + 's'}</span>
+            ${hasNote ? '<span class="clip-note">💬</span>' : ''}
+          `;
+          btn.addEventListener('click', () => playClip(anim.name));
+          clipsContainer.appendChild(btn);
+        }
+
+        catEl.appendChild(header);
+        catEl.appendChild(clipsContainer);
+        list.appendChild(catEl);
+      }
+    }
+
+    function updateCharButtons() {
+      const btns = document.querySelectorAll('.char-btn');
+      btns.forEach((btn, i) => btn.classList.toggle('active', i === currentCharIndex));
+    }
+
+    function updateClipButtons() {
+      document.querySelectorAll('.clip-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.clipName === currentClipName);
+      });
+    }
+
+    function updatePlayButtons() {
+      document.getElementById('btn-play').classList.toggle('primary', !isPlaying);
+      document.getElementById('btn-pause').classList.toggle('primary', isPlaying);
+    }
+
+    function updateLoopButton() {
+      const btn = document.getElementById('btn-loop');
+      btn.classList.toggle('toggle-on', isLooping);
+      btn.textContent = isLooping ? 'On' : 'Off';
+    }
+
+    function updateClipInfo(anim) {
+      const nameEl = document.querySelector('.clip-info-name');
+      const metaEl = document.getElementById('clip-info-meta');
+      if (!anim) {
+        nameEl.textContent = '—';
+        metaEl.textContent = 'Select an animation';
+        return;
+      }
+      nameEl.textContent = anim.name;
+      const poseText = anim.isPose ? 'Static Pose · ' : '';
+      metaEl.textContent = `${poseText}${anim.duration.toFixed(2)}s · ${anim.category}`;
+    }
+
+    function updateStatus(text) {
+      document.getElementById('status-text').textContent = text;
+    }
+
+    function hideLoading() {
+      document.getElementById('loading-overlay').classList.add('hidden');
+    }
+
+    // ============================================================
+    // NOTES
+    // ============================================================
+    function getNotesKey(charIdx, clipName) {
+      const charKey = CHARACTERS[charIdx]?.key || 'unknown';
+      return NOTES_KEY_PREFIX + charKey + '_' + clipName;
+    }
+
+    function loadNoteRaw(charIdx, clipName) {
+      try { return localStorage.getItem(getNotesKey(charIdx, clipName)) || ''; }
+      catch { return ''; }
+    }
+
+    function loadNotes() {
+      const text = loadNoteRaw(currentCharIndex, currentClipName || '');
+      document.getElementById('notes-textarea').value = text;
+    }
+
+    function saveNotes() {
+      if (!currentClipName) return;
+      const text = document.getElementById('notes-textarea').value;
+      try {
+        if (text.trim()) {
+          localStorage.setItem(getNotesKey(currentCharIndex, currentClipName), text);
+        } else {
+          localStorage.removeItem(getNotesKey(currentCharIndex, currentClipName));
+        }
+      } catch {}
+      // Refresh clip button badges
+      renderAnimList(document.getElementById('search-input').value.toLowerCase());
+      updateClipButtons();
+    }
+
+    function onNotesInput() {
+      if (notesDebounce) clearTimeout(notesDebounce);
+      notesDebounce = setTimeout(saveNotes, 500);
+    }
+
+    function updateNotesContext() {
+      const el = document.getElementById('notes-context');
+      const char = CHARACTERS[currentCharIndex];
+      if (currentClipName) {
+        el.textContent = `${char.name} · ${currentClipName}`;
+      } else {
+        el.textContent = `${char.name} · No animation selected`;
+      }
+    }
+
+    function exportNotes() {
+      const exportData = {};
+      for (let i = 0; i < CHARACTERS.length; i++) {
+        const charKey = CHARACTERS[i].key;
+        const charNotes = {};
+        for (const anim of animClips) {
+          const text = loadNoteRaw(i, anim.name);
+          if (text.trim()) charNotes[anim.name] = text;
+        }
+        if (Object.keys(charNotes).length > 0) {
+          exportData[charKey] = charNotes;
+        }
+      }
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kaykit-animation-notes.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ============================================================
+    // INPUT / ORBIT
+    // ============================================================
+    function setupEventListeners() {
+      const container = document.getElementById('canvas-container');
+
+      container.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        dragButton = e.button;
+        lastMouse.x = e.clientX;
+        lastMouse.y = e.clientY;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastMouse.x;
+        const dy = e.clientY - lastMouse.y;
+        lastMouse.x = e.clientX;
+        lastMouse.y = e.clientY;
+
+        if (dragButton === 0) {
+          // Left: orbit
+          orbit.theta -= dx * 0.008;
+          orbit.phi = Math.max(0.05, Math.min(Math.PI / 2 - 0.05, orbit.phi + dy * 0.008));
+        } else if (dragButton === 2) {
+          // Right: pan
+          const panSpeed = orbit.radius * 0.002;
+          const right = new THREE.Vector3();
+          const up = new THREE.Vector3(0, 1, 0);
+          camera.getWorldDirection(right);
+          right.cross(up).normalize();
+          orbit.target.addScaledVector(right, -dx * panSpeed);
+          orbit.target.y += dy * panSpeed;
+        }
+        updateCamera();
+      });
+
+      window.addEventListener('mouseup', () => { isDragging = false; });
+      container.addEventListener('contextmenu', (e) => e.preventDefault());
+
+      container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        orbit.radius *= e.deltaY > 0 ? 1.1 : 0.9;
+        orbit.radius = Math.max(1.5, Math.min(10, orbit.radius));
+        updateCamera();
+      }, { passive: false });
+
+      window.addEventListener('resize', () => {
+        const rect = container.getBoundingClientRect();
+        camera.aspect = rect.width / rect.height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(rect.width, rect.height);
+      });
+    }
+
+    // ============================================================
+    // RENDER LOOP
+    // ============================================================
+    function startRenderLoop() {
+      renderer.setAnimationLoop(() => {
+        const dt = clock.getDelta();
+        if (mixer) mixer.update(dt);
+        renderer.render(scene, camera);
+
+        // Auto-return to idle when a one-shot finishes
+        if (currentAction && !isLooping && currentClipName !== 'Idle_A') {
+          const remaining = currentAction.getClip().duration - currentAction.time;
+          if (remaining <= 0.05 && !currentAction.isRunning()) {
+            // One-shot finished, go back to idle
+            if (clipActions.has('Idle_A')) {
+              const idleAction = clipActions.get('Idle_A');
+              idleAction.reset().fadeIn(0.3).play();
+              currentAction = idleAction;
+              currentClipName = 'Idle_A';
+              isPlaying = true;
+              updateClipInfo(animClips.find(a => a.name === 'Idle_A'));
+              updateClipButtons();
+              updateNotesContext();
+              loadNotes();
+            }
+          }
+        }
+      });
+    }
+
+    // ============================================================
+    // START
+    // ============================================================
+    init().catch(err => {
+      console.error('Init failed:', err);
+      document.getElementById('loading-text').textContent = 'Error: ' + err.message;
+    });
+  </script>
+</body>
+</html>

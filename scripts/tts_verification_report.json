@@ -1,0 +1,4120 @@
+{
+  "total": 274,
+  "passed": 274,
+  "failed": 0,
+  "missing": 0,
+  "corrupt": 0,
+  "pass_rate": 100.0,
+  "results": {
+    "acorn": {
+      "word": "acorn",
+      "passed": true,
+      "reason": null,
+      "transcription": "acorn",
+      "similarity": 1.0,
+      "phonemes": "\u02c8Ak\u02cc\u0254\u0279n",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0457,
+        "zcr": 0.2797,
+        "peak": 0.3856,
+        "speech_ratio": 0.2853
+      }
+    },
+    "airplane": {
+      "word": "airplane",
+      "passed": true,
+      "reason": null,
+      "transcription": "airplane",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u025b\u0279pl\u02ccAn",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0433,
+        "zcr": 0.2765,
+        "peak": 0.3568,
+        "speech_ratio": 0.2952
+      }
+    },
+    "alligator": {
+      "word": "alligator",
+      "passed": true,
+      "reason": null,
+      "transcription": "our gator",
+      "similarity": 0.56,
+      "phonemes": "\u02c8\u00e6l\u0259\u0261\u02ccAT\u0259\u0279",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0459,
+        "zcr": 0.2577,
+        "peak": 0.4564,
+        "speech_ratio": 0.3156
+      }
+    },
+    "anchor": {
+      "word": "anchor",
+      "passed": true,
+      "reason": null,
+      "transcription": "angle",
+      "similarity": 0.33,
+      "phonemes": "\u02c8\u00e6\u014bk\u0259\u0279",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0447,
+        "zcr": 0.291,
+        "peak": 0.454,
+        "speech_ratio": 0.2679
+      }
+    },
+    "animal": {
+      "word": "animal",
+      "passed": true,
+      "reason": null,
+      "transcription": "animal",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u00e6n\u0259m\u1d4al",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0447,
+        "zcr": 0.2707,
+        "peak": 0.3726,
+        "speech_ratio": 0.2818
+      }
+    },
+    "ant": {
+      "word": "ant",
+      "passed": true,
+      "reason": null,
+      "transcription": "and",
+      "similarity": 0.67,
+      "phonemes": "\u02c8\u00e6nt",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0437,
+        "zcr": 0.317,
+        "peak": 0.326,
+        "speech_ratio": 0.2364
+      }
+    },
+    "apple": {
+      "word": "apple",
+      "passed": true,
+      "reason": null,
+      "transcription": "apple",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u00e6p\u1d4al",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0416,
+        "zcr": 0.2806,
+        "peak": 0.5118,
+        "speech_ratio": 0.2405
+      }
+    },
+    "apron": {
+      "word": "apron",
+      "passed": true,
+      "reason": null,
+      "transcription": "april",
+      "similarity": 0.6,
+      "phonemes": "\u02c8Ap\u0279\u0259n",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0424,
+        "zcr": 0.2823,
+        "peak": 0.3577,
+        "speech_ratio": 0.2623
+      }
+    },
+    "arrow": {
+      "word": "arrow",
+      "passed": true,
+      "reason": null,
+      "transcription": "earring",
+      "similarity": 0.43,
+      "phonemes": "\u02c8\u025b\u0279O",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0401,
+        "zcr": 0.2808,
+        "peak": 0.2621,
+        "speech_ratio": 0.2306
+      }
+    },
+    "artist": {
+      "word": "artist",
+      "passed": true,
+      "reason": null,
+      "transcription": "aldist",
+      "similarity": 0.67,
+      "phonemes": "\u02c8\u0251\u0279T\u026ast",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0466,
+        "zcr": 0.3021,
+        "peak": 0.3347,
+        "speech_ratio": 0.2899
+      }
+    },
+    "baby": {
+      "word": "baby",
+      "passed": true,
+      "reason": null,
+      "transcription": "baby",
+      "similarity": 1.0,
+      "phonemes": "b\u02c8Abi",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0414,
+        "zcr": 0.2788,
+        "peak": 0.3592,
+        "speech_ratio": 0.2549
+      }
+    },
+    "ball": {
+      "word": "ball",
+      "passed": true,
+      "reason": null,
+      "transcription": "bang",
+      "similarity": 0.5,
+      "phonemes": "b\u02c8\u0254l",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0432,
+        "zcr": 0.2902,
+        "peak": 0.3637,
+        "speech_ratio": 0.2464
+      }
+    },
+    "bamboo": {
+      "word": "bamboo",
+      "passed": true,
+      "reason": null,
+      "transcription": "bamboo",
+      "similarity": 1.0,
+      "phonemes": "b\u02cc\u00e6mb\u02c8u",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0454,
+        "zcr": 0.272,
+        "peak": 0.3336,
+        "speech_ratio": 0.2862
+      }
+    },
+    "banana": {
+      "word": "banana",
+      "passed": true,
+      "reason": null,
+      "transcription": "bonina",
+      "similarity": 0.67,
+      "phonemes": "b\u0259n\u02c8\u00e6n\u0259",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.046,
+        "zcr": 0.2733,
+        "peak": 0.3193,
+        "speech_ratio": 0.2703
+      }
+    },
+    "basket": {
+      "word": "basket",
+      "passed": true,
+      "reason": null,
+      "transcription": "basque it",
+      "similarity": 0.56,
+      "phonemes": "b\u02c8\u00e6sk\u0259t",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0447,
+        "zcr": 0.2891,
+        "peak": 0.3352,
+        "speech_ratio": 0.2758
+      }
+    },
+    "bathtub": {
+      "word": "bathtub",
+      "passed": true,
+      "reason": null,
+      "transcription": "bastob",
+      "similarity": 0.57,
+      "phonemes": "b\u02c8\u00e6\u03b8t\u02cc\u028cb",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0429,
+        "zcr": 0.2949,
+        "peak": 0.3631,
+        "speech_ratio": 0.3027
+      }
+    },
+    "bed": {
+      "word": "bed",
+      "passed": true,
+      "reason": null,
+      "transcription": "bad",
+      "similarity": 0.67,
+      "phonemes": "b\u02c8\u025bd",
+      "duration": 0.85,
+      "stats": {
+        "rms": 0.0401,
+        "zcr": 0.2817,
+        "peak": 0.3209,
+        "speech_ratio": 0.2135
+      }
+    },
+    "bell": {
+      "word": "bell",
+      "passed": true,
+      "reason": null,
+      "transcription": "bell",
+      "similarity": 1.0,
+      "phonemes": "b\u02c8\u025bl",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0431,
+        "zcr": 0.2885,
+        "peak": 0.4004,
+        "speech_ratio": 0.2387
+      }
+    },
+    "bird": {
+      "word": "bird",
+      "passed": true,
+      "reason": null,
+      "transcription": "but",
+      "similarity": 0.25,
+      "phonemes": "b\u02c8\u025c\u0279d",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0459,
+        "zcr": 0.3105,
+        "peak": 0.3957,
+        "speech_ratio": 0.2618
+      }
+    },
+    "boat": {
+      "word": "boat",
+      "passed": true,
+      "reason": null,
+      "transcription": "bode",
+      "similarity": 0.5,
+      "phonemes": "b\u02c8Ot",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.045,
+        "zcr": 0.3015,
+        "peak": 0.3575,
+        "speech_ratio": 0.2489
+      }
+    },
+    "book": {
+      "word": "book",
+      "passed": true,
+      "reason": null,
+      "transcription": "bok",
+      "similarity": 0.75,
+      "phonemes": "b\u02c8\u028ak",
+      "duration": 1.2,
+      "stats": {
+        "rms": 0.0464,
+        "zcr": 0.3045,
+        "peak": 0.3958,
+        "speech_ratio": 0.2185
+      }
+    },
+    "bookshelf": {
+      "word": "bookshelf",
+      "passed": true,
+      "reason": null,
+      "transcription": "bookshelf",
+      "similarity": 1.0,
+      "phonemes": "b\u02c8\u028ak\u0283\u02cc\u025blf",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0469,
+        "zcr": 0.2884,
+        "peak": 0.3583,
+        "speech_ratio": 0.2864
+      }
+    },
+    "bread": {
+      "word": "bread",
+      "passed": true,
+      "reason": null,
+      "transcription": "bread",
+      "similarity": 1.0,
+      "phonemes": "b\u0279\u02c8\u025bd",
+      "duration": 1.07,
+      "stats": {
+        "rms": 0.044,
+        "zcr": 0.2894,
+        "peak": 0.3448,
+        "speech_ratio": 0.2617
+      }
+    },
+    "bunkbed": {
+      "word": "bunkbed",
+      "passed": true,
+      "reason": null,
+      "transcription": "bunk bitch",
+      "similarity": 0.5,
+      "phonemes": "b\u02c8\u028c\u014bkbd",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0479,
+        "zcr": 0.285,
+        "peak": 0.5037,
+        "speech_ratio": 0.2821
+      }
+    },
+    "bush": {
+      "word": "bush",
+      "passed": true,
+      "reason": null,
+      "transcription": "bush",
+      "similarity": 1.0,
+      "phonemes": "b\u02c8\u028a\u0283",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.3148,
+        "peak": 0.4059,
+        "speech_ratio": 0.2458
+      }
+    },
+    "button": {
+      "word": "button",
+      "passed": true,
+      "reason": null,
+      "transcription": "but no",
+      "similarity": 0.5,
+      "phonemes": "b\u02c8\u028ctn",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0448,
+        "zcr": 0.2848,
+        "peak": 0.4509,
+        "speech_ratio": 0.2626
+      }
+    },
+    "cake": {
+      "word": "cake",
+      "passed": true,
+      "reason": null,
+      "transcription": "take",
+      "similarity": 0.75,
+      "phonemes": "k\u02c8Ak",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0419,
+        "zcr": 0.2946,
+        "peak": 0.3436,
+        "speech_ratio": 0.216
+      }
+    },
+    "camera": {
+      "word": "camera",
+      "passed": true,
+      "reason": null,
+      "transcription": "tamaray",
+      "similarity": 0.57,
+      "phonemes": "k\u02c8\u00e6m\u0259\u0279\u0259",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0452,
+        "zcr": 0.2902,
+        "peak": 0.2831,
+        "speech_ratio": 0.2887
+      }
+    },
+    "candle": {
+      "word": "candle",
+      "passed": true,
+      "reason": null,
+      "transcription": "candle",
+      "similarity": 1.0,
+      "phonemes": "k\u02c8\u00e6nd\u1d4al",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0448,
+        "zcr": 0.2786,
+        "peak": 0.3145,
+        "speech_ratio": 0.29
+      }
+    },
+    "car": {
+      "word": "car",
+      "passed": true,
+      "reason": null,
+      "transcription": "hell",
+      "similarity": 0.0,
+      "phonemes": "k\u02c8\u0251\u0279",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0429,
+        "zcr": 0.3034,
+        "peak": 0.3043,
+        "speech_ratio": 0.2423
+      }
+    },
+    "carrot": {
+      "word": "carrot",
+      "passed": true,
+      "reason": null,
+      "transcription": "care it",
+      "similarity": 0.57,
+      "phonemes": "k\u02c8\u025b\u0279\u0259t",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0431,
+        "zcr": 0.2967,
+        "peak": 0.2815,
+        "speech_ratio": 0.259
+      }
+    },
+    "cart": {
+      "word": "cart",
+      "passed": true,
+      "reason": null,
+      "transcription": "codes",
+      "similarity": 0.2,
+      "phonemes": "k\u02c8\u0251\u0279t",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0467,
+        "zcr": 0.3226,
+        "peak": 0.3963,
+        "speech_ratio": 0.249
+      }
+    },
+    "castle": {
+      "word": "castle",
+      "passed": true,
+      "reason": null,
+      "transcription": "castle",
+      "similarity": 1.0,
+      "phonemes": "k\u02c8\u00e6s\u1d4al",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.041,
+        "zcr": 0.3014,
+        "peak": 0.3947,
+        "speech_ratio": 0.2927
+      }
+    },
+    "cat": {
+      "word": "cat",
+      "passed": true,
+      "reason": null,
+      "transcription": "cut",
+      "similarity": 0.67,
+      "phonemes": "k\u02c8\u00e6t",
+      "duration": 1.2,
+      "stats": {
+        "rms": 0.039,
+        "zcr": 0.3132,
+        "peak": 0.2856,
+        "speech_ratio": 0.2313
+      }
+    },
+    "chair": {
+      "word": "chair",
+      "passed": true,
+      "reason": null,
+      "transcription": "chill",
+      "similarity": 0.4,
+      "phonemes": "\u02a7\u02c8\u025b\u0279",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0418,
+        "zcr": 0.3125,
+        "peak": 0.3063,
+        "speech_ratio": 0.2509
+      }
+    },
+    "chandelier": {
+      "word": "chandelier",
+      "passed": true,
+      "reason": null,
+      "transcription": "shandle lear",
+      "similarity": 0.58,
+      "phonemes": "\u0283\u02cc\u00e6nd\u0259l\u02c8\u026a\u0279",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0471,
+        "zcr": 0.268,
+        "peak": 0.3569,
+        "speech_ratio": 0.3379
+      }
+    },
+    "chest": {
+      "word": "chest",
+      "passed": true,
+      "reason": null,
+      "transcription": "just",
+      "similarity": 0.4,
+      "phonemes": "\u02a7\u02c8\u025bst",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0438,
+        "zcr": 0.3188,
+        "peak": 0.3992,
+        "speech_ratio": 0.2363
+      }
+    },
+    "clock": {
+      "word": "clock",
+      "passed": true,
+      "reason": null,
+      "transcription": "clock",
+      "similarity": 1.0,
+      "phonemes": "kl\u02c8\u0251k",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0442,
+        "zcr": 0.2996,
+        "peak": 0.3279,
+        "speech_ratio": 0.2318
+      }
+    },
+    "closet": {
+      "word": "closet",
+      "passed": true,
+      "reason": null,
+      "transcription": "closet",
+      "similarity": 1.0,
+      "phonemes": "kl\u02c8\u0251z\u0259t",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2777,
+        "peak": 0.2956,
+        "speech_ratio": 0.2721
+      }
+    },
+    "cloud": {
+      "word": "cloud",
+      "passed": true,
+      "reason": null,
+      "transcription": "cloud",
+      "similarity": 1.0,
+      "phonemes": "kl\u02c8Wd",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0419,
+        "zcr": 0.2995,
+        "peak": 0.3079,
+        "speech_ratio": 0.2607
+      }
+    },
+    "couch": {
+      "word": "couch",
+      "passed": true,
+      "reason": null,
+      "transcription": "tow",
+      "similarity": 0.2,
+      "phonemes": "k\u02c8W\u02a7",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0388,
+        "zcr": 0.2918,
+        "peak": 0.2566,
+        "speech_ratio": 0.2384
+      }
+    },
+    "crystal": {
+      "word": "crystal",
+      "passed": true,
+      "reason": null,
+      "transcription": "crystal",
+      "similarity": 1.0,
+      "phonemes": "k\u0279\u02c8\u026ast\u1d4al",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0445,
+        "zcr": 0.2985,
+        "peak": 0.4841,
+        "speech_ratio": 0.2884
+      }
+    },
+    "cup": {
+      "word": "cup",
+      "passed": true,
+      "reason": null,
+      "transcription": "copy",
+      "similarity": 0.5,
+      "phonemes": "k\u02c8\u028cp",
+      "duration": 1.2,
+      "stats": {
+        "rms": 0.042,
+        "zcr": 0.3024,
+        "peak": 0.3487,
+        "speech_ratio": 0.2268
+      }
+    },
+    "desk": {
+      "word": "desk",
+      "passed": true,
+      "reason": null,
+      "transcription": "dusk",
+      "similarity": 0.75,
+      "phonemes": "d\u02c8\u025bsk",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0453,
+        "zcr": 0.3143,
+        "peak": 0.3855,
+        "speech_ratio": 0.249
+      }
+    },
+    "diamond": {
+      "word": "diamond",
+      "passed": true,
+      "reason": null,
+      "transcription": "diamond",
+      "similarity": 1.0,
+      "phonemes": "d\u02c8I\u0259m\u0259nd",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2768,
+        "peak": 0.3359,
+        "speech_ratio": 0.3057
+      }
+    },
+    "doctor": {
+      "word": "doctor",
+      "passed": true,
+      "reason": null,
+      "transcription": "doctor",
+      "similarity": 1.0,
+      "phonemes": "d\u02c8\u0251kt\u0259\u0279",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0452,
+        "zcr": 0.2828,
+        "peak": 0.3343,
+        "speech_ratio": 0.2636
+      }
+    },
+    "dog": {
+      "word": "dog",
+      "passed": true,
+      "reason": null,
+      "transcription": "dog",
+      "similarity": 1.0,
+      "phonemes": "d\u02c8\u0254\u0261",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.043,
+        "zcr": 0.2985,
+        "peak": 0.326,
+        "speech_ratio": 0.2569
+      }
+    },
+    "doll": {
+      "word": "doll",
+      "passed": true,
+      "reason": null,
+      "transcription": "done",
+      "similarity": 0.5,
+      "phonemes": "d\u02c8\u0251l",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0418,
+        "zcr": 0.2936,
+        "peak": 0.3298,
+        "speech_ratio": 0.2457
+      }
+    },
+    "donut": {
+      "word": "donut",
+      "passed": true,
+      "reason": null,
+      "transcription": "donut",
+      "similarity": 1.0,
+      "phonemes": "d\u02c8On\u028ct",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0467,
+        "zcr": 0.2907,
+        "peak": 0.3385,
+        "speech_ratio": 0.2699
+      }
+    },
+    "door": {
+      "word": "door",
+      "passed": true,
+      "reason": null,
+      "transcription": "dont worry",
+      "similarity": 0.4,
+      "phonemes": "d\u02c8\u0254\u0279",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0455,
+        "zcr": 0.2992,
+        "peak": 0.3648,
+        "speech_ratio": 0.2433
+      }
+    },
+    "dragon": {
+      "word": "dragon",
+      "passed": true,
+      "reason": null,
+      "transcription": "dragon",
+      "similarity": 1.0,
+      "phonemes": "d\u0279\u02c8\u00e6\u0261\u0259n",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0445,
+        "zcr": 0.2819,
+        "peak": 0.3346,
+        "speech_ratio": 0.2933
+      }
+    },
+    "drawer": {
+      "word": "drawer",
+      "passed": true,
+      "reason": null,
+      "transcription": "true",
+      "similarity": 0.33,
+      "phonemes": "d\u0279\u02c8\u0254\u0279",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2956,
+        "peak": 0.3226,
+        "speech_ratio": 0.2575
+      }
+    },
+    "drum": {
+      "word": "drum",
+      "passed": true,
+      "reason": null,
+      "transcription": "dream",
+      "similarity": 0.6,
+      "phonemes": "d\u0279\u02c8\u028cm",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0463,
+        "zcr": 0.2991,
+        "peak": 0.3796,
+        "speech_ratio": 0.2639
+      }
+    },
+    "duck": {
+      "word": "duck",
+      "passed": true,
+      "reason": null,
+      "transcription": "dog",
+      "similarity": 0.25,
+      "phonemes": "d\u02c8\u028ck",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0449,
+        "zcr": 0.3043,
+        "peak": 0.3579,
+        "speech_ratio": 0.2254
+      }
+    },
+    "eagle": {
+      "word": "eagle",
+      "passed": true,
+      "reason": null,
+      "transcription": "eagle",
+      "similarity": 1.0,
+      "phonemes": "\u02c8i\u0261\u0259l",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0434,
+        "zcr": 0.2742,
+        "peak": 0.405,
+        "speech_ratio": 0.2661
+      }
+    },
+    "ear": {
+      "word": "ear",
+      "passed": true,
+      "reason": null,
+      "transcription": "ear",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u026a\u0279",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0409,
+        "zcr": 0.3079,
+        "peak": 0.3102,
+        "speech_ratio": 0.2271
+      }
+    },
+    "earth": {
+      "word": "earth",
+      "passed": true,
+      "reason": null,
+      "transcription": "oh its",
+      "similarity": 0.17,
+      "phonemes": "\u02c8\u025c\u0279\u03b8",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0445,
+        "zcr": 0.3247,
+        "peak": 0.3708,
+        "speech_ratio": 0.2463
+      }
+    },
+    "egg": {
+      "word": "egg",
+      "passed": true,
+      "reason": null,
+      "transcription": "egd",
+      "similarity": 0.67,
+      "phonemes": "\u02c8\u025b\u0261",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.04,
+        "zcr": 0.3006,
+        "peak": 0.4312,
+        "speech_ratio": 0.2415
+      }
+    },
+    "elbow": {
+      "word": "elbow",
+      "passed": true,
+      "reason": null,
+      "transcription": "elbow",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u025blb\u02ccO",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0435,
+        "zcr": 0.2819,
+        "peak": 0.4705,
+        "speech_ratio": 0.2661
+      }
+    },
+    "elephant": {
+      "word": "elephant",
+      "passed": true,
+      "reason": null,
+      "transcription": "our funt",
+      "similarity": 0.25,
+      "phonemes": "\u02c8\u025bl\u0259f\u0259nt",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0457,
+        "zcr": 0.2858,
+        "peak": 0.4768,
+        "speech_ratio": 0.2885
+      }
+    },
+    "elf": {
+      "word": "elf",
+      "passed": true,
+      "reason": null,
+      "transcription": "oof",
+      "similarity": 0.33,
+      "phonemes": "\u02c8\u025blf",
+      "duration": 1.2,
+      "stats": {
+        "rms": 0.0432,
+        "zcr": 0.3096,
+        "peak": 0.425,
+        "speech_ratio": 0.2238
+      }
+    },
+    "engine": {
+      "word": "engine",
+      "passed": true,
+      "reason": null,
+      "transcription": "anshem",
+      "similarity": 0.17,
+      "phonemes": "\u02c8\u025bn\u02a4\u0259n",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0457,
+        "zcr": 0.2964,
+        "peak": 0.5345,
+        "speech_ratio": 0.2932
+      }
+    },
+    "envelope": {
+      "word": "envelope",
+      "passed": true,
+      "reason": null,
+      "transcription": "envelope",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u025bnv\u0259l\u02ccOp",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0476,
+        "zcr": 0.259,
+        "peak": 0.3616,
+        "speech_ratio": 0.2763
+      }
+    },
+    "eraser": {
+      "word": "eraser",
+      "passed": true,
+      "reason": null,
+      "transcription": "are we still",
+      "similarity": 0.17,
+      "phonemes": "\u0259\u0279\u02c8As\u0259\u0279",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0459,
+        "zcr": 0.2935,
+        "peak": 0.433,
+        "speech_ratio": 0.3031
+      }
+    },
+    "family": {
+      "word": "family",
+      "passed": true,
+      "reason": null,
+      "transcription": "family",
+      "similarity": 1.0,
+      "phonemes": "f\u02c8\u00e6m\u1d4ali",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0459,
+        "zcr": 0.2841,
+        "peak": 0.3868,
+        "speech_ratio": 0.2863
+      }
+    },
+    "fan": {
+      "word": "fan",
+      "passed": true,
+      "reason": null,
+      "transcription": "famm",
+      "similarity": 0.5,
+      "phonemes": "f\u02c8\u00e6n",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0418,
+        "zcr": 0.318,
+        "peak": 0.3478,
+        "speech_ratio": 0.2557
+      }
+    },
+    "farm": {
+      "word": "farm",
+      "passed": true,
+      "reason": null,
+      "transcription": "firm",
+      "similarity": 0.75,
+      "phonemes": "f\u02c8\u0251\u0279m",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0471,
+        "zcr": 0.3139,
+        "peak": 0.4836,
+        "speech_ratio": 0.2662
+      }
+    },
+    "feather": {
+      "word": "feather",
+      "passed": true,
+      "reason": null,
+      "transcription": "freder",
+      "similarity": 0.43,
+      "phonemes": "f\u02c8\u025b\u00f0\u0259\u0279",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.045,
+        "zcr": 0.3027,
+        "peak": 0.3791,
+        "speech_ratio": 0.2648
+      }
+    },
+    "fence": {
+      "word": "fence",
+      "passed": true,
+      "reason": null,
+      "transcription": "friends",
+      "similarity": 0.43,
+      "phonemes": "f\u02c8\u025bns",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0457,
+        "zcr": 0.323,
+        "peak": 0.3521,
+        "speech_ratio": 0.2606
+      }
+    },
+    "fire": {
+      "word": "fire",
+      "passed": true,
+      "reason": null,
+      "transcription": "fire",
+      "similarity": 1.0,
+      "phonemes": "f\u02c8I\u0259\u0279",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0445,
+        "zcr": 0.311,
+        "peak": 0.4922,
+        "speech_ratio": 0.2645
+      }
+    },
+    "fireplace": {
+      "word": "fireplace",
+      "passed": true,
+      "reason": null,
+      "transcription": "fireplace",
+      "similarity": 1.0,
+      "phonemes": "f\u02c8I\u0259\u0279pl\u02ccAs",
+      "duration": 1.55,
+      "stats": {
+        "rms": 0.047,
+        "zcr": 0.2883,
+        "peak": 0.4604,
+        "speech_ratio": 0.3013
+      }
+    },
+    "fish": {
+      "word": "fish",
+      "passed": true,
+      "reason": null,
+      "transcription": "vish",
+      "similarity": 0.75,
+      "phonemes": "f\u02c8\u026a\u0283",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0433,
+        "zcr": 0.3141,
+        "peak": 0.3826,
+        "speech_ratio": 0.2467
+      }
+    },
+    "flower": {
+      "word": "flower",
+      "passed": true,
+      "reason": null,
+      "transcription": "flower",
+      "similarity": 1.0,
+      "phonemes": "fl\u02c8W\u0259\u0279",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.3005,
+        "peak": 0.303,
+        "speech_ratio": 0.2827
+      }
+    },
+    "forest": {
+      "word": "forest",
+      "passed": true,
+      "reason": null,
+      "transcription": "forrest",
+      "similarity": 0.86,
+      "phonemes": "f\u02c8\u0254\u0279\u0259st",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0483,
+        "zcr": 0.3016,
+        "peak": 0.4022,
+        "speech_ratio": 0.2883
+      }
+    },
+    "fork": {
+      "word": "fork",
+      "passed": true,
+      "reason": null,
+      "transcription": "flock",
+      "similarity": 0.6,
+      "phonemes": "f\u02c8\u0254\u0279k",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0493,
+        "zcr": 0.319,
+        "peak": 0.4033,
+        "speech_ratio": 0.223
+      }
+    },
+    "fridge": {
+      "word": "fridge",
+      "passed": true,
+      "reason": null,
+      "transcription": "friend",
+      "similarity": 0.5,
+      "phonemes": "f\u0279\u02c8\u026a\u02a4",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0424,
+        "zcr": 0.2928,
+        "peak": 0.3167,
+        "speech_ratio": 0.2567
+      }
+    },
+    "frog": {
+      "word": "frog",
+      "passed": true,
+      "reason": null,
+      "transcription": "frag",
+      "similarity": 0.75,
+      "phonemes": "f\u0279\u02c8\u0254\u0261",
+      "duration": 1.05,
+      "stats": {
+        "rms": 0.0422,
+        "zcr": 0.3124,
+        "peak": 0.3892,
+        "speech_ratio": 0.2573
+      }
+    },
+    "garden": {
+      "word": "garden",
+      "passed": true,
+      "reason": null,
+      "transcription": "garden",
+      "similarity": 1.0,
+      "phonemes": "\u0261\u02c8\u0251\u0279d\u0259n",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0456,
+        "zcr": 0.2755,
+        "peak": 0.359,
+        "speech_ratio": 0.2888
+      }
+    },
+    "gate": {
+      "word": "gate",
+      "passed": true,
+      "reason": null,
+      "transcription": "gay it",
+      "similarity": 0.33,
+      "phonemes": "\u0261\u02c8At",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.042,
+        "zcr": 0.2924,
+        "peak": 0.337,
+        "speech_ratio": 0.2437
+      }
+    },
+    "ghost": {
+      "word": "ghost",
+      "passed": true,
+      "reason": null,
+      "transcription": "ghost",
+      "similarity": 1.0,
+      "phonemes": "\u0261\u02c8Ost",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0473,
+        "zcr": 0.3212,
+        "peak": 0.3945,
+        "speech_ratio": 0.2622
+      }
+    },
+    "gift": {
+      "word": "gift",
+      "passed": true,
+      "reason": null,
+      "transcription": "gift",
+      "similarity": 1.0,
+      "phonemes": "\u0261\u02c8\u026aft",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0456,
+        "zcr": 0.3087,
+        "peak": 0.4234,
+        "speech_ratio": 0.2288
+      }
+    },
+    "glass": {
+      "word": "glass",
+      "passed": true,
+      "reason": null,
+      "transcription": "glass",
+      "similarity": 1.0,
+      "phonemes": "\u0261l\u02c8\u00e6s",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0445,
+        "zcr": 0.3115,
+        "peak": 0.2739,
+        "speech_ratio": 0.2833
+      }
+    },
+    "glove": {
+      "word": "glove",
+      "passed": true,
+      "reason": null,
+      "transcription": "gloves",
+      "similarity": 0.83,
+      "phonemes": "\u0261l\u02c8\u028cv",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.304,
+        "peak": 0.3163,
+        "speech_ratio": 0.2518
+      }
+    },
+    "goat": {
+      "word": "goat",
+      "passed": true,
+      "reason": null,
+      "transcription": "goat",
+      "similarity": 1.0,
+      "phonemes": "\u0261\u02c8Ot",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0448,
+        "zcr": 0.2956,
+        "peak": 0.3361,
+        "speech_ratio": 0.2535
+      }
+    },
+    "gold": {
+      "word": "gold",
+      "passed": true,
+      "reason": null,
+      "transcription": "go out",
+      "similarity": 0.33,
+      "phonemes": "\u0261\u02c8Old",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0466,
+        "zcr": 0.2937,
+        "peak": 0.3422,
+        "speech_ratio": 0.264
+      }
+    },
+    "grape": {
+      "word": "grape",
+      "passed": true,
+      "reason": null,
+      "transcription": "great",
+      "similarity": 0.4,
+      "phonemes": "\u0261\u0279\u02c8Ap",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0463,
+        "zcr": 0.2847,
+        "peak": 0.342,
+        "speech_ratio": 0.2403
+      }
+    },
+    "grass": {
+      "word": "grass",
+      "passed": true,
+      "reason": null,
+      "transcription": "grass",
+      "similarity": 1.0,
+      "phonemes": "\u0261\u0279\u02c8\u00e6s",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0448,
+        "zcr": 0.3085,
+        "peak": 0.2736,
+        "speech_ratio": 0.2876
+      }
+    },
+    "guitar": {
+      "word": "guitar",
+      "passed": true,
+      "reason": null,
+      "transcription": "good time",
+      "similarity": 0.22,
+      "phonemes": "\u0261\u0259t\u02c8\u0251\u0279",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0454,
+        "zcr": 0.2938,
+        "peak": 0.4285,
+        "speech_ratio": 0.278
+      }
+    },
+    "hammer": {
+      "word": "hammer",
+      "passed": true,
+      "reason": null,
+      "transcription": "helm",
+      "similarity": 0.33,
+      "phonemes": "h\u02c8\u00e6m\u0259\u0279",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0444,
+        "zcr": 0.291,
+        "peak": 0.3188,
+        "speech_ratio": 0.2691
+      }
+    },
+    "hand": {
+      "word": "hand",
+      "passed": true,
+      "reason": null,
+      "transcription": "hand",
+      "similarity": 1.0,
+      "phonemes": "h\u02c8\u00e6nd",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0431,
+        "zcr": 0.3049,
+        "peak": 0.3295,
+        "speech_ratio": 0.2534
+      }
+    },
+    "hat": {
+      "word": "hat",
+      "passed": true,
+      "reason": null,
+      "transcription": "hot",
+      "similarity": 0.67,
+      "phonemes": "h\u02c8\u00e6t",
+      "duration": 1.15,
+      "stats": {
+        "rms": 0.0397,
+        "zcr": 0.3126,
+        "peak": 0.3597,
+        "speech_ratio": 0.2384
+      }
+    },
+    "heart": {
+      "word": "heart",
+      "passed": true,
+      "reason": null,
+      "transcription": "hellt",
+      "similarity": 0.6,
+      "phonemes": "h\u02c8\u0251\u0279t",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0474,
+        "zcr": 0.306,
+        "peak": 0.343,
+        "speech_ratio": 0.2463
+      }
+    },
+    "helicopter": {
+      "word": "helicopter",
+      "passed": true,
+      "reason": null,
+      "transcription": "how will copter",
+      "similarity": 0.53,
+      "phonemes": "h\u02c8\u025bl\u0259k\u02cc\u0251pt\u0259\u0279",
+      "duration": 1.6,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2567,
+        "peak": 0.3219,
+        "speech_ratio": 0.3087
+      }
+    },
+    "helmet": {
+      "word": "helmet",
+      "passed": true,
+      "reason": null,
+      "transcription": "helmet",
+      "similarity": 1.0,
+      "phonemes": "h\u02c8\u025blm\u0259t",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0485,
+        "zcr": 0.2823,
+        "peak": 0.3878,
+        "speech_ratio": 0.285
+      }
+    },
+    "hill": {
+      "word": "hill",
+      "passed": true,
+      "reason": null,
+      "transcription": "hill",
+      "similarity": 1.0,
+      "phonemes": "h\u02c8\u026al",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.2879,
+        "peak": 0.3339,
+        "speech_ratio": 0.2392
+      }
+    },
+    "honey": {
+      "word": "honey",
+      "passed": true,
+      "reason": null,
+      "transcription": "honey",
+      "similarity": 1.0,
+      "phonemes": "h\u02c8\u028cni",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0454,
+        "zcr": 0.282,
+        "peak": 0.3788,
+        "speech_ratio": 0.2622
+      }
+    },
+    "horse": {
+      "word": "horse",
+      "passed": true,
+      "reason": null,
+      "transcription": "horse",
+      "similarity": 1.0,
+      "phonemes": "h\u02c8\u0254\u0279s",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0501,
+        "zcr": 0.3236,
+        "peak": 0.4359,
+        "speech_ratio": 0.2751
+      }
+    },
+    "house": {
+      "word": "house",
+      "passed": true,
+      "reason": null,
+      "transcription": "house",
+      "similarity": 1.0,
+      "phonemes": "h\u02c8Ws",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.042,
+        "zcr": 0.3289,
+        "peak": 0.2925,
+        "speech_ratio": 0.2634
+      }
+    },
+    "ice": {
+      "word": "ice",
+      "passed": true,
+      "reason": null,
+      "transcription": "eyes",
+      "similarity": 0.25,
+      "phonemes": "\u02c8Is",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0412,
+        "zcr": 0.3232,
+        "peak": 0.4725,
+        "speech_ratio": 0.2503
+      }
+    },
+    "idea": {
+      "word": "idea",
+      "passed": true,
+      "reason": null,
+      "transcription": "idea",
+      "similarity": 1.0,
+      "phonemes": "Id\u02c8i\u0259",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0422,
+        "zcr": 0.2826,
+        "peak": 0.3192,
+        "speech_ratio": 0.2626
+      }
+    },
+    "igloo": {
+      "word": "igloo",
+      "passed": true,
+      "reason": null,
+      "transcription": "iclaw",
+      "similarity": 0.4,
+      "phonemes": "\u02c8\u026a\u0261lu",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0416,
+        "zcr": 0.2829,
+        "peak": 0.411,
+        "speech_ratio": 0.2592
+      }
+    },
+    "iguana": {
+      "word": "iguana",
+      "passed": true,
+      "reason": null,
+      "transcription": "equana",
+      "similarity": 0.67,
+      "phonemes": "\u0259\u0261w\u02c8\u0251n\u0259",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2685,
+        "peak": 0.5107,
+        "speech_ratio": 0.2846
+      }
+    },
+    "image": {
+      "word": "image",
+      "passed": true,
+      "reason": null,
+      "transcription": "emma",
+      "similarity": 0.2,
+      "phonemes": "\u02c8\u026am\u026a\u02a4",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0431,
+        "zcr": 0.2766,
+        "peak": 0.2689,
+        "speech_ratio": 0.2491
+      }
+    },
+    "ink": {
+      "word": "ink",
+      "passed": true,
+      "reason": null,
+      "transcription": "inc",
+      "similarity": 0.67,
+      "phonemes": "\u02c8\u026a\u014bk",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0429,
+        "zcr": 0.302,
+        "peak": 0.3618,
+        "speech_ratio": 0.2294
+      }
+    },
+    "insect": {
+      "word": "insect",
+      "passed": true,
+      "reason": null,
+      "transcription": "insakt",
+      "similarity": 0.67,
+      "phonemes": "\u02c8\u026ans\u02cc\u025bkt",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0514,
+        "zcr": 0.2914,
+        "peak": 0.3839,
+        "speech_ratio": 0.2686
+      }
+    },
+    "inside": {
+      "word": "inside",
+      "passed": true,
+      "reason": null,
+      "transcription": "inside",
+      "similarity": 1.0,
+      "phonemes": "\u026ans\u02c8Id",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0488,
+        "zcr": 0.3052,
+        "peak": 0.3352,
+        "speech_ratio": 0.2845
+      }
+    },
+    "iron": {
+      "word": "iron",
+      "passed": true,
+      "reason": null,
+      "transcription": "iron",
+      "similarity": 1.0,
+      "phonemes": "\u02c8I\u0259\u0279n",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0421,
+        "zcr": 0.2939,
+        "peak": 0.3953,
+        "speech_ratio": 0.2719
+      }
+    },
+    "island": {
+      "word": "island",
+      "passed": true,
+      "reason": null,
+      "transcription": "island",
+      "similarity": 1.0,
+      "phonemes": "\u02c8Il\u0259nd",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0441,
+        "zcr": 0.2915,
+        "peak": 0.3947,
+        "speech_ratio": 0.288
+      }
+    },
+    "jacket": {
+      "word": "jacket",
+      "passed": true,
+      "reason": null,
+      "transcription": "jacket",
+      "similarity": 1.0,
+      "phonemes": "\u02a4\u02c8\u00e6k\u0259t",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0454,
+        "zcr": 0.2823,
+        "peak": 0.4014,
+        "speech_ratio": 0.2467
+      }
+    },
+    "jam": {
+      "word": "jam",
+      "passed": true,
+      "reason": null,
+      "transcription": "jam",
+      "similarity": 1.0,
+      "phonemes": "\u02a4\u02c8\u00e6m",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.042,
+        "zcr": 0.3019,
+        "peak": 0.2649,
+        "speech_ratio": 0.2723
+      }
+    },
+    "jar": {
+      "word": "jar",
+      "passed": true,
+      "reason": null,
+      "transcription": "john",
+      "similarity": 0.25,
+      "phonemes": "\u02a4\u02c8\u0251\u0279",
+      "duration": 1.2,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.2952,
+        "peak": 0.2596,
+        "speech_ratio": 0.2534
+      }
+    },
+    "jelly": {
+      "word": "jelly",
+      "passed": true,
+      "reason": null,
+      "transcription": "jelly",
+      "similarity": 1.0,
+      "phonemes": "\u02a4\u02c8\u025bli",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0466,
+        "zcr": 0.283,
+        "peak": 0.3915,
+        "speech_ratio": 0.2756
+      }
+    },
+    "jet": {
+      "word": "jet",
+      "passed": true,
+      "reason": null,
+      "transcription": "jets",
+      "similarity": 0.75,
+      "phonemes": "\u02a4\u02c8\u025bt",
+      "duration": 1.15,
+      "stats": {
+        "rms": 0.045,
+        "zcr": 0.3125,
+        "peak": 0.3355,
+        "speech_ratio": 0.2187
+      }
+    },
+    "jewel": {
+      "word": "jewel",
+      "passed": true,
+      "reason": null,
+      "transcription": "jewel",
+      "similarity": 1.0,
+      "phonemes": "\u02a4\u02c8u\u1d4al",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0447,
+        "zcr": 0.2806,
+        "peak": 0.4174,
+        "speech_ratio": 0.272
+      }
+    },
+    "jigsaw": {
+      "word": "jigsaw",
+      "passed": true,
+      "reason": null,
+      "transcription": "jigsaw",
+      "similarity": 1.0,
+      "phonemes": "\u02a4\u02c8\u026a\u0261s\u02cc\u0254",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.044,
+        "zcr": 0.3018,
+        "peak": 0.3405,
+        "speech_ratio": 0.3049
+      }
+    },
+    "juice": {
+      "word": "juice",
+      "passed": true,
+      "reason": null,
+      "transcription": "jews",
+      "similarity": 0.2,
+      "phonemes": "\u02a4\u02c8us",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0426,
+        "zcr": 0.311,
+        "peak": 0.3363,
+        "speech_ratio": 0.2701
+      }
+    },
+    "jump": {
+      "word": "jump",
+      "passed": true,
+      "reason": null,
+      "transcription": "jump",
+      "similarity": 1.0,
+      "phonemes": "\u02a4\u02c8\u028cmp",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0465,
+        "zcr": 0.2993,
+        "peak": 0.3791,
+        "speech_ratio": 0.2407
+      }
+    },
+    "jungle": {
+      "word": "jungle",
+      "passed": true,
+      "reason": null,
+      "transcription": "jango",
+      "similarity": 0.5,
+      "phonemes": "\u02a4\u02c8\u028c\u014b\u0261\u1d4al",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0478,
+        "zcr": 0.2791,
+        "peak": 0.4203,
+        "speech_ratio": 0.286
+      }
+    },
+    "kangaroo": {
+      "word": "kangaroo",
+      "passed": true,
+      "reason": null,
+      "transcription": "tango will",
+      "similarity": 0.3,
+      "phonemes": "k\u02cc\u00e6\u014b\u0261\u0259\u0279\u02c8u",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0447,
+        "zcr": 0.2715,
+        "peak": 0.2921,
+        "speech_ratio": 0.3151
+      }
+    },
+    "kettle": {
+      "word": "kettle",
+      "passed": true,
+      "reason": null,
+      "transcription": "carol",
+      "similarity": 0.17,
+      "phonemes": "k\u02c8\u025bT\u1d4al",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0423,
+        "zcr": 0.2843,
+        "peak": 0.3266,
+        "speech_ratio": 0.2715
+      }
+    },
+    "key": {
+      "word": "key",
+      "passed": true,
+      "reason": null,
+      "transcription": "i see you",
+      "similarity": 0.22,
+      "phonemes": "k\u02c8i",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0377,
+        "zcr": 0.3132,
+        "peak": 0.267,
+        "speech_ratio": 0.2174
+      }
+    },
+    "king": {
+      "word": "king",
+      "passed": true,
+      "reason": null,
+      "transcription": "ting",
+      "similarity": 0.75,
+      "phonemes": "k\u02c8\u026a\u014b",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0414,
+        "zcr": 0.3089,
+        "peak": 0.3346,
+        "speech_ratio": 0.2533
+      }
+    },
+    "kitchen": {
+      "word": "kitchen",
+      "passed": true,
+      "reason": null,
+      "transcription": "kitchen",
+      "similarity": 1.0,
+      "phonemes": "k\u02c8\u026a\u02a7\u1d4an",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0429,
+        "zcr": 0.2977,
+        "peak": 0.3359,
+        "speech_ratio": 0.2745
+      }
+    },
+    "kite": {
+      "word": "kite",
+      "passed": true,
+      "reason": null,
+      "transcription": "cite",
+      "similarity": 0.75,
+      "phonemes": "k\u02c8It",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0425,
+        "zcr": 0.3024,
+        "peak": 0.3361,
+        "speech_ratio": 0.2386
+      }
+    },
+    "kitten": {
+      "word": "kitten",
+      "passed": true,
+      "reason": null,
+      "transcription": "kittener",
+      "similarity": 0.75,
+      "phonemes": "k\u02c8\u026atn",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0417,
+        "zcr": 0.293,
+        "peak": 0.3813,
+        "speech_ratio": 0.262
+      }
+    },
+    "kiwi": {
+      "word": "kiwi",
+      "passed": true,
+      "reason": null,
+      "transcription": "t-wave",
+      "similarity": 0.17,
+      "phonemes": "k\u02c8iwi",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0424,
+        "zcr": 0.3001,
+        "peak": 0.3157,
+        "speech_ratio": 0.2584
+      }
+    },
+    "knee": {
+      "word": "knee",
+      "passed": true,
+      "reason": null,
+      "transcription": "there",
+      "similarity": 0.4,
+      "phonemes": "n\u02c8i",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0405,
+        "zcr": 0.3039,
+        "peak": 0.3109,
+        "speech_ratio": 0.234
+      }
+    },
+    "koala": {
+      "word": "koala",
+      "passed": true,
+      "reason": null,
+      "transcription": "crowley",
+      "similarity": 0.29,
+      "phonemes": "kO\u02c8\u0251l\u0259",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0456,
+        "zcr": 0.2785,
+        "peak": 0.3265,
+        "speech_ratio": 0.2747
+      }
+    },
+    "ladder": {
+      "word": "ladder",
+      "passed": true,
+      "reason": null,
+      "transcription": "later",
+      "similarity": 0.67,
+      "phonemes": "l\u02c8\u00e6d\u0259\u0279",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.2845,
+        "peak": 0.3031,
+        "speech_ratio": 0.2708
+      }
+    },
+    "lake": {
+      "word": "lake",
+      "passed": true,
+      "reason": null,
+      "transcription": "wake",
+      "similarity": 0.75,
+      "phonemes": "l\u02c8Ak",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.046,
+        "zcr": 0.296,
+        "peak": 0.3872,
+        "speech_ratio": 0.2146
+      }
+    },
+    "lamp": {
+      "word": "lamp",
+      "passed": true,
+      "reason": null,
+      "transcription": "lamp",
+      "similarity": 1.0,
+      "phonemes": "l\u02c8\u00e6mp",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0444,
+        "zcr": 0.2897,
+        "peak": 0.3552,
+        "speech_ratio": 0.2213
+      }
+    },
+    "leaf": {
+      "word": "leaf",
+      "passed": true,
+      "reason": null,
+      "transcription": "leafs",
+      "similarity": 0.8,
+      "phonemes": "l\u02c8if",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0421,
+        "zcr": 0.3007,
+        "peak": 0.3199,
+        "speech_ratio": 0.2432
+      }
+    },
+    "lemon": {
+      "word": "lemon",
+      "passed": true,
+      "reason": null,
+      "transcription": "lemon",
+      "similarity": 1.0,
+      "phonemes": "l\u02c8\u025bm\u0259n",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0459,
+        "zcr": 0.2793,
+        "peak": 0.3556,
+        "speech_ratio": 0.2859
+      }
+    },
+    "letter": {
+      "word": "letter",
+      "passed": true,
+      "reason": null,
+      "transcription": "letter",
+      "similarity": 1.0,
+      "phonemes": "l\u02c8\u025bT\u0259\u0279",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.2816,
+        "peak": 0.3192,
+        "speech_ratio": 0.2786
+      }
+    },
+    "lion": {
+      "word": "lion",
+      "passed": true,
+      "reason": null,
+      "transcription": "lion",
+      "similarity": 1.0,
+      "phonemes": "l\u02c8I\u0259n",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0431,
+        "zcr": 0.2835,
+        "peak": 0.2801,
+        "speech_ratio": 0.2772
+      }
+    },
+    "lizard": {
+      "word": "lizard",
+      "passed": true,
+      "reason": null,
+      "transcription": "listen",
+      "similarity": 0.33,
+      "phonemes": "l\u02c8\u026az\u0259\u0279d",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0449,
+        "zcr": 0.2857,
+        "peak": 0.3533,
+        "speech_ratio": 0.2866
+      }
+    },
+    "lock": {
+      "word": "lock",
+      "passed": true,
+      "reason": null,
+      "transcription": "lock",
+      "similarity": 1.0,
+      "phonemes": "l\u02c8\u0251k",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0451,
+        "zcr": 0.2942,
+        "peak": 0.2827,
+        "speech_ratio": 0.2292
+      }
+    },
+    "lunch": {
+      "word": "lunch",
+      "passed": true,
+      "reason": null,
+      "transcription": "lunch",
+      "similarity": 1.0,
+      "phonemes": "l\u02c8\u028cn\u02a7",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0465,
+        "zcr": 0.3038,
+        "peak": 0.3658,
+        "speech_ratio": 0.2866
+      }
+    },
+    "magnet": {
+      "word": "magnet",
+      "passed": true,
+      "reason": null,
+      "transcription": "magnet",
+      "similarity": 1.0,
+      "phonemes": "m\u02c8\u00e6\u0261n\u0259t",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0462,
+        "zcr": 0.2814,
+        "peak": 0.3246,
+        "speech_ratio": 0.2921
+      }
+    },
+    "map": {
+      "word": "map",
+      "passed": true,
+      "reason": null,
+      "transcription": "nap",
+      "similarity": 0.67,
+      "phonemes": "m\u02c8\u00e6p",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.3053,
+        "peak": 0.3338,
+        "speech_ratio": 0.2168
+      }
+    },
+    "milk": {
+      "word": "milk",
+      "passed": true,
+      "reason": null,
+      "transcription": "milk",
+      "similarity": 1.0,
+      "phonemes": "m\u02c8\u026alk",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0497,
+        "zcr": 0.2957,
+        "peak": 0.3437,
+        "speech_ratio": 0.2321
+      }
+    },
+    "mirror": {
+      "word": "mirror",
+      "passed": true,
+      "reason": null,
+      "transcription": "mioa",
+      "similarity": 0.5,
+      "phonemes": "m\u02c8\u026a\u0279\u0259\u0279",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0474,
+        "zcr": 0.2801,
+        "peak": 0.3404,
+        "speech_ratio": 0.2718
+      }
+    },
+    "monkey": {
+      "word": "monkey",
+      "passed": true,
+      "reason": null,
+      "transcription": "monkier",
+      "similarity": 0.71,
+      "phonemes": "m\u02c8\u028c\u014bki",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0495,
+        "zcr": 0.2873,
+        "peak": 0.5034,
+        "speech_ratio": 0.2821
+      }
+    },
+    "moon": {
+      "word": "moon",
+      "passed": true,
+      "reason": null,
+      "transcription": "moon",
+      "similarity": 1.0,
+      "phonemes": "m\u02c8un",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0438,
+        "zcr": 0.2949,
+        "peak": 0.239,
+        "speech_ratio": 0.2561
+      }
+    },
+    "mountain": {
+      "word": "mountain",
+      "passed": true,
+      "reason": null,
+      "transcription": "mountain",
+      "similarity": 1.0,
+      "phonemes": "m\u02c8Wnt\u1d4an",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.048,
+        "zcr": 0.2872,
+        "peak": 0.4203,
+        "speech_ratio": 0.2941
+      }
+    },
+    "mouse": {
+      "word": "mouse",
+      "passed": true,
+      "reason": null,
+      "transcription": "mouse",
+      "similarity": 1.0,
+      "phonemes": "m\u02c8Ws",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0444,
+        "zcr": 0.3243,
+        "peak": 0.3678,
+        "speech_ratio": 0.2808
+      }
+    },
+    "muffin": {
+      "word": "muffin",
+      "passed": true,
+      "reason": null,
+      "transcription": "muffin",
+      "similarity": 1.0,
+      "phonemes": "m\u02c8\u028cf\u1d4an",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0473,
+        "zcr": 0.3065,
+        "peak": 0.4169,
+        "speech_ratio": 0.2901
+      }
+    },
+    "mushroom": {
+      "word": "mushroom",
+      "passed": true,
+      "reason": null,
+      "transcription": "mushroom",
+      "similarity": 1.0,
+      "phonemes": "m\u02c8\u028c\u0283\u0279\u02ccum",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0481,
+        "zcr": 0.2848,
+        "peak": 0.4731,
+        "speech_ratio": 0.3203
+      }
+    },
+    "music": {
+      "word": "music",
+      "passed": true,
+      "reason": null,
+      "transcription": "music",
+      "similarity": 1.0,
+      "phonemes": "mj\u02c8uz\u026ak",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0493,
+        "zcr": 0.2882,
+        "peak": 0.3428,
+        "speech_ratio": 0.2724
+      }
+    },
+    "napkin": {
+      "word": "napkin",
+      "passed": true,
+      "reason": null,
+      "transcription": "napkin",
+      "similarity": 1.0,
+      "phonemes": "n\u02c8\u00e6pk\u026an",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0448,
+        "zcr": 0.2806,
+        "peak": 0.3694,
+        "speech_ratio": 0.2712
+      }
+    },
+    "necklace": {
+      "word": "necklace",
+      "passed": true,
+      "reason": null,
+      "transcription": "necwers",
+      "similarity": 0.38,
+      "phonemes": "n\u02c8\u025bkl\u0259s",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.048,
+        "zcr": 0.2983,
+        "peak": 0.41,
+        "speech_ratio": 0.2829
+      }
+    },
+    "needle": {
+      "word": "needle",
+      "passed": true,
+      "reason": null,
+      "transcription": "needle",
+      "similarity": 1.0,
+      "phonemes": "n\u02c8id\u1d4al",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0465,
+        "zcr": 0.2782,
+        "peak": 0.3979,
+        "speech_ratio": 0.2698
+      }
+    },
+    "nest": {
+      "word": "nest",
+      "passed": true,
+      "reason": null,
+      "transcription": "nast",
+      "similarity": 0.75,
+      "phonemes": "n\u02c8\u025bst",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0455,
+        "zcr": 0.3264,
+        "peak": 0.4107,
+        "speech_ratio": 0.2488
+      }
+    },
+    "net": {
+      "word": "net",
+      "passed": true,
+      "reason": null,
+      "transcription": "not",
+      "similarity": 0.67,
+      "phonemes": "n\u02c8\u025bt",
+      "duration": 1.2,
+      "stats": {
+        "rms": 0.0457,
+        "zcr": 0.3132,
+        "peak": 0.3761,
+        "speech_ratio": 0.2306
+      }
+    },
+    "night": {
+      "word": "night",
+      "passed": true,
+      "reason": null,
+      "transcription": "light",
+      "similarity": 0.8,
+      "phonemes": "n\u02c8It",
+      "duration": 1.23,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2997,
+        "peak": 0.3528,
+        "speech_ratio": 0.2415
+      }
+    },
+    "nose": {
+      "word": "nose",
+      "passed": true,
+      "reason": null,
+      "transcription": "nose",
+      "similarity": 1.0,
+      "phonemes": "n\u02c8Oz",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0451,
+        "zcr": 0.3161,
+        "peak": 0.2878,
+        "speech_ratio": 0.2824
+      }
+    },
+    "notebook": {
+      "word": "notebook",
+      "passed": true,
+      "reason": null,
+      "transcription": "notebook",
+      "similarity": 1.0,
+      "phonemes": "n\u02c8Otb\u02cc\u028ak",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0495,
+        "zcr": 0.2745,
+        "peak": 0.3564,
+        "speech_ratio": 0.2627
+      }
+    },
+    "number": {
+      "word": "number",
+      "passed": true,
+      "reason": null,
+      "transcription": "number",
+      "similarity": 1.0,
+      "phonemes": "n\u02c8\u028cmb\u0259\u0279",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0478,
+        "zcr": 0.2837,
+        "peak": 0.4933,
+        "speech_ratio": 0.2894
+      }
+    },
+    "nurse": {
+      "word": "nurse",
+      "passed": true,
+      "reason": null,
+      "transcription": "nose",
+      "similarity": 0.6,
+      "phonemes": "n\u02c8\u025c\u0279s",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0478,
+        "zcr": 0.3094,
+        "peak": 0.3362,
+        "speech_ratio": 0.2806
+      }
+    },
+    "ocean": {
+      "word": "ocean",
+      "passed": true,
+      "reason": null,
+      "transcription": "ocean",
+      "similarity": 1.0,
+      "phonemes": "\u02c8O\u0283\u0259n",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0447,
+        "zcr": 0.3036,
+        "peak": 0.5721,
+        "speech_ratio": 0.2845
+      }
+    },
+    "octopus": {
+      "word": "octopus",
+      "passed": true,
+      "reason": null,
+      "transcription": "octopus",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u0251kt\u0259p\u0259s",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0471,
+        "zcr": 0.2915,
+        "peak": 0.4177,
+        "speech_ratio": 0.277
+      }
+    },
+    "office": {
+      "word": "office",
+      "passed": true,
+      "reason": null,
+      "transcription": "office",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u0254f\u0259s",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.3211,
+        "peak": 0.3085,
+        "speech_ratio": 0.2715
+      }
+    },
+    "olive": {
+      "word": "olive",
+      "passed": true,
+      "reason": null,
+      "transcription": "all lives",
+      "similarity": 0.44,
+      "phonemes": "\u02c8\u0251l\u0259v",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0457,
+        "zcr": 0.3065,
+        "peak": 0.3736,
+        "speech_ratio": 0.262
+      }
+    },
+    "onion": {
+      "word": "onion",
+      "passed": true,
+      "reason": null,
+      "transcription": "anian",
+      "similarity": 0.6,
+      "phonemes": "\u02c8\u028cnj\u1d4an",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0455,
+        "zcr": 0.2792,
+        "peak": 0.3986,
+        "speech_ratio": 0.2897
+      }
+    },
+    "orange": {
+      "word": "orange",
+      "passed": true,
+      "reason": null,
+      "transcription": "and",
+      "similarity": 0.33,
+      "phonemes": "\u02c8\u0254\u0279\u1d4an\u02a4",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0471,
+        "zcr": 0.285,
+        "peak": 0.2891,
+        "speech_ratio": 0.2857
+      }
+    },
+    "orbit": {
+      "word": "orbit",
+      "passed": true,
+      "reason": null,
+      "transcription": "robert",
+      "similarity": 0.33,
+      "phonemes": "\u02c8\u0254\u0279b\u0259t",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0476,
+        "zcr": 0.2856,
+        "peak": 0.3519,
+        "speech_ratio": 0.2683
+      }
+    },
+    "otter": {
+      "word": "otter",
+      "passed": true,
+      "reason": null,
+      "transcription": "alter",
+      "similarity": 0.6,
+      "phonemes": "\u02c8\u0251T\u0259\u0279",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0416,
+        "zcr": 0.3026,
+        "peak": 0.3243,
+        "speech_ratio": 0.2566
+      }
+    },
+    "oven": {
+      "word": "oven",
+      "passed": true,
+      "reason": null,
+      "transcription": "often",
+      "similarity": 0.6,
+      "phonemes": "\u02c8\u028cv\u1d4an",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.044,
+        "zcr": 0.301,
+        "peak": 0.5904,
+        "speech_ratio": 0.2632
+      }
+    },
+    "owl": {
+      "word": "owl",
+      "passed": true,
+      "reason": null,
+      "transcription": "ow",
+      "similarity": 0.67,
+      "phonemes": "\u02c8Wl",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0401,
+        "zcr": 0.3,
+        "peak": 0.4513,
+        "speech_ratio": 0.2394
+      }
+    },
+    "panda": {
+      "word": "panda",
+      "passed": true,
+      "reason": null,
+      "transcription": "panda",
+      "similarity": 1.0,
+      "phonemes": "p\u02c8\u00e6nd\u0259",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0434,
+        "zcr": 0.2869,
+        "peak": 0.2945,
+        "speech_ratio": 0.2836
+      }
+    },
+    "pen": {
+      "word": "pen",
+      "passed": true,
+      "reason": null,
+      "transcription": "pum",
+      "similarity": 0.33,
+      "phonemes": "p\u02c8\u025bn",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0418,
+        "zcr": 0.3006,
+        "peak": 0.3727,
+        "speech_ratio": 0.252
+      }
+    },
+    "pencil": {
+      "word": "pencil",
+      "passed": true,
+      "reason": null,
+      "transcription": "pencil",
+      "similarity": 1.0,
+      "phonemes": "p\u02c8\u025bns\u1d4al",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0464,
+        "zcr": 0.2955,
+        "peak": 0.3626,
+        "speech_ratio": 0.3025
+      }
+    },
+    "piano": {
+      "word": "piano",
+      "passed": true,
+      "reason": null,
+      "transcription": "piano",
+      "similarity": 1.0,
+      "phonemes": "pi\u02c8\u00e6nO",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0421,
+        "zcr": 0.2752,
+        "peak": 0.2804,
+        "speech_ratio": 0.2796
+      }
+    },
+    "pig": {
+      "word": "pig",
+      "passed": true,
+      "reason": null,
+      "transcription": "pig",
+      "similarity": 1.0,
+      "phonemes": "p\u02c8\u026a\u0261",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0403,
+        "zcr": 0.2964,
+        "peak": 0.3104,
+        "speech_ratio": 0.2523
+      }
+    },
+    "pillow": {
+      "word": "pillow",
+      "passed": true,
+      "reason": null,
+      "transcription": "hello",
+      "similarity": 0.5,
+      "phonemes": "p\u02c8\u026alO",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0417,
+        "zcr": 0.2826,
+        "peak": 0.2959,
+        "speech_ratio": 0.2638
+      }
+    },
+    "pizza": {
+      "word": "pizza",
+      "passed": true,
+      "reason": null,
+      "transcription": "pizza",
+      "similarity": 1.0,
+      "phonemes": "p\u02c8its\u0259",
+      "duration": 1.55,
+      "stats": {
+        "rms": 0.0431,
+        "zcr": 0.2993,
+        "peak": 0.3588,
+        "speech_ratio": 0.275
+      }
+    },
+    "plant": {
+      "word": "plant",
+      "passed": true,
+      "reason": null,
+      "transcription": "plant",
+      "similarity": 1.0,
+      "phonemes": "pl\u02c8\u00e6nt",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0446,
+        "zcr": 0.3015,
+        "peak": 0.3735,
+        "speech_ratio": 0.2472
+      }
+    },
+    "pocket": {
+      "word": "pocket",
+      "passed": true,
+      "reason": null,
+      "transcription": "park it",
+      "similarity": 0.43,
+      "phonemes": "p\u02c8\u0251k\u0259t",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0448,
+        "zcr": 0.2874,
+        "peak": 0.3471,
+        "speech_ratio": 0.2555
+      }
+    },
+    "pumpkin": {
+      "word": "pumpkin",
+      "passed": true,
+      "reason": null,
+      "transcription": "pumpkin",
+      "similarity": 1.0,
+      "phonemes": "p\u02c8\u028cmpk\u1d4an",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0469,
+        "zcr": 0.2818,
+        "peak": 0.4593,
+        "speech_ratio": 0.2905
+      }
+    },
+    "quail": {
+      "word": "quail",
+      "passed": true,
+      "reason": null,
+      "transcription": "kuiou",
+      "similarity": 0.2,
+      "phonemes": "kw\u02c8Al",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0437,
+        "zcr": 0.2834,
+        "peak": 0.3541,
+        "speech_ratio": 0.2518
+      }
+    },
+    "quarter": {
+      "word": "quarter",
+      "passed": true,
+      "reason": null,
+      "transcription": "quarterly",
+      "similarity": 0.78,
+      "phonemes": "kw\u02c8\u0254\u0279T\u0259\u0279",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.047,
+        "zcr": 0.2748,
+        "peak": 0.4089,
+        "speech_ratio": 0.2753
+      }
+    },
+    "queen": {
+      "word": "queen",
+      "passed": true,
+      "reason": null,
+      "transcription": "queen",
+      "similarity": 1.0,
+      "phonemes": "kw\u02c8in",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0426,
+        "zcr": 0.2915,
+        "peak": 0.3478,
+        "speech_ratio": 0.2638
+      }
+    },
+    "question": {
+      "word": "question",
+      "passed": true,
+      "reason": null,
+      "transcription": "question",
+      "similarity": 1.0,
+      "phonemes": "kw\u02c8\u025bs\u02a7\u1d4an",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0462,
+        "zcr": 0.2851,
+        "peak": 0.4955,
+        "speech_ratio": 0.3123
+      }
+    },
+    "quick": {
+      "word": "quick",
+      "passed": true,
+      "reason": null,
+      "transcription": "quicker",
+      "similarity": 0.71,
+      "phonemes": "kw\u02c8\u026ak",
+      "duration": 1.2,
+      "stats": {
+        "rms": 0.0455,
+        "zcr": 0.2882,
+        "peak": 0.4707,
+        "speech_ratio": 0.2305
+      }
+    },
+    "quiet": {
+      "word": "quiet",
+      "passed": true,
+      "reason": null,
+      "transcription": "quiet",
+      "similarity": 1.0,
+      "phonemes": "kw\u02c8I\u0259t",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0467,
+        "zcr": 0.2804,
+        "peak": 0.3569,
+        "speech_ratio": 0.2554
+      }
+    },
+    "quilt": {
+      "word": "quilt",
+      "passed": true,
+      "reason": null,
+      "transcription": "quilt",
+      "similarity": 1.0,
+      "phonemes": "kw\u02c8\u026alt",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2933,
+        "peak": 0.3659,
+        "speech_ratio": 0.2584
+      }
+    },
+    "quiz": {
+      "word": "quiz",
+      "passed": true,
+      "reason": null,
+      "transcription": "quiz",
+      "similarity": 1.0,
+      "phonemes": "kw\u02c8\u026az",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0452,
+        "zcr": 0.3085,
+        "peak": 0.3766,
+        "speech_ratio": 0.2598
+      }
+    },
+    "rabbit": {
+      "word": "rabbit",
+      "passed": true,
+      "reason": null,
+      "transcription": "rabbit",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8\u00e6b\u0259t",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0444,
+        "zcr": 0.2804,
+        "peak": 0.3152,
+        "speech_ratio": 0.2703
+      }
+    },
+    "radio": {
+      "word": "radio",
+      "passed": true,
+      "reason": null,
+      "transcription": "radio",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8AdiO",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0429,
+        "zcr": 0.2735,
+        "peak": 0.3606,
+        "speech_ratio": 0.2782
+      }
+    },
+    "rain": {
+      "word": "rain",
+      "passed": true,
+      "reason": null,
+      "transcription": "rain",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8An",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0427,
+        "zcr": 0.2959,
+        "peak": 0.3779,
+        "speech_ratio": 0.2644
+      }
+    },
+    "rainbow": {
+      "word": "rainbow",
+      "passed": true,
+      "reason": null,
+      "transcription": "rainbow",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8Anb\u02ccO",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0471,
+        "zcr": 0.2797,
+        "peak": 0.3958,
+        "speech_ratio": 0.2939
+      }
+    },
+    "ring": {
+      "word": "ring",
+      "passed": true,
+      "reason": null,
+      "transcription": "ring",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8\u026a\u014b",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.3024,
+        "peak": 0.343,
+        "speech_ratio": 0.2528
+      }
+    },
+    "river": {
+      "word": "river",
+      "passed": true,
+      "reason": null,
+      "transcription": "river",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8\u026av\u0259\u0279",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0454,
+        "zcr": 0.289,
+        "peak": 0.4195,
+        "speech_ratio": 0.2716
+      }
+    },
+    "robot": {
+      "word": "robot",
+      "passed": true,
+      "reason": null,
+      "transcription": "robot",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8Ob\u02cc\u0251t",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0474,
+        "zcr": 0.2781,
+        "peak": 0.3568,
+        "speech_ratio": 0.2883
+      }
+    },
+    "rock": {
+      "word": "rock",
+      "passed": true,
+      "reason": null,
+      "transcription": "wack",
+      "similarity": 0.5,
+      "phonemes": "\u0279\u02c8\u0251k",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0449,
+        "zcr": 0.2955,
+        "peak": 0.378,
+        "speech_ratio": 0.231
+      }
+    },
+    "rocket": {
+      "word": "rocket",
+      "passed": true,
+      "reason": null,
+      "transcription": "rocket",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8\u0251k\u0259t",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0463,
+        "zcr": 0.279,
+        "peak": 0.4349,
+        "speech_ratio": 0.2562
+      }
+    },
+    "rug": {
+      "word": "rug",
+      "passed": true,
+      "reason": null,
+      "transcription": "rug",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8\u028c\u0261",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0446,
+        "zcr": 0.3,
+        "peak": 0.3637,
+        "speech_ratio": 0.2512
+      }
+    },
+    "ruler": {
+      "word": "ruler",
+      "passed": true,
+      "reason": null,
+      "transcription": "ruler",
+      "similarity": 1.0,
+      "phonemes": "\u0279\u02c8ul\u0259\u0279",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0438,
+        "zcr": 0.2726,
+        "peak": 0.2749,
+        "speech_ratio": 0.2831
+      }
+    },
+    "sandwich": {
+      "word": "sandwich",
+      "passed": true,
+      "reason": null,
+      "transcription": "sandwich",
+      "similarity": 1.0,
+      "phonemes": "s\u02c8\u00e6ndw\u02cc\u026a\u02a7",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0473,
+        "zcr": 0.2908,
+        "peak": 0.3379,
+        "speech_ratio": 0.3109
+      }
+    },
+    "school": {
+      "word": "school",
+      "passed": true,
+      "reason": null,
+      "transcription": "school",
+      "similarity": 1.0,
+      "phonemes": "sk\u02c8ul",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0437,
+        "zcr": 0.3009,
+        "peak": 0.3272,
+        "speech_ratio": 0.2647
+      }
+    },
+    "sheep": {
+      "word": "sheep",
+      "passed": true,
+      "reason": null,
+      "transcription": "see ya",
+      "similarity": 0.33,
+      "phonemes": "\u0283\u02c8ip",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0398,
+        "zcr": 0.3244,
+        "peak": 0.335,
+        "speech_ratio": 0.2228
+      }
+    },
+    "shelf": {
+      "word": "shelf",
+      "passed": true,
+      "reason": null,
+      "transcription": "shove",
+      "similarity": 0.4,
+      "phonemes": "\u0283\u02c8\u025blf",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0445,
+        "zcr": 0.304,
+        "peak": 0.4138,
+        "speech_ratio": 0.2256
+      }
+    },
+    "shoe": {
+      "word": "shoe",
+      "passed": true,
+      "reason": null,
+      "transcription": "sure",
+      "similarity": 0.5,
+      "phonemes": "\u0283\u02c8u",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0409,
+        "zcr": 0.3266,
+        "peak": 0.3536,
+        "speech_ratio": 0.2446
+      }
+    },
+    "snake": {
+      "word": "snake",
+      "passed": true,
+      "reason": null,
+      "transcription": "snake",
+      "similarity": 1.0,
+      "phonemes": "sn\u02c8Ak",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0453,
+        "zcr": 0.3118,
+        "peak": 0.3773,
+        "speech_ratio": 0.2431
+      }
+    },
+    "sock": {
+      "word": "sock",
+      "passed": true,
+      "reason": null,
+      "transcription": "sock",
+      "similarity": 1.0,
+      "phonemes": "s\u02c8\u0251k",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0427,
+        "zcr": 0.321,
+        "peak": 0.3307,
+        "speech_ratio": 0.2353
+      }
+    },
+    "sofa": {
+      "word": "sofa",
+      "passed": true,
+      "reason": null,
+      "transcription": "so far",
+      "similarity": 0.67,
+      "phonemes": "s\u02c8Of\u0259",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.043,
+        "zcr": 0.3223,
+        "peak": 0.4666,
+        "speech_ratio": 0.2733
+      }
+    },
+    "spoon": {
+      "word": "spoon",
+      "passed": true,
+      "reason": null,
+      "transcription": "spoon",
+      "similarity": 1.0,
+      "phonemes": "sp\u02c8un",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0431,
+        "zcr": 0.3139,
+        "peak": 0.3236,
+        "speech_ratio": 0.2666
+      }
+    },
+    "star": {
+      "word": "star",
+      "passed": true,
+      "reason": null,
+      "transcription": "star",
+      "similarity": 1.0,
+      "phonemes": "st\u02c8\u0251\u0279",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0445,
+        "zcr": 0.3242,
+        "peak": 0.3301,
+        "speech_ratio": 0.2575
+      }
+    },
+    "stool": {
+      "word": "stool",
+      "passed": true,
+      "reason": null,
+      "transcription": "stool",
+      "similarity": 1.0,
+      "phonemes": "st\u02c8ul",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0441,
+        "zcr": 0.3133,
+        "peak": 0.3338,
+        "speech_ratio": 0.267
+      }
+    },
+    "sun": {
+      "word": "sun",
+      "passed": true,
+      "reason": null,
+      "transcription": "sun",
+      "similarity": 1.0,
+      "phonemes": "s\u02c8\u028cn",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0443,
+        "zcr": 0.3337,
+        "peak": 0.3657,
+        "speech_ratio": 0.2555
+      }
+    },
+    "table": {
+      "word": "table",
+      "passed": true,
+      "reason": null,
+      "transcription": "table",
+      "similarity": 1.0,
+      "phonemes": "t\u02c8Ab\u1d4al",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.043,
+        "zcr": 0.2868,
+        "peak": 0.4507,
+        "speech_ratio": 0.2763
+      }
+    },
+    "teacher": {
+      "word": "teacher",
+      "passed": true,
+      "reason": null,
+      "transcription": "teacher",
+      "similarity": 1.0,
+      "phonemes": "t\u02c8i\u02a7\u0259\u0279",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0423,
+        "zcr": 0.2981,
+        "peak": 0.35,
+        "speech_ratio": 0.2788
+      }
+    },
+    "tiger": {
+      "word": "tiger",
+      "passed": true,
+      "reason": null,
+      "transcription": "tiger",
+      "similarity": 1.0,
+      "phonemes": "t\u02c8I\u0261\u0259\u0279",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0432,
+        "zcr": 0.2909,
+        "peak": 0.3138,
+        "speech_ratio": 0.2834
+      }
+    },
+    "tomato": {
+      "word": "tomato",
+      "passed": true,
+      "reason": null,
+      "transcription": "to me",
+      "similarity": 0.33,
+      "phonemes": "t\u0259m\u02c8ATO",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.046,
+        "zcr": 0.2733,
+        "peak": 0.3141,
+        "speech_ratio": 0.286
+      }
+    },
+    "tooth": {
+      "word": "tooth",
+      "passed": true,
+      "reason": null,
+      "transcription": "two",
+      "similarity": 0.4,
+      "phonemes": "t\u02c8u\u03b8",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0412,
+        "zcr": 0.3191,
+        "peak": 0.2997,
+        "speech_ratio": 0.2321
+      }
+    },
+    "tower": {
+      "word": "tower",
+      "passed": true,
+      "reason": null,
+      "transcription": "taiwan",
+      "similarity": 0.33,
+      "phonemes": "t\u02c8W\u0259\u0279",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.043,
+        "zcr": 0.301,
+        "peak": 0.2764,
+        "speech_ratio": 0.2725
+      }
+    },
+    "train": {
+      "word": "train",
+      "passed": true,
+      "reason": null,
+      "transcription": "train",
+      "similarity": 1.0,
+      "phonemes": "t\u0279\u02c8An",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0439,
+        "zcr": 0.3018,
+        "peak": 0.3879,
+        "speech_ratio": 0.2804
+      }
+    },
+    "tree": {
+      "word": "tree",
+      "passed": true,
+      "reason": null,
+      "transcription": "trea",
+      "similarity": 0.75,
+      "phonemes": "t\u0279\u02c8i",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0421,
+        "zcr": 0.3048,
+        "peak": 0.3918,
+        "speech_ratio": 0.2566
+      }
+    },
+    "truck": {
+      "word": "truck",
+      "passed": true,
+      "reason": null,
+      "transcription": "trunk",
+      "similarity": 0.8,
+      "phonemes": "t\u0279\u02c8\u028ck",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0451,
+        "zcr": 0.3051,
+        "peak": 0.4058,
+        "speech_ratio": 0.2467
+      }
+    },
+    "turtle": {
+      "word": "turtle",
+      "passed": true,
+      "reason": null,
+      "transcription": "turtle",
+      "similarity": 1.0,
+      "phonemes": "t\u02c8\u025c\u0279T\u1d4al",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0433,
+        "zcr": 0.2806,
+        "peak": 0.3131,
+        "speech_ratio": 0.2846
+      }
+    },
+    "ukulele": {
+      "word": "ukulele",
+      "passed": true,
+      "reason": null,
+      "transcription": "you collared",
+      "similarity": 0.25,
+      "phonemes": "j\u02ccuk\u0259l\u02c8Ali",
+      "duration": 1.57,
+      "stats": {
+        "rms": 0.0456,
+        "zcr": 0.2423,
+        "peak": 0.356,
+        "speech_ratio": 0.3153
+      }
+    },
+    "umbrella": {
+      "word": "umbrella",
+      "passed": true,
+      "reason": null,
+      "transcription": "and brello",
+      "similarity": 0.5,
+      "phonemes": "\u02cc\u028cmb\u0279\u02c8\u025bl\u0259",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0483,
+        "zcr": 0.2653,
+        "peak": 0.3336,
+        "speech_ratio": 0.3032
+      }
+    },
+    "uncle": {
+      "word": "uncle",
+      "passed": true,
+      "reason": null,
+      "transcription": "uncle",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u028c\u014bk\u0259l",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0459,
+        "zcr": 0.2769,
+        "peak": 0.5873,
+        "speech_ratio": 0.2639
+      }
+    },
+    "under": {
+      "word": "under",
+      "passed": true,
+      "reason": null,
+      "transcription": "under",
+      "similarity": 1.0,
+      "phonemes": "\u02c8\u028cnd\u0259\u0279",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.047,
+        "zcr": 0.2946,
+        "peak": 0.3906,
+        "speech_ratio": 0.2735
+      }
+    },
+    "unicorn": {
+      "word": "unicorn",
+      "passed": true,
+      "reason": null,
+      "transcription": "unicorn",
+      "similarity": 1.0,
+      "phonemes": "j\u02c8un\u0259k\u02cc\u0254\u0279n",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0466,
+        "zcr": 0.255,
+        "peak": 0.4213,
+        "speech_ratio": 0.3179
+      }
+    },
+    "uniform": {
+      "word": "uniform",
+      "passed": true,
+      "reason": null,
+      "transcription": "uniform",
+      "similarity": 1.0,
+      "phonemes": "j\u02c8un\u0259f\u02cc\u0254\u0279m",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0478,
+        "zcr": 0.2765,
+        "peak": 0.4384,
+        "speech_ratio": 0.3273
+      }
+    },
+    "upstairs": {
+      "word": "upstairs",
+      "passed": true,
+      "reason": null,
+      "transcription": "upstairs",
+      "similarity": 1.0,
+      "phonemes": "\u02cc\u028cpst\u02c8\u025b\u0279z",
+      "duration": 1.6,
+      "stats": {
+        "rms": 0.045,
+        "zcr": 0.2993,
+        "peak": 0.532,
+        "speech_ratio": 0.3016
+      }
+    },
+    "urchin": {
+      "word": "urchin",
+      "passed": true,
+      "reason": null,
+      "transcription": "oh jim",
+      "similarity": 0.17,
+      "phonemes": "\u02c8\u025c\u0279\u02a7\u0259n",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0438,
+        "zcr": 0.2949,
+        "peak": 0.3668,
+        "speech_ratio": 0.2834
+      }
+    },
+    "useful": {
+      "word": "useful",
+      "passed": true,
+      "reason": null,
+      "transcription": "useful",
+      "similarity": 1.0,
+      "phonemes": "j\u02c8usf\u1d4al",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0456,
+        "zcr": 0.2971,
+        "peak": 0.4076,
+        "speech_ratio": 0.2953
+      }
+    },
+    "utensil": {
+      "word": "utensil",
+      "passed": true,
+      "reason": null,
+      "transcription": "you cancel",
+      "similarity": 0.3,
+      "phonemes": "jut\u02c8\u025bns\u1d4al",
+      "duration": 1.57,
+      "stats": {
+        "rms": 0.0447,
+        "zcr": 0.2761,
+        "peak": 0.3099,
+        "speech_ratio": 0.3308
+      }
+    },
+    "vacuum": {
+      "word": "vacuum",
+      "passed": true,
+      "reason": null,
+      "transcription": "vacuum",
+      "similarity": 1.0,
+      "phonemes": "v\u02c8\u00e6kj\u02ccum",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.045,
+        "zcr": 0.2714,
+        "peak": 0.4185,
+        "speech_ratio": 0.3046
+      }
+    },
+    "valley": {
+      "word": "valley",
+      "passed": true,
+      "reason": null,
+      "transcription": "valley",
+      "similarity": 1.0,
+      "phonemes": "v\u02c8\u00e6li",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0437,
+        "zcr": 0.2792,
+        "peak": 0.3215,
+        "speech_ratio": 0.2693
+      }
+    },
+    "van": {
+      "word": "van",
+      "passed": true,
+      "reason": null,
+      "transcription": "vam",
+      "similarity": 0.67,
+      "phonemes": "v\u02c8\u00e6n",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0413,
+        "zcr": 0.2971,
+        "peak": 0.3249,
+        "speech_ratio": 0.2563
+      }
+    },
+    "vase": {
+      "word": "vase",
+      "passed": true,
+      "reason": null,
+      "transcription": "vieus",
+      "similarity": 0.2,
+      "phonemes": "v\u02c8As",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.3207,
+        "peak": 0.4114,
+        "speech_ratio": 0.271
+      }
+    },
+    "vegetable": {
+      "word": "vegetable",
+      "passed": true,
+      "reason": null,
+      "transcription": "vegetable",
+      "similarity": 1.0,
+      "phonemes": "v\u02c8\u025b\u02a4t\u0259b\u0259l",
+      "duration": 1.52,
+      "stats": {
+        "rms": 0.0442,
+        "zcr": 0.2753,
+        "peak": 0.4131,
+        "speech_ratio": 0.3136
+      }
+    },
+    "vest": {
+      "word": "vest",
+      "passed": true,
+      "reason": null,
+      "transcription": "vastir",
+      "similarity": 0.5,
+      "phonemes": "v\u02c8\u025bst",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.044,
+        "zcr": 0.3232,
+        "peak": 0.4006,
+        "speech_ratio": 0.2707
+      }
+    },
+    "village": {
+      "word": "village",
+      "passed": true,
+      "reason": null,
+      "transcription": "villar",
+      "similarity": 0.71,
+      "phonemes": "v\u02c8\u026al\u026a\u02a4",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0426,
+        "zcr": 0.2593,
+        "peak": 0.3675,
+        "speech_ratio": 0.2675
+      }
+    },
+    "violin": {
+      "word": "violin",
+      "passed": true,
+      "reason": null,
+      "transcription": "fire lim",
+      "similarity": 0.38,
+      "phonemes": "v\u02ccI\u0259l\u02c8\u026an",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0438,
+        "zcr": 0.262,
+        "peak": 0.4088,
+        "speech_ratio": 0.3102
+      }
+    },
+    "visitor": {
+      "word": "visitor",
+      "passed": true,
+      "reason": null,
+      "transcription": "vizzaker",
+      "similarity": 0.38,
+      "phonemes": "v\u02c8\u026az\u0259T\u0259\u0279",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.046,
+        "zcr": 0.2783,
+        "peak": 0.3541,
+        "speech_ratio": 0.3117
+      }
+    },
+    "volcano": {
+      "word": "volcano",
+      "passed": true,
+      "reason": null,
+      "transcription": "volcano",
+      "similarity": 1.0,
+      "phonemes": "v\u0251lk\u02c8AnO",
+      "duration": 1.6,
+      "stats": {
+        "rms": 0.0472,
+        "zcr": 0.2593,
+        "peak": 0.5028,
+        "speech_ratio": 0.3
+      }
+    },
+    "wagon": {
+      "word": "wagon",
+      "passed": true,
+      "reason": null,
+      "transcription": "wagon",
+      "similarity": 1.0,
+      "phonemes": "w\u02c8\u00e6\u0261\u1d4an",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0441,
+        "zcr": 0.2835,
+        "peak": 0.377,
+        "speech_ratio": 0.2868
+      }
+    },
+    "watch": {
+      "word": "watch",
+      "passed": true,
+      "reason": null,
+      "transcription": "watch",
+      "similarity": 1.0,
+      "phonemes": "w\u02c8\u0251\u02a7",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0456,
+        "zcr": 0.317,
+        "peak": 0.3495,
+        "speech_ratio": 0.25
+      }
+    },
+    "water": {
+      "word": "water",
+      "passed": true,
+      "reason": null,
+      "transcription": "water",
+      "similarity": 1.0,
+      "phonemes": "w\u02c8\u0254T\u0259\u0279",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0458,
+        "zcr": 0.2931,
+        "peak": 0.3328,
+        "speech_ratio": 0.2908
+      }
+    },
+    "whale": {
+      "word": "whale",
+      "passed": true,
+      "reason": null,
+      "transcription": "will",
+      "similarity": 0.4,
+      "phonemes": "w\u02c8Al",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0418,
+        "zcr": 0.2829,
+        "peak": 0.3256,
+        "speech_ratio": 0.2597
+      }
+    },
+    "wheel": {
+      "word": "wheel",
+      "passed": true,
+      "reason": null,
+      "transcription": "weal",
+      "similarity": 0.6,
+      "phonemes": "w\u02c8il",
+      "duration": 1.32,
+      "stats": {
+        "rms": 0.042,
+        "zcr": 0.2865,
+        "peak": 0.3198,
+        "speech_ratio": 0.2542
+      }
+    },
+    "window": {
+      "word": "window",
+      "passed": true,
+      "reason": null,
+      "transcription": "window",
+      "similarity": 1.0,
+      "phonemes": "w\u02c8\u026andO",
+      "duration": 1.55,
+      "stats": {
+        "rms": 0.0459,
+        "zcr": 0.2859,
+        "peak": 0.343,
+        "speech_ratio": 0.2885
+      }
+    },
+    "winter": {
+      "word": "winter",
+      "passed": true,
+      "reason": null,
+      "transcription": "winter",
+      "similarity": 1.0,
+      "phonemes": "w\u02c8\u026ant\u0259\u0279",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0481,
+        "zcr": 0.2895,
+        "peak": 0.3727,
+        "speech_ratio": 0.2978
+      }
+    },
+    "wolf": {
+      "word": "wolf",
+      "passed": true,
+      "reason": null,
+      "transcription": "wolf",
+      "similarity": 1.0,
+      "phonemes": "w\u02c8\u028alf",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0481,
+        "zcr": 0.3197,
+        "peak": 0.3867,
+        "speech_ratio": 0.2533
+      }
+    },
+    "woman": {
+      "word": "woman",
+      "passed": true,
+      "reason": null,
+      "transcription": "woman",
+      "similarity": 1.0,
+      "phonemes": "w\u02c8\u028am\u0259n",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0477,
+        "zcr": 0.2857,
+        "peak": 0.3865,
+        "speech_ratio": 0.2839
+      }
+    },
+    "wood": {
+      "word": "wood",
+      "passed": true,
+      "reason": null,
+      "transcription": "what",
+      "similarity": 0.25,
+      "phonemes": "w\u02c8\u028ad",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0455,
+        "zcr": 0.2957,
+        "peak": 0.3478,
+        "speech_ratio": 0.253
+      }
+    },
+    "xenon": {
+      "word": "xenon",
+      "passed": true,
+      "reason": null,
+      "transcription": "youre seeing on",
+      "similarity": 0.27,
+      "phonemes": "z\u02c8in\u02cc\u0251n",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0443,
+        "zcr": 0.29,
+        "peak": 0.3827,
+        "speech_ratio": 0.3035
+      }
+    },
+    "xenops": {
+      "word": "xenops",
+      "passed": true,
+      "reason": null,
+      "transcription": "zanops",
+      "similarity": 0.67,
+      "phonemes": "z\u02c8\u025bn\u0259ps",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0463,
+        "zcr": 0.2902,
+        "peak": 0.35,
+        "speech_ratio": 0.2765
+      }
+    },
+    "xerox": {
+      "word": "xerox",
+      "passed": true,
+      "reason": null,
+      "transcription": "x",
+      "similarity": 0.2,
+      "phonemes": "z\u02c8\u026a\u0279\u02cc\u0251ks",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0465,
+        "zcr": 0.2908,
+        "peak": 0.4028,
+        "speech_ratio": 0.2881
+      }
+    },
+    "xerus": {
+      "word": "xerus",
+      "passed": true,
+      "reason": null,
+      "transcription": "xeroise",
+      "similarity": 0.57,
+      "phonemes": "z\u02c8\u025b\u0279\u0259s",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0441,
+        "zcr": 0.3036,
+        "peak": 0.3884,
+        "speech_ratio": 0.2958
+      }
+    },
+    "xray": {
+      "word": "xray",
+      "passed": true,
+      "reason": null,
+      "transcription": "x-ray",
+      "similarity": 0.8,
+      "phonemes": "\u02c8\u025bks\u0279\u02c8A",
+      "duration": 1.5,
+      "stats": {
+        "rms": 0.0437,
+        "zcr": 0.288,
+        "peak": 0.631,
+        "speech_ratio": 0.2761
+      }
+    },
+    "xylophone": {
+      "word": "xylophone",
+      "passed": true,
+      "reason": null,
+      "transcription": "zeyla phone",
+      "similarity": 0.64,
+      "phonemes": "z\u02c8Il\u0259f\u02ccOn",
+      "duration": 1.55,
+      "stats": {
+        "rms": 0.0438,
+        "zcr": 0.2832,
+        "peak": 0.377,
+        "speech_ratio": 0.3288
+      }
+    },
+    "yacht": {
+      "word": "yacht",
+      "passed": true,
+      "reason": null,
+      "transcription": "yacht",
+      "similarity": 1.0,
+      "phonemes": "j\u02c8\u0251t",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.043,
+        "zcr": 0.299,
+        "peak": 0.2876,
+        "speech_ratio": 0.2456
+      }
+    },
+    "yak": {
+      "word": "yak",
+      "passed": true,
+      "reason": null,
+      "transcription": "yuck",
+      "similarity": 0.5,
+      "phonemes": "j\u02c8\u00e6k",
+      "duration": 1.25,
+      "stats": {
+        "rms": 0.0455,
+        "zcr": 0.2961,
+        "peak": 0.3666,
+        "speech_ratio": 0.2249
+      }
+    },
+    "yard": {
+      "word": "yard",
+      "passed": true,
+      "reason": null,
+      "transcription": "youre",
+      "similarity": 0.4,
+      "phonemes": "j\u02c8\u0251\u0279d",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0446,
+        "zcr": 0.297,
+        "peak": 0.3712,
+        "speech_ratio": 0.2548
+      }
+    },
+    "yarn": {
+      "word": "yarn",
+      "passed": true,
+      "reason": null,
+      "transcription": "you are him",
+      "similarity": 0.27,
+      "phonemes": "j\u02c8\u0251\u0279n",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0423,
+        "zcr": 0.2921,
+        "peak": 0.3145,
+        "speech_ratio": 0.2599
+      }
+    },
+    "yawn": {
+      "word": "yawn",
+      "passed": true,
+      "reason": null,
+      "transcription": "john",
+      "similarity": 0.25,
+      "phonemes": "j\u02c8\u0254n",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0415,
+        "zcr": 0.2957,
+        "peak": 0.2429,
+        "speech_ratio": 0.2529
+      }
+    },
+    "year": {
+      "word": "year",
+      "passed": true,
+      "reason": null,
+      "transcription": "you",
+      "similarity": 0.25,
+      "phonemes": "j\u02c8\u026a\u0279",
+      "duration": 1.3,
+      "stats": {
+        "rms": 0.0427,
+        "zcr": 0.2942,
+        "peak": 0.3016,
+        "speech_ratio": 0.2402
+      }
+    },
+    "yellow": {
+      "word": "yellow",
+      "passed": true,
+      "reason": null,
+      "transcription": "yall are",
+      "similarity": 0.38,
+      "phonemes": "j\u02c8\u025blO",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.0424,
+        "zcr": 0.2503,
+        "peak": 0.2675,
+        "speech_ratio": 0.2635
+      }
+    },
+    "yogurt": {
+      "word": "yogurt",
+      "passed": true,
+      "reason": null,
+      "transcription": "yogurt",
+      "similarity": 1.0,
+      "phonemes": "j\u02c8O\u0261\u0259\u0279t",
+      "duration": 1.35,
+      "stats": {
+        "rms": 0.0482,
+        "zcr": 0.2786,
+        "peak": 0.3507,
+        "speech_ratio": 0.2701
+      }
+    },
+    "yolk": {
+      "word": "yolk",
+      "passed": true,
+      "reason": null,
+      "transcription": "yoke",
+      "similarity": 0.5,
+      "phonemes": "j\u02c8Ok",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0476,
+        "zcr": 0.2985,
+        "peak": 0.3596,
+        "speech_ratio": 0.2227
+      }
+    },
+    "yoyo": {
+      "word": "yoyo",
+      "passed": true,
+      "reason": null,
+      "transcription": "yeong-rye",
+      "similarity": 0.33,
+      "phonemes": "j\u02c8OjO",
+      "duration": 1.4,
+      "stats": {
+        "rms": 0.0446,
+        "zcr": 0.2675,
+        "peak": 0.3377,
+        "speech_ratio": 0.2625
+      }
+    },
+    "zebra": {
+      "word": "zebra",
+      "passed": true,
+      "reason": null,
+      "transcription": "see you boy",
+      "similarity": 0.18,
+      "phonemes": "z\u02c8ib\u0279\u0259",
+      "duration": 1.48,
+      "stats": {
+        "rms": 0.042,
+        "zcr": 0.2968,
+        "peak": 0.3776,
+        "speech_ratio": 0.2903
+      }
+    },
+    "zero": {
+      "word": "zero",
+      "passed": true,
+      "reason": null,
+      "transcription": "see you soon",
+      "similarity": 0.17,
+      "phonemes": "z\u02c8\u026a\u0279O",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0427,
+        "zcr": 0.2857,
+        "peak": 0.3754,
+        "speech_ratio": 0.2817
+      }
+    },
+    "zigzag": {
+      "word": "zigzag",
+      "passed": true,
+      "reason": null,
+      "transcription": "zigzag",
+      "similarity": 1.0,
+      "phonemes": "z\u02c8\u026a\u0261z\u02cc\u00e6\u0261",
+      "duration": 1.55,
+      "stats": {
+        "rms": 0.0429,
+        "zcr": 0.2946,
+        "peak": 0.3608,
+        "speech_ratio": 0.3057
+      }
+    },
+    "zinnia": {
+      "word": "zinnia",
+      "passed": true,
+      "reason": null,
+      "transcription": "zenia",
+      "similarity": 0.67,
+      "phonemes": "z\u02c8\u026ani\u0259",
+      "duration": 1.45,
+      "stats": {
+        "rms": 0.0452,
+        "zcr": 0.2973,
+        "peak": 0.3484,
+        "speech_ratio": 0.2857
+      }
+    },
+    "zipper": {
+      "word": "zipper",
+      "passed": true,
+      "reason": null,
+      "transcription": "see you",
+      "similarity": 0.0,
+      "phonemes": "z\u02c8\u026ap\u0259\u0279",
+      "duration": 1.43,
+      "stats": {
+        "rms": 0.0441,
+        "zcr": 0.2964,
+        "peak": 0.4615,
+        "speech_ratio": 0.2544
+      }
+    },
+    "zone": {
+      "word": "zone",
+      "passed": true,
+      "reason": null,
+      "transcription": "zone",
+      "similarity": 1.0,
+      "phonemes": "z\u02c8On",
+      "duration": 1.38,
+      "stats": {
+        "rms": 0.0436,
+        "zcr": 0.3199,
+        "peak": 0.2924,
+        "speech_ratio": 0.2657
+      }
+    },
+    "zoo": {
+      "word": "zoo",
+      "passed": true,
+      "reason": null,
+      "transcription": "zoom",
+      "similarity": 0.75,
+      "phonemes": "z\u02c8u",
+      "duration": 1.27,
+      "stats": {
+        "rms": 0.0405,
+        "zcr": 0.3255,
+        "peak": 0.3619,
+        "speech_ratio": 0.2376
+      }
+    },
+    "zucchini": {
+      "word": "zucchini",
+      "passed": true,
+      "reason": null,
+      "transcription": "zookane",
+      "similarity": 0.25,
+      "phonemes": "zuk\u02c8ini",
+      "duration": 1.55,
+      "stats": {
+        "rms": 0.0422,
+        "zcr": 0.2827,
+        "peak": 0.3794,
+        "speech_ratio": 0.286
+      }
+    }
+  }
+}

@@ -89,6 +89,8 @@ export class UIManager {
     this.elPetOverlayGrid = document.getElementById('pet-overlay-grid');
     this.elPetOverlayProgressFill = document.getElementById('pet-overlay-progress-fill');
     this.elPetOverlayProgressText = document.getElementById('pet-overlay-progress-text');
+    this.elPetOverlayPreview = document.getElementById('pet-overlay-preview');
+    this.elPetPreview = document.getElementById('pet-preview');
     this.elPetOverlayClose = document.getElementById('pet-den-close');
     this.petDenOpen = false;
 
@@ -769,7 +771,8 @@ export class UIManager {
   _renderPetDen() {
     this._renderPetPanel(
       this.elPetEquippedLetter, this.elPetEquippedLevel,
-      this.elPetLetterGrid, this.elPetProgressFill, this.elPetProgressText
+      this.elPetLetterGrid, this.elPetProgressFill, this.elPetProgressText,
+      this.elPetPreview
     );
   }
 
@@ -777,11 +780,12 @@ export class UIManager {
     if (!this.petDenOpen) return;
     this._renderPetPanel(
       this.elPetOverlayLetter, this.elPetOverlayLevel,
-      this.elPetOverlayGrid, this.elPetOverlayProgressFill, this.elPetOverlayProgressText
+      this.elPetOverlayGrid, this.elPetOverlayProgressFill, this.elPetOverlayProgressText,
+      this.elPetOverlayPreview
     );
   }
 
-  _renderPetPanel(letterEl, levelEl, gridEl, fillEl, textEl) {
+  _renderPetPanel(letterEl, levelEl, gridEl, fillEl, textEl, previewEl) {
     const pm = this.game.petManager;
     if (!pm || !gridEl) return;
 
@@ -852,6 +856,72 @@ export class UIManager {
         });
       }
       gridEl.appendChild(card);
+    }
+
+    // Render level preview toggle
+    this._renderPreviewLevels(previewEl, equipped);
+  }
+
+  _renderPreviewLevels(containerEl, equipped) {
+    if (!containerEl) return;
+    containerEl.innerHTML = '';
+
+    const pet = this.game.pet;
+    const inGame = this.game.state === 'playing' && pet && equipped && pet.letter === equipped.letter;
+
+    const label = document.createElement('div');
+    label.className = 'pet-preview-label';
+    label.textContent = 'Preview Level';
+    containerEl.appendChild(label);
+
+    const actualLevel = equipped?.level ?? 1;
+    const visualLevel = pet?.visualLevel ?? actualLevel;
+
+    for (let lv = 1; lv <= 7; lv++) {
+      const cfg = PET_LEVELS.find(l => l.level === lv);
+      const btn = document.createElement('button');
+      btn.className = 'pet-level-btn';
+      btn.textContent = lv;
+      const colorHex = '#' + cfg.color.toString(16).padStart(6, '0');
+      btn.style.borderColor = colorHex;
+      btn.style.color = colorHex;
+
+      if (lv === actualLevel) {
+        btn.classList.add('actual');
+      }
+      if (lv === visualLevel) {
+        btn.classList.add('active');
+        btn.style.background = colorHex;
+        btn.style.color = '#000';
+      }
+
+      if (!inGame) {
+        btn.disabled = true;
+      } else {
+        btn.addEventListener('click', () => {
+          pet.setVisualLevel(lv);
+          this._renderPetDen();
+          this._renderPetDenOverlay();
+        });
+      }
+      containerEl.appendChild(btn);
+    }
+
+    if (inGame && visualLevel !== actualLevel) {
+      const restore = document.createElement('button');
+      restore.className = 'pet-restore-btn';
+      restore.textContent = 'Restore';
+      restore.addEventListener('click', () => {
+        pet.clearVisualLevel();
+        this._renderPetDen();
+        this._renderPetDenOverlay();
+      });
+      containerEl.appendChild(restore);
+    } else if (!inGame) {
+      const hint = document.createElement('div');
+      hint.className = 'pet-preview-hint';
+      hint.textContent = 'Preview available in-game';
+      containerEl.appendChild(hint);
     }
   }
 

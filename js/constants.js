@@ -98,17 +98,16 @@ export const PROP_VOCABULARY = [
 ];
 
 export const FURNITURE_LEVELS = [
-  { level: 1, capturesRequired: 1, color: '#d1d5db', rewardMultiplier: 1.0, catchPenalty: 0.00, quizMode: 'guided' },
-  { level: 2, capturesRequired: 3, color: '#4ade80', rewardMultiplier: 1.25, catchPenalty: 0.04, quizMode: 'audio' },
-  { level: 3, capturesRequired: 7, color: '#38bdf8', rewardMultiplier: 1.55, catchPenalty: 0.08, quizMode: 'identify' },
-  { level: 4, capturesRequired: 15, color: '#a855f7', rewardMultiplier: 2.0, catchPenalty: 0.12, quizMode: 'identify' },
-  { level: 5, capturesRequired: 30, color: '#fbbf24', rewardMultiplier: 3.0, catchPenalty: 0.16, quizMode: 'identify' },
+  { level: 1, capturesRequired: 1, color: '#d1d5db', rewardMultiplier: 1.0, catchPenalty: 0.00 },
+  { level: 2, capturesRequired: 3, color: '#4ade80', rewardMultiplier: 1.25, catchPenalty: 0.04 },
+  { level: 3, capturesRequired: 7, color: '#38bdf8', rewardMultiplier: 1.55, catchPenalty: 0.08 },
+  { level: 4, capturesRequired: 15, color: '#a855f7', rewardMultiplier: 2.0, catchPenalty: 0.12 },
+  { level: 5, capturesRequired: 30, color: '#fbbf24', rewardMultiplier: 3.0, catchPenalty: 0.16 },
 ];
 
 export const QUIZ_MODES = {
-  guided: { showWord: true, revealPending: true, playAudio: true, label: 'Type the English word' },
-  audio: { showWord: false, revealPending: false, playAudio: true, label: 'Listen, then type the word' },
-  identify: { showWord: false, revealPending: false, playAudio: false, label: 'Identify the furniture' },
+  spell: { type: 'spell', showWord: false, revealPending: false, playAudio: true, label: 'Listen, then spell the word' },
+  choice: { type: 'choice', showWord: false, revealPending: false, playAudio: false, label: 'Listen to the words, then choose the match' },
 };
 
 // Vocabulary mapped to asset filenames
@@ -279,13 +278,265 @@ export const ASSETS = {
   },
 };
 
+const CUBE = 'Cube World - Aug 2023';
+const SUSHI = 'Sushi Restaurant Kit - May 2023';
+const SPACE = 'Ultimate Space Kit - March 2023';
+const TOON = 'Toon Shooter Game Kit - Dec 2022';
+const FOOD = 'Ultimate Food Pack - Oct 2019';
+
+const tierForIndex = (index) => {
+  if (index >= 46) return 'epic';
+  if (index >= 38) return 'rare';
+  if (index >= 24) return 'uncommon';
+  return 'common';
+};
+
+const dropsFor = (resources, index) => {
+  const primary = resources[index % resources.length];
+  const secondary = resources[(index + 2) % resources.length];
+  return [
+    { resource: primary, min: 1, max: tierForIndex(index) === 'common' ? 2 : 3 },
+    { resource: secondary, min: 0, max: index >= 24 ? 1 : 0 },
+  ];
+};
+
+const makeCatchables = (biome, words, assetMap, resources) => words.map((word, index) => ({
+  key: `${biome}_${word}`,
+  word,
+  ttsWord: word,
+  biome,
+  assetPath: assetMap[word] || assetMap.default,
+  tier: tierForIndex(index),
+  resourceDrops: dropsFor(resources, index),
+}));
+
+const FARM_WORDS = [
+  'tree', 'flower', 'grass', 'bush', 'mushroom', 'bamboo', 'rock', 'crystal', 'fence', 'gate',
+  'chest', 'cart', 'key', 'door', 'plant', 'leaf', 'seed', 'wood', 'soil', 'water',
+  'fire', 'apple', 'pumpkin', 'potato', 'radish', 'carrot', 'tomato', 'wheat', 'cabbage', 'beet',
+  'corn', 'milk', 'egg', 'fish', 'bird', 'cow', 'sheep', 'chick', 'chicken', 'duck',
+  'pig', 'horse', 'cat', 'dog', 'wolf', 'frog', 'rabbit', 'bee', 'butterfly', 'basket',
+];
+
+const FOOD_WORDS = [
+  'rice', 'fish', 'tuna', 'salmon', 'shrimp', 'squid', 'octopus', 'cucumber', 'avocado', 'egg',
+  'milk', 'bread', 'cake', 'pizza', 'sandwich', 'carrot', 'tomato', 'potato', 'pumpkin', 'cabbage',
+  'corn', 'wheat', 'berry', 'apple', 'banana', 'orange', 'lemon', 'yogurt', 'water', 'bowl',
+  'plate', 'cup', 'bottle', 'pan', 'pot', 'oven', 'fridge', 'sink', 'knife', 'spoon',
+  'fork', 'table', 'chair', 'stool', 'bench', 'counter', 'cabinet', 'basket', 'sign', 'truck',
+];
+
+const SPACE_WORDS = [
+  'moon', 'star', 'planet', 'sun', 'rocket', 'spaceship', 'rover', 'robot', 'astronaut', 'helmet',
+  'suit', 'boot', 'glove', 'backpack', 'keycard', 'battery', 'button', 'lever', 'panel', 'solar',
+  'antenna', 'radar', 'dome', 'base', 'tower', 'bridge', 'ramp', 'stairs', 'door', 'window',
+  'light', 'crate', 'box', 'jar', 'sphere', 'rock', 'crystal', 'metal', 'wire', 'pipe',
+  'wheel', 'engine', 'fire', 'smoke', 'cloud', 'map', 'flag', 'tent', 'camera', 'radio',
+];
+
+const FARM_ASSETS = {
+  default: `${CUBE}/Environment/glTF/Plant_2.gltf`,
+  tree: `${CUBE}/Environment/glTF/Tree_1.gltf`,
+  flower: `${CUBE}/Environment/glTF/Flowers_1.gltf`,
+  grass: `${CUBE}/Environment/glTF/Grass_Small.gltf`,
+  bush: `${CUBE}/Environment/glTF/Bush.gltf`,
+  mushroom: `${CUBE}/Environment/glTF/Mushroom.gltf`,
+  bamboo: `${CUBE}/Environment/glTF/Bamboo.gltf`,
+  rock: `${CUBE}/Environment/glTF/Rock1.gltf`,
+  crystal: `${CUBE}/Environment/glTF/Crystal_Small.gltf`,
+  fence: `${CUBE}/Environment/glTF/Fence_Center.gltf`,
+  gate: `${CUBE}/Environment/glTF/Fence_T.gltf`,
+  chest: `${CUBE}/Environment/glTF/Chest_Closed.gltf`,
+  cart: `${CUBE}/Environment/glTF/Cart.gltf`,
+  key: `${CUBE}/Environment/glTF/Key.gltf`,
+  door: `${CUBE}/Environment/glTF/Door_Closed.gltf`,
+  plant: `${CUBE}/Environment/glTF/Plant_2.gltf`,
+  leaf: `${CUBE}/Pixel Blocks/glTF/Leaves.gltf`,
+  seed: `${CUBE}/Environment/glTF/Flowers_2.gltf`,
+  wood: `${CUBE}/Blocks/glTF/Block_WoodPlanks.gltf`,
+  soil: `${CUBE}/Blocks/glTF/Block_Dirt.gltf`,
+  water: `${SPACE}/Items/GLTF/Pickup_Sphere.gltf`,
+  fire: `${TOON}/Guns/glTF/FireGrenade.gltf`,
+  apple: `${FOOD}/OBJ/Apple.obj`,
+  pumpkin: `${FOOD}/OBJ/Pumpkin.obj`,
+  potato: `${FOOD}/OBJ/Turnip.obj`,
+  radish: `${FOOD}/OBJ/Turnip.obj`,
+  carrot: `${FOOD}/OBJ/Carrot.obj`,
+  tomato: `${FOOD}/OBJ/Tomato.obj`,
+  wheat: `${CUBE}/Environment/glTF/Grass_Big.gltf`,
+  cabbage: `${FOOD}/OBJ/Lettuce_Whole.obj`,
+  beet: `${FOOD}/OBJ/Turnip.obj`,
+  corn: `${FOOD}/OBJ/Corndog.obj`,
+  milk: `${FOOD}/OBJ/Bottle1.obj`,
+  egg: `${FOOD}/OBJ/Egg_Whole.obj`,
+  fish: `${FOOD}/OBJ/Fish.obj`,
+  bird: 'Ultimate Monsters/Big/glTF/Birb.gltf',
+  cow: 'Ultimate Animated Character Pack - Nov 2019/glTF/Cow.gltf',
+  sheep: `${CUBE}/Animals/glTF/Sheep.gltf`,
+  chick: `${CUBE}/Animals/glTF/Chick.gltf`,
+  chicken: `${CUBE}/Animals/glTF/Chicken.gltf`,
+  duck: `${CUBE}/Animals/glTF/Chicken.gltf`,
+  pig: `${CUBE}/Animals/glTF/Pig.gltf`,
+  horse: `${CUBE}/Animals/glTF/Horse.gltf`,
+  cat: `${CUBE}/Animals/glTF/Cat.gltf`,
+  dog: `${CUBE}/Animals/glTF/Dog.gltf`,
+  wolf: `${CUBE}/Animals/glTF/Wolf.gltf`,
+  frog: 'Ultimate Monsters/Big/glTF/Frog.gltf',
+  rabbit: `${SUSHI}/Characters/Normal/glTF/Rabbit_Grey.gltf`,
+  bee: 'Ultimate Monsters/Flying/glTF/Armabee.gltf',
+  butterfly: 'Ultimate Monsters/Flying/glTF/Armabee.gltf',
+  basket: `${CUBE}/Environment/glTF/Cart.gltf`,
+};
+
+const FOOD_ASSETS = {
+  default: `${SUSHI}/Food/glTF/Food_Roll.gltf`,
+  rice: `${SUSHI}/Food/glTF/FoodIngredient_Rice.gltf`,
+  fish: `${FOOD}/OBJ/Fish.obj`,
+  tuna: `${SUSHI}/Food/glTF/FoodIngredient_Tuna.gltf`,
+  salmon: `${SUSHI}/Food/glTF/FoodIngredient_Salmon.gltf`,
+  shrimp: `${SUSHI}/Food/glTF/FoodIngredient_Ebi.gltf`,
+  squid: `${SUSHI}/Food/glTF/FoodIngredient_Squid.gltf`,
+  octopus: `${SUSHI}/Food/glTF/FoodIngredient_Octopus.gltf`,
+  cucumber: `${SUSHI}/Food/glTF/FoodIngredient_Cucumber.gltf`,
+  avocado: `${SUSHI}/Food/glTF/FoodIngredient_Avocado.gltf`,
+  egg: `${FOOD}/OBJ/Egg_Whole.obj`,
+  milk: `${FOOD}/OBJ/Bottle1.obj`,
+  bread: `${FOOD}/OBJ/Bread.obj`,
+  cake: `${FOOD}/OBJ/Cupcake.obj`,
+  pizza: `${FOOD}/OBJ/Pizza.obj`,
+  sandwich: `${SUSHI}/Food/glTF/Food_Onigiri.gltf`,
+  carrot: `${FOOD}/OBJ/Carrot.obj`,
+  tomato: `${FOOD}/OBJ/Tomato.obj`,
+  potato: `${FOOD}/OBJ/Turnip.obj`,
+  pumpkin: `${FOOD}/OBJ/Pumpkin.obj`,
+  cabbage: `${FOOD}/OBJ/Lettuce_Whole.obj`,
+  corn: `${FOOD}/OBJ/Corndog.obj`,
+  wheat: `${CUBE}/Environment/glTF/Grass_Big.gltf`,
+  berry: `${FOOD}/OBJ/Apple_Green.obj`,
+  apple: `${FOOD}/OBJ/Apple.obj`,
+  banana: `${FOOD}/OBJ/Banana.obj`,
+  orange: `${FOOD}/OBJ/Orange.obj`,
+  lemon: `${FOOD}/OBJ/Orange.obj`,
+  yogurt: `${SUSHI}/Environment/glTF/Environment_Bowl.gltf`,
+  water: `${SPACE}/Items/GLTF/Pickup_Sphere.gltf`,
+  bowl: `${SUSHI}/Environment/glTF/Environment_Bowl.gltf`,
+  plate: `${SUSHI}/Environment/glTF/Environment_Plate.gltf`,
+  cup: `${SUSHI}/Environment/glTF/Environment_Bottle.gltf`,
+  bottle: `${SUSHI}/Environment/glTF/Environment_Bottle.gltf`,
+  pan: `${FOOD}/OBJ/FryingPan.obj`,
+  pot: `${FOOD}/OBJ/CookingPot.obj`,
+  oven: `${SUSHI}/Environment/glTF/Environment_Oven.gltf`,
+  fridge: `${SUSHI}/Environment/glTF/Environment_Fridge.gltf`,
+  sink: `${SUSHI}/Environment/glTF/Environment_Counter_Sink.gltf`,
+  knife: `${FOOD}/OBJ/Knife.obj`,
+  spoon: `${FOOD}/OBJ/Spoon.obj`,
+  fork: `${FOOD}/OBJ/Fork.obj`,
+  table: `${SUSHI}/Environment/glTF/Environment_Table.gltf`,
+  chair: `${SUSHI}/Environment/glTF/Environment_Chair1.gltf`,
+  stool: `${SUSHI}/Environment/glTF/Environment_Stool.gltf`,
+  bench: `${SUSHI}/Environment/glTF/Environment_Bench.gltf`,
+  counter: `${SUSHI}/Environment/glTF/Environment_Counter_Straight.gltf`,
+  cabinet: `${SUSHI}/Environment/glTF/Environment_Cabinet_Doors.gltf`,
+  basket: `${CUBE}/Environment/glTF/Cart.gltf`,
+  sign: `${SUSHI}/Decoration/glTF/Decoration_Sign.gltf`,
+  truck: `${SUSHI}/Environment/glTF/Truck.gltf`,
+};
+
+const SPACE_ASSETS = {
+  default: `${SPACE}/Environment/GLTF/Planet_1.gltf`,
+  moon: `${SPACE}/Environment/GLTF/Planet_2.gltf`,
+  star: `${SPACE}/Items/GLTF/Pickup_Thunder.gltf`,
+  planet: `${SPACE}/Environment/GLTF/Planet_1.gltf`,
+  sun: `${SPACE}/Environment/GLTF/Planet_7.gltf`,
+  rocket: `${TOON}/Guns/glTF/RocketLauncher.gltf`,
+  spaceship: `${SPACE}/Vehicles/GLTF/Spaceship_FinnTheFrog.gltf`,
+  rover: `${SPACE}/Vehicles/GLTF/Rover_1.gltf`,
+  robot: `${SPACE}/Characters/GLTF/Mech_FinnTheFrog.gltf`,
+  astronaut: `${SPACE}/Characters/GLTF/Astronaut_FinnTheFrog.gltf`,
+  helmet: 'Ultimate Animated Character Pack - Nov 2019/glTF/VikingHelmet.gltf',
+  suit: 'Ultimate Animated Character Pack - Nov 2019/glTF/Suit_Male.gltf',
+  boot: `${CUBE}/Characters/glTF/Character_Male_1.gltf`,
+  glove: `${CUBE}/Characters/glTF/Character_Male_1.gltf`,
+  backpack: `${SPACE}/Items/GLTF/Pickup_Crate.gltf`,
+  keycard: `${SPACE}/Items/GLTF/Pickup_KeyCard.gltf`,
+  battery: `${SPACE}/Items/GLTF/Pickup_Health.gltf`,
+  button: `${CUBE}/Environment/glTF/Button.gltf`,
+  lever: `${CUBE}/Environment/glTF/Lever_Left.gltf`,
+  panel: `${SPACE}/Environment/GLTF/SolarPanel_Ground.gltf`,
+  solar: `${SPACE}/Environment/GLTF/SolarPanel_Structure.gltf`,
+  antenna: `${SPACE}/Environment/GLTF/Roof_Antenna.gltf`,
+  radar: `${SPACE}/Environment/GLTF/Roof_Radar.gltf`,
+  dome: `${SPACE}/Environment/GLTF/GeodesicDome.gltf`,
+  base: `${SPACE}/Environment/GLTF/Base_Large.gltf`,
+  tower: `${TOON}/Environment/glTF/WaterTank_Platform.gltf`,
+  bridge: `${SPACE}/Environment/GLTF/Connector.gltf`,
+  ramp: `${SPACE}/Environment/GLTF/Ramp.gltf`,
+  stairs: `${SPACE}/Environment/GLTF/Stairs.gltf`,
+  door: `${CUBE}/Environment/glTF/Door_Closed.gltf`,
+  window: `${SPACE}/Environment/GLTF/House_Open.gltf`,
+  light: `${SPACE}/Environment/GLTF/Tree_Light_1.gltf`,
+  crate: `${SPACE}/Items/GLTF/Pickup_Crate.gltf`,
+  box: `${TOON}/Environment/glTF/CardboardBoxes_1.gltf`,
+  jar: `${SPACE}/Items/GLTF/Pickup_Jar.gltf`,
+  sphere: `${SPACE}/Items/GLTF/Pickup_Sphere.gltf`,
+  rock: `${SPACE}/Environment/GLTF/Rock_1.gltf`,
+  crystal: `${CUBE}/Environment/glTF/Crystal_Big.gltf`,
+  metal: `${CUBE}/Blocks/glTF/Block_Metal.gltf`,
+  wire: `${TOON}/Environment/glTF/Pipes.gltf`,
+  pipe: `${TOON}/Environment/glTF/Pipes.gltf`,
+  wheel: `${TOON}/Environment/glTF/Debris_Tires.gltf`,
+  engine: `${SPACE}/Vehicles/GLTF/Rover_2.gltf`,
+  fire: `${TOON}/Guns/glTF/FireGrenade.gltf`,
+  smoke: `${TOON}/Environment/glTF/GasTank.gltf`,
+  cloud: `${SPACE}/Environment/GLTF/Planet_6.gltf`,
+  map: 'Pirate Kit - Nov 2023/glTF/UI_Paper.gltf',
+  flag: `${SUSHI}/Decoration/glTF/Decoration_Sign_2.gltf`,
+  tent: `${SPACE}/Environment/GLTF/House_Single.gltf`,
+  camera: `${SPACE}/Environment/GLTF/Roof_Radar.gltf`,
+  radio: `${SPACE}/Environment/GLTF/Roof_Antenna.gltf`,
+};
+
+export const ESL_BIOMES = {
+  farm_garden: { name: 'Farm & Garden', resources: ['wood', 'seed', 'leaf', 'food', 'crystal'] },
+  food_market: { name: 'Food Market', resources: ['food', 'rice', 'fish', 'spice', 'coin'] },
+  space_camp: { name: 'Space Camp', resources: ['metal', 'battery', 'crystal', 'star', 'fuel'] },
+};
+
+export const CATCHABLE_CATALOG = [
+  ...makeCatchables('farm_garden', FARM_WORDS, FARM_ASSETS, ESL_BIOMES.farm_garden.resources),
+  ...makeCatchables('food_market', FOOD_WORDS, FOOD_ASSETS, ESL_BIOMES.food_market.resources),
+  ...makeCatchables('space_camp', SPACE_WORDS, SPACE_ASSETS, ESL_BIOMES.space_camp.resources),
+];
+
+export const CATCHABLE_BY_KEY = Object.fromEntries(CATCHABLE_CATALOG.map(item => [item.key, item]));
+export const CATCHABLE_WORDS = [...new Set(CATCHABLE_CATALOG.map(item => item.word))].sort();
+
 export const BIOMES = {
-  meadow: {
-    name: 'Cozy Meadows',
+  farm_garden: {
+    name: 'Farm & Garden',
     fogColor: 0x87ceeb,
     groundBlocks: ['grass', 'dirt', 'stone', 'wood'],
     decorations: ['grassSmall', 'grassBig', 'flowers1', 'flowers2'],
-    furniturePool: ['chair', 'table', 'bed', 'lamp', 'rug', 'stool', 'shelf', 'plant', 'couch', 'bookshelf'],
-    propPool: ['tree', 'tree_big', 'tree_pine', 'rock', 'rock_big', 'bush', 'flower', 'flower2', 'grass', 'grass_big', 'mushroom', 'bamboo', 'bamboo_small', 'fence', 'fence_corner', 'chest', 'cart', 'crystal', 'crystal_big', 'plant', 'plant3', 'door', 'dead_tree'],
+    furniturePool: [],
+    propPool: CATCHABLE_CATALOG.filter(item => item.biome === 'farm_garden').map(item => item.key),
   },
+  food_market: {
+    name: 'Food Market',
+    fogColor: 0xf7c98a,
+    groundBlocks: ['wood', 'brick', 'dirt', 'grass'],
+    decorations: ['bamboo', 'bambooSmall', 'plant2', 'flowers1'],
+    furniturePool: [],
+    propPool: CATCHABLE_CATALOG.filter(item => item.biome === 'food_market').map(item => item.key),
+  },
+  space_camp: {
+    name: 'Space Camp',
+    fogColor: 0x273469,
+    groundBlocks: ['stone', 'brick', 'wood', 'grass'],
+    decorations: ['crystalSmall', 'crystalBig', 'rock1', 'rock2'],
+    furniturePool: [],
+    propPool: CATCHABLE_CATALOG.filter(item => item.biome === 'space_camp').map(item => item.key),
+  },
+  meadow: null,
 };
+
+BIOMES.meadow = BIOMES.farm_garden;

@@ -191,6 +191,7 @@
       cursor: pointer;
       font-size: 18px;
       font-weight: 900;
+      overflow-wrap: anywhere;
       transition: transform 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
     }
     .speaker-answer-btn:hover { transform: translateY(-1px); border-color: #facc15; box-shadow: 0 0 16px rgba(250,204,21,0.2); }
@@ -335,6 +336,31 @@
     </div>
   </div>
 
+  <!-- Biome Select Screen -->
+  <div id="biome-select-screen" style="display:none; position:fixed; inset:0; z-index:205; background:linear-gradient(135deg, rgba(15,12,41,0.96), rgba(36,36,62,0.96)); overflow-y:auto;">
+    <div style="max-width:900px; margin:0 auto; padding:48px 20px;">
+      <h1 style="font-size:34px; font-weight:900; background:linear-gradient(90deg, #c084fc, #6366f1); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px;">CHOOSE YOUR BIOME</h1>
+      <p style="opacity:0.6; margin-bottom:28px;">Pick the word world you want to practice first.</p>
+
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:32px;">
+        <button class="biome-card" data-biome="farm_garden" style="text-align:left; background:rgba(99,102,241,0.22); border:1px solid rgba(165,180,252,0.85); border-radius:12px; padding:18px; color:#fff; cursor:pointer;">
+          <div style="font-weight:900; font-size:18px; margin-bottom:6px;">Farm & Garden</div>
+          <div style="font-size:13px; opacity:0.68;">Animals, plants, crops, and outdoor words</div>
+        </button>
+        <button class="biome-card" data-biome="food_market" style="text-align:left; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:18px; color:#fff; cursor:pointer;">
+          <div style="font-weight:900; font-size:18px; margin-bottom:6px;">Food Market</div>
+          <div style="font-size:13px; opacity:0.68;">Food, kitchen items, and market words</div>
+        </button>
+        <button class="biome-card" data-biome="space_camp" style="text-align:left; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:18px; color:#fff; cursor:pointer;">
+          <div style="font-weight:900; font-size:18px; margin-bottom:6px;">Space Camp</div>
+          <div style="font-size:13px; opacity:0.68;">Science, vehicles, shapes, and tools</div>
+        </button>
+      </div>
+
+      <button id="btn-biome-confirm" style="padding:14px 40px; font-size:18px; font-weight:700; color:#fff; background:linear-gradient(90deg, #4f46e5, #7c3aed); border:none; border-radius:12px; cursor:pointer;">Start Expedition</button>
+    </div>
+  </div>
+
   <!-- Loading -->
   <div id="loading">
     <div class="loading-spinner"></div>
@@ -415,6 +441,27 @@
           <div style="font-size:12px; text-transform:uppercase; letter-spacing:1px; opacity:0.5; margin-bottom:8px;">Income / sec</div>
           <div style="font-size:32px; font-weight:800; color:#4ade80;" id="base-income">0</div>
         </div>
+      </div>
+
+      <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:20px; margin-bottom:32px;">
+        <div style="font-size:12px; text-transform:uppercase; letter-spacing:1px; opacity:0.5; margin-bottom:12px;">Resources</div>
+        <div id="base-resources" style="display:flex; flex-wrap:wrap; gap:8px; font-size:13px;"></div>
+      </div>
+
+      <h2 style="font-size:20px; font-weight:700; margin-bottom:16px;">Choose Biome</h2>
+      <div id="biome-select" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:40px;">
+        <button class="biome-card" data-biome="farm_garden" style="text-align:left; background:rgba(255,255,255,0.05); border:1px solid rgba(165,180,252,0.35); border-radius:12px; padding:16px; color:#fff; cursor:pointer;">
+          <div style="font-weight:800; margin-bottom:4px;">Farm & Garden</div>
+          <div style="font-size:12px; opacity:0.62;">Animals, plants, crops, and outdoor words</div>
+        </button>
+        <button class="biome-card" data-biome="food_market" style="text-align:left; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:16px; color:#fff; cursor:pointer;">
+          <div style="font-weight:800; margin-bottom:4px;">Food Market</div>
+          <div style="font-size:12px; opacity:0.62;">Food, kitchen items, and market words</div>
+        </button>
+        <button class="biome-card" data-biome="space_camp" style="text-align:left; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:16px; color:#fff; cursor:pointer;">
+          <div style="font-weight:800; margin-bottom:4px;">Space Camp</div>
+          <div style="font-size:12px; opacity:0.62;">Science, vehicles, shapes, and tools</div>
+        </button>
       </div>
       
       <h2 style="font-size:20px; font-weight:700; margin-bottom:16px;">Upgrades</h2>

@@ -151,6 +151,7 @@ export class Player {
     this.inventory = {};
     this.level = 1;
     this.xp = 0;
+    this.world = null; // set by Game for ground height snapping
   }
 
   async spawn(characterId = DEFAULT_LOADOUT.characterId) {
@@ -423,6 +424,42 @@ export class Player {
       this.stamina = Math.min(GAME.MAX_STAMINA, this.stamina + GAME.STAMINA_REGEN * dt);
     }
 
+    // Ground height snapping (3D terrain support) — 2×2 area check
+    let groundY = 0;
+    let fallingIntoVoid = false;
+    if (this.world) {
+      const topY = this._getGroundHeight(this.position.x, this.position.z);
+      if (topY > -999) {
+        groundY = topY;
+      } else if (this.world.authoredMode) {
+        // No block underfoot in authored level = fall into void
+        groundY = -999;
+        fallingIntoVoid = true;
+      } else {
+        // Procedural mode: hard floor at -50
+        groundY = -50;
+      }
+    }
+
+    // Void death: fell off the edge of the level
+    if (fallingIntoVoid && this.position.y < -10) {
+      this._respawnFromVoid();
+      return;
+    }
+
+    // Simple gravity / falling
+    if (this.position.y > groundY + 0.01 || fallingIntoVoid) {
+      this.velocity.y += GAME.GRAVITY * dt;
+      this.position.y += this.velocity.y * dt;
+      if (!fallingIntoVoid && this.position.y <= groundY) {
+        this.position.y = groundY;
+        this.velocity.y = 0;
+      }
+    } else if (this.position.y < groundY) {
+      this.position.y = groundY;
+      this.velocity.y = 0;
+    }
+
     // Dodge handling
     if (this.isDodging) {
       this.dodgeTimer -= dt;
@@ -486,10 +523,6 @@ export class Player {
       this.playAnim('Idle');
     }
 
-    const bound = GAME.FLOOR_SIZE - 1;
-    this.position.x = Math.max(-bound, Math.min(bound, this.position.x));
-    this.position.z = Math.max(-bound, Math.min(bound, this.position.z));
-
     this._updateMesh();
   }
 
@@ -541,6 +574,40 @@ export class Player {
 
   getHandPosition() {
     return this.position.clone().add(new THREE.Vector3(0, 1.2 + this.groundOffset, 0));
+  }
+
+  _getGroundHeight(px, pz) {
+    if (!this.world) return 0;
+    // Check a 2×2 area around the player's position for the highest ground.
+    // This prevents falling through narrow gaps between tiles.
+    let maxY = -999;
+    const x0 = Math.floor(px);
+    const z0 = Math.floor(pz);
+    for (let dx = 0; dx <= 1; dx++) {
+      for (let dz = 0; dz <= 1; dz++) {
+        const y = this.world.getColumnTop(x0 + dx, z0 + dz);
+        if (y > maxY) maxY = y;
+      }
+    }
+    return maxY;
+  }
+
+  _respawnFromVoid() {
+    // Respawn at level start position
+    if (this.world && this.world.startPosition) {
+      this.position.copy(this.world.startPosition);
+    } else {
+      this.position.set(0, 0, 0);
+    }
+    this.velocity.set(0, 0, 0);
+    // Brief damage flash to indicate "whoops"
+    this._flashDamage();
+    // Emit a toast/event for UI feedback
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('voidloop:playerFell', {
+        detail: { message: 'Whoops! Watch your step!' }
+      }));
+    }
   }
 
   _flashDamage() {

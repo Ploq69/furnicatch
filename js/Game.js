@@ -7,7 +7,7 @@ import { Orb } from './Orb.js';
 import { ParticleSystem } from './ParticleSystem.js';
 import { UIManager } from './UIManager.js';
 import { CharPreview } from './CharPreview.js';
-import { GAME, FURNITURE_TIERS, FURNITURE_LEVELS, LETTER_WORDS, QUIZ_MODES, VOCABULARY, PROP_VOCABULARY, ULTIMATE_CHARACTERS } from './constants.js';
+import { GAME, FURNITURE_TIERS, FURNITURE_LEVELS, LETTER_WORDS, QUIZ_MODES, VOCABULARY, PROP_VOCABULARY, ULTIMATE_CHARACTERS, CATCHABLE_CATALOG, CATCHABLE_WORDS, ESL_BIOMES } from './constants.js';
 import { audio } from './AudioManager.js';
 import { AimController } from './AimController.js';
 import { ImpactController } from './ImpactController.js';
@@ -128,12 +128,16 @@ export class Game {
     this.currentChallengeType = 'furniture';
     this.currentLetter = null;
     this.speakerOptions = [];
+    this.currentChoiceOptions = [];
     this.correctSpeakerWord = null;
     this.selectedSpeakerWord = null;
     this.letterChallengePhase = 'speakers';
     this.typedWord = '';
     this.challengeCompleting = false;
     this.challengeCameraSide = 1;
+    this.biomeKeys = ['farm_garden', 'food_market', 'space_camp'];
+    this.currentBiomeIndex = 0;
+    this.selectedBiomeKey = this.biomeKeys[this.currentBiomeIndex];
     
     // Hint state
     this.hintsUsed = 0;
@@ -162,6 +166,7 @@ export class Game {
     this.ui.bindBaseClick('boots', () => this._buyUpgrade('boots'));
     this.ui.bindBaseClick('orb', () => this._buyUpgrade('orb'));
     this.ui.bindHint(() => this._useHint());
+    this.ui.bindBiomeSelect((biomeKey) => this._selectBiome(biomeKey));
   }
 
   async init() {
@@ -270,16 +275,19 @@ export class Game {
         this.charPreview.showCharacter(ULTIMATE_CHARACTERS[index]);
       },
       (index) => {
-        // On confirm: start game with selected character
+        // On confirm: choose the first biome before loading the world.
         const char = ULTIMATE_CHARACTERS[index];
         this.selectedCharPath = char.path;
-        this._startGameWithCharacter(char.path);
+        this.ui.hideCharSelect();
+        this.ui.setSelectedBiome(this.selectedBiomeKey);
+        this.ui.showBiomeSelect(() => this._startGameWithCharacter(this.selectedCharPath));
       }
     );
   }
 
   async _startGameWithCharacter(charPath) {
     this.ui.hideCharSelect();
+    this.ui.hideBiomeSelect();
     this.ui.showLoading('Loading hunter...');
 
     // Hide preview and clean up
@@ -290,7 +298,7 @@ export class Game {
     await this.player.ready;
 
     this.ui.loadingText.textContent = 'Generating world...';
-    await this.world.generate('meadow');
+    await this.world.generate(this.selectedBiomeKey);
 
     // Snap player to terrain surface at origin
     // Safety: ensure spawn point is at least at default ground level so player
@@ -564,13 +572,21 @@ export class Game {
     this.hintsUsed = 0;
     this.hintedIndices = [];
     const level = furniture.level || 1;
-    this.currentQuizMode = this._getQuizModeForLevel(level);
+    this.currentQuizMode = this._getQuizModeForEntity(this.currentVocab.word, 'furniture');
+    this.currentChoiceOptions = this.currentQuizMode.type === 'choice'
+      ? this._buildWordChoiceOptions(this.currentVocab.word, this.currentVocab.biome)
+      : [];
     this.challengeCompleting = false;
     
     const mesh = furniture.container;
-    this.ui.showVocabChallenge(this.currentVocab, mesh, this.streak, this.currentQuizMode, level, this.hintsUsed);
-    this.typingGlyphView.show(this.ui.vocabPreview, this.currentVocab.word, this.currentQuizMode.revealPending);
-    this.floatingGlyphs.showLiveTypedWord(this.currentFurniture.position, this.typedWord, this.hintedIndices);
+    this.ui.showVocabChallenge(this.currentVocab, mesh, this.streak, this.currentQuizMode, level, this.hintsUsed, this.currentChoiceOptions);
+    if (this.currentQuizMode.type === 'spell') {
+      this.typingGlyphView.show(this.ui.vocabPreview, this.currentVocab.word, this.currentQuizMode.revealPending);
+      this.floatingGlyphs.showLiveTypedWord(this.currentFurniture.position, this.typedWord, this.hintedIndices);
+    } else {
+      this.typingGlyphView.hide();
+      this.floatingGlyphs.hideLiveTypedWord();
+    }
     this._snapChallengeCamera();
     if (this.currentQuizMode.playAudio) {
       tts.playWord(this.currentVocab.word);
@@ -581,22 +597,30 @@ export class Game {
     this.state = STATES.VOCAB_CHALLENGE;
     this.currentChallengeType = 'prop';
     this.currentFurniture = prop;
-    this.currentVocab = { word: prop.word };
+    this.currentVocab = { word: prop.word, ttsWord: prop.ttsWord, biome: prop.biome, resourceDrops: prop.resourceDrops };
     this.currentLetter = null;
     this.typedWord = '';
     this.hintsUsed = 0;
     this.hintedIndices = [];
     const level = prop.level || 1;
-    this.currentQuizMode = this._getQuizModeForLevel(level);
+    this.currentQuizMode = this._getQuizModeForEntity(prop.collectionKey || prop.word, 'prop');
+    this.currentChoiceOptions = this.currentQuizMode.type === 'choice'
+      ? this._buildWordChoiceOptions(this.currentVocab.word, this.currentVocab.biome)
+      : [];
     this.challengeCompleting = false;
     
     const mesh = prop.container;
-    this.ui.showVocabChallenge(this.currentVocab, mesh, this.streak, this.currentQuizMode, level, this.hintsUsed);
-    this.typingGlyphView.show(this.ui.vocabPreview, this.currentVocab.word, this.currentQuizMode.revealPending);
-    this.floatingGlyphs.showLiveTypedWord(this.currentFurniture.position, this.typedWord, this.hintedIndices);
+    this.ui.showVocabChallenge(this.currentVocab, mesh, this.streak, this.currentQuizMode, level, this.hintsUsed, this.currentChoiceOptions);
+    if (this.currentQuizMode.type === 'spell') {
+      this.typingGlyphView.show(this.ui.vocabPreview, this.currentVocab.word, this.currentQuizMode.revealPending);
+      this.floatingGlyphs.showLiveTypedWord(this.currentFurniture.position, this.typedWord, this.hintedIndices);
+    } else {
+      this.typingGlyphView.hide();
+      this.floatingGlyphs.hideLiveTypedWord();
+    }
     this._snapChallengeCamera();
     if (this.currentQuizMode.playAudio) {
-      tts.playWord(this.currentVocab.word);
+      tts.playWord(this.currentVocab.ttsWord || this.currentVocab.word);
     }
   }
 
@@ -639,6 +663,7 @@ export class Game {
   _useHint() {
     if (this.state !== STATES.VOCAB_CHALLENGE) return;
     if (this.challengeCompleting) return;
+    if (this.currentQuizMode?.type === 'choice') return;
 
     let targetWord = '';
     if (this.currentChallengeType === 'furniture' && this.currentVocab) {
@@ -720,6 +745,7 @@ export class Game {
       this._onLetterTypeKey(key);
       return;
     }
+    if (this.currentQuizMode?.type === 'choice') return;
     
     if (key === 'Backspace') {
       this.typedWord = this.typedWord.slice(0, -1);
@@ -782,8 +808,23 @@ export class Game {
   }
 
   _onSpeakerPlay(index) {
-    if (this.state !== STATES.VOCAB_CHALLENGE || this.currentChallengeType !== 'letter') return;
-    if (this.letterChallengePhase !== 'speakers' || this.challengeCompleting) return;
+    if (this.state !== STATES.VOCAB_CHALLENGE || this.challengeCompleting) return;
+
+    if (this.currentChallengeType !== 'letter') {
+      if (this.currentQuizMode?.type === 'choice') {
+        const option = this.currentChoiceOptions[index];
+        if (!option) return;
+        this.ui.updateSpeakerState(index, 'playing');
+        tts.playWord(option.word);
+        window.setTimeout(() => this.ui.updateSpeakerState(index, null), 260);
+      } else if (index === 0) {
+        const word = this.currentVocab?.ttsWord || this.currentVocab?.word || this._getTargetWord();
+        if (word) tts.playWord(word);
+      }
+      return;
+    }
+
+    if (this.letterChallengePhase !== 'speakers') return;
     const option = this.speakerOptions[index];
     if (!option) return;
 
@@ -793,8 +834,30 @@ export class Game {
   }
 
   _onSpeakerChoice(index) {
-    if (this.state !== STATES.VOCAB_CHALLENGE || this.currentChallengeType !== 'letter') return;
-    if (this.letterChallengePhase !== 'speakers' || this.challengeCompleting) return;
+    if (this.state !== STATES.VOCAB_CHALLENGE || this.challengeCompleting) return;
+
+    if (this.currentChallengeType !== 'letter') {
+      if (this.currentQuizMode?.type !== 'choice') return;
+      const option = this.currentChoiceOptions[index];
+      if (!option) return;
+      if (option.correct) {
+        this.ui.updateSpeakerAnswerState(index, 'correct');
+        audio.playTypeCorrect(this.streak);
+        this.challengeCompleting = true;
+        window.setTimeout(() => {
+          if (this.state === STATES.VOCAB_CHALLENGE) this._successChallenge();
+        }, 260);
+      } else {
+        audio.playTypeWrong();
+        this.ui.ensureVocabChallengeVisible();
+        this.ui.shakeScreen();
+        this.ui.updateSpeakerAnswerState(index, 'wrong');
+        window.setTimeout(() => this.ui.updateSpeakerAnswerState(index, null), 420);
+      }
+      return;
+    }
+
+    if (this.letterChallengePhase !== 'speakers') return;
     const option = this.speakerOptions[index];
     if (!option) return;
 
@@ -897,6 +960,10 @@ export class Game {
         const shinyBonus = this.currentFurniture.variant === 'shiny' ? 2 : 1;
         reward = Math.floor(this.currentFurniture.tier.reward * this.streak * levelConfig.rewardMultiplier * shinyBonus * hintBonus);
         levelUp = record.level > this.currentFurniture.level ? record.level : null;
+        const resourceMultiplier = this.currentFurniture.variant === 'shiny' ? 2 : 1;
+        const earned = this.collectionStore.addResources(this.currentFurniture.resourceDrops, resourceMultiplier);
+        const earnedText = Object.entries(earned).map(([name, amount]) => `+${amount} ${name}`).join('  ');
+        if (earnedText) this.ui.showFeedback(earnedText, '#a5b4fc');
       } else {
         record = this.collectionStore.recordCapture(this.currentVocab.word, this.streak, this.currentFurniture.variant);
         levelConfig = FURNITURE_LEVELS.find(item => item.level === this.currentFurniture.level) || FURNITURE_LEVELS[0];
@@ -926,6 +993,7 @@ export class Game {
     this.state = STATES.PLAYING;
     this.currentFurniture = null;
     this.currentVocab = null;
+    this.currentChoiceOptions = [];
     this.hintsUsed = 0;
     this.hintedIndices = [];
   }
@@ -970,6 +1038,7 @@ export class Game {
     this.selectedSpeakerWord = null;
     this.correctSpeakerWord = null;
     this.speakerOptions = [];
+    this.currentChoiceOptions = [];
     this.currentChallengeType = 'furniture';
     this.hintsUsed = 0;
     this.hintedIndices = [];
@@ -995,6 +1064,7 @@ export class Game {
     this.selectedSpeakerWord = null;
     this.correctSpeakerWord = null;
     this.speakerOptions = [];
+    this.currentChoiceOptions = [];
     this.currentChallengeType = 'furniture';
     this.hintsUsed = 0;
     this.hintedIndices = [];
@@ -1030,7 +1100,9 @@ export class Game {
   _returnToBase() {
     this.state = STATES.BASE;
     this._updateBaseUI();
-    this.ui.showBase(this._getTotalCollectionCount(), VOCABULARY.length + 26 + PROP_VOCABULARY.length, this.coins, this.incomePerSec);
+    this.ui.showBase(this._getTotalCollectionCount(), this._getTotalCollectibleCount(), this.coins, this.incomePerSec);
+    this.ui.updateResources(this.collectionStore.getResources());
+    this.ui.setSelectedBiome(this.selectedBiomeKey);
     audio.playLevelUp();
   }
 
@@ -1045,9 +1117,10 @@ export class Game {
   }
 
   _updateBaseUI() {
-    this.ui.baseCollectionCount.textContent = `${this._getTotalCollectionCount()} / ${VOCABULARY.length + 26 + PROP_VOCABULARY.length}`;
+    this.ui.baseCollectionCount.textContent = `${this._getTotalCollectionCount()} / ${this._getTotalCollectibleCount()}`;
     this.ui.baseCoinCount.textContent = Math.floor(this.coins);
     this.ui.baseIncome.textContent = `+${this.incomePerSec.toFixed(1)}`;
+    this.ui.updateResources(this.collectionStore.getResources());
     
     this.ui.setUpgradeEnabled('satchel', this.coins >= this.upgradeCosts.satchel);
     this.ui.setUpgradeEnabled('boots', this.coins >= this.upgradeCosts.boots);
@@ -1056,6 +1129,10 @@ export class Game {
 
   _getTotalCollectionCount() {
     return this.collectionStore.getUniqueCount() + this.collectionStore.getUniqueLetterCount() + this.collectionStore.getUniquePropCount();
+  }
+
+  _getTotalCollectibleCount() {
+    return CATCHABLE_CATALOG.length + 26;
   }
 
   _buyUpgrade(key) {
@@ -1097,7 +1174,7 @@ export class Game {
     }
     for (const [key, record] of Object.entries(this.collectionStore.getAllPropRecords())) {
       if (!record.captures) continue;
-      const prop = PROP_VOCABULARY.find(p => p.word === key);
+      const prop = CATCHABLE_CATALOG.find(p => p.word === key) || PROP_VOCABULARY.find(p => p.word === key);
       if (prop) {
         const tier = FURNITURE_TIERS[prop.tier] || FURNITURE_TIERS.common;
         const levelConfig = FURNITURE_LEVELS.find(item => item.level === record.level) || FURNITURE_LEVELS[0];
@@ -1112,19 +1189,46 @@ export class Game {
     this.ui.hideBase();
     this.state = STATES.PLAYING;
     
-    // If world is empty of furniture, regenerate
-    const activeFurniture = this.world.getActiveFurniture();
-    if (activeFurniture.length < 3) {
-      this.world.clear();
-      this.world.generate('meadow');
-      this.player.position.set(0, 0, 0);
-      this.cameraYaw = 0;
-    }
+    this.world.clear();
+    const biomeKey = this.selectedBiomeKey;
+    this.world.generate(biomeKey);
+    this.player.position.set(0, 0, 0);
+    this.cameraYaw = 0;
+    this.ui.showFeedback(ESL_BIOMES[biomeKey]?.name || 'Expedition', '#a5b4fc');
   }
 
-  _getQuizModeForLevel(level) {
-    const config = FURNITURE_LEVELS.find(item => item.level === level) || FURNITURE_LEVELS[0];
-    return QUIZ_MODES[config.quizMode] || QUIZ_MODES.guided;
+  _selectBiome(biomeKey) {
+    if (!this.biomeKeys.includes(biomeKey)) return;
+    this.selectedBiomeKey = biomeKey;
+    this.currentBiomeIndex = this.biomeKeys.indexOf(biomeKey);
+  }
+
+  _getQuizModeForEntity(collectionKey, type = 'prop') {
+    let captures = 0;
+    if (type === 'furniture') {
+      captures = this.collectionStore.getCaptureCount(collectionKey);
+    } else {
+      captures = this.collectionStore.getPropRecord(collectionKey).captures || 0;
+    }
+    if (captures <= 0) return QUIZ_MODES.spell;
+    return captures % 2 === 1 ? QUIZ_MODES.choice : QUIZ_MODES.spell;
+  }
+
+  _buildWordChoiceOptions(correctWord, biome = null) {
+    const normalized = String(correctWord || '').toLowerCase();
+    const sameBiome = CATCHABLE_CATALOG
+      .filter(item => item.biome === biome && item.word !== normalized)
+      .map(item => item.word);
+    const similarLength = sameBiome.filter(word => Math.abs(word.length - normalized.length) <= 2);
+    const fallback = CATCHABLE_WORDS.filter(word => word !== normalized);
+    const pool = [...new Set([...similarLength, ...sameBiome, ...fallback])];
+    this._shuffle(pool);
+    const options = [
+      { word: normalized, correct: true },
+      { word: pool[0] || 'tree', correct: false },
+      { word: pool[1] || 'chair', correct: false },
+    ];
+    return this._shuffle(options);
   }
 
   _onResize() {

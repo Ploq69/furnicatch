@@ -225,11 +225,12 @@ export class PetLetter {
       return;
     }
 
-    // 2. Check for blocks
+    // 2. Check for floating blocks only (ground blocks are never mineable by pet)
     let nearestBlock = null;
     let nearestBlockDist = PET_ATTACK_RANGE;
     for (const block of world.blocks.values()) {
       if (block.destroyed) continue;
+      if (!block.isFloating) continue; // Pet only mines floating blocks
       const dist = this.container.position.distanceTo(block.position);
       if (dist < nearestBlockDist) {
         nearestBlockDist = dist;

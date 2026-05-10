@@ -31,6 +31,8 @@ export class UIManager {
     this.baseCollectionCount = document.getElementById('base-collection-count');
     this.baseCoinCount = document.getElementById('base-coin-count');
     this.baseIncome = document.getElementById('base-income');
+    this.baseResources = document.getElementById('base-resources');
+    this.biomeCards = [...document.querySelectorAll('.biome-card')];
     this.btnExpedition = document.getElementById('btn-expedition');
     
     this.upgradeCards = {
@@ -49,6 +51,8 @@ export class UIManager {
     this.charNote = document.getElementById('char-note');
     this.charDots = document.getElementById('char-dots');
     this.charIndex = 0;
+    this.biomeSelectScreen = document.getElementById('biome-select-screen');
+    this.btnBiomeConfirm = document.getElementById('btn-biome-confirm');
     
     // Power meter
     this.powerMeter = document.getElementById('power-meter');
@@ -97,7 +101,7 @@ export class UIManager {
     this.capturedCount.textContent = captured;
   }
 
-  showVocabChallenge(vocabEntry, trappedMesh, streak = 1, quizMode = { showWord: true, revealPending: true, label: 'Type the English word' }, level = 1, hintsUsed = 0) {
+  showVocabChallenge(vocabEntry, trappedMesh, streak = 1, quizMode = { type: 'spell', showWord: false, revealPending: false, label: 'Listen, then spell the word' }, level = 1, hintsUsed = 0, choiceOptions = []) {
     this.streak = streak;
     this.quizMode = quizMode;
     document.body.style.cursor = 'auto';
@@ -106,14 +110,57 @@ export class UIManager {
     this.vocabTargetName.style.color = '#a5b4fc';
     this.vocabStreak.textContent = `Streak: x${streak} · Mastery Lv ${level}`;
     this.vocabInstruction.textContent = quizMode.label || 'Type the English word to capture it!';
-    this.speakerRow.style.display = 'none';
-    this.speakerAnswerRow.style.display = 'none';
-    this._renderInputDisplay(vocabEntry.word, '', quizMode.revealPending, []);
+    this.speakerRow.style.display = 'grid';
+    this.speakerAnswerRow.style.display = quizMode.type === 'choice' ? 'grid' : 'none';
     this.setTimerVisible(false);
     this.vocabTimerBar.style.width = '100%';
     this.vocabTimerBar.style.background = '#fbbf24';
     this.vocabTimerText.textContent = '';
-    this._ensureHintButton(vocabEntry.word, hintsUsed);
+    this.letterOptions = choiceOptions || [];
+
+    if (quizMode.type === 'choice') {
+      this.speakerRow.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+      this.speakerRow.style.justifyContent = '';
+      this.speakerAnswerRow.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+      this.vocabInputDisplay.innerHTML = '';
+      this._removeHintButton();
+      this.speakerButtons.forEach((button, index) => {
+        const option = this.letterOptions[index];
+        button.className = 'speaker-btn';
+        button.disabled = !option;
+        button.style.display = option ? '' : 'none';
+        button.title = option ? `Hear ${option.word}` : '';
+        button.setAttribute('aria-label', option ? `Hear ${option.word}` : `Play option ${index + 1}`);
+      });
+      this.speakerAnswerButtons.forEach((button, index) => {
+        const option = this.letterOptions[index];
+        button.className = 'speaker-answer-btn';
+        button.disabled = !option;
+        button.style.display = option ? '' : 'none';
+        button.style.fontSize = '';
+        button.textContent = option ? option.word.toUpperCase() : String(index + 1);
+        button.title = option ? `Choose ${option.word}` : `Choose option ${index + 1}`;
+        button.setAttribute('aria-label', option ? `Choose ${option.word}` : `Choose option ${index + 1}`);
+      });
+    } else {
+      this.speakerRow.style.gridTemplateColumns = 'minmax(96px, 140px)';
+      this.speakerRow.style.justifyContent = 'center';
+      this._renderInputDisplay(vocabEntry.word, '', quizMode.revealPending, []);
+      this._ensureHintButton(vocabEntry.word, hintsUsed);
+      this.speakerButtons.forEach((button, index) => {
+        button.className = 'speaker-btn';
+        button.disabled = index !== 0;
+        button.style.display = index === 0 ? '' : 'none';
+        button.title = `Hear ${vocabEntry.word}`;
+        button.setAttribute('aria-label', `Hear ${vocabEntry.word}`);
+      });
+      this.speakerAnswerButtons.forEach((button, index) => {
+        button.className = 'speaker-answer-btn';
+        button.disabled = false;
+        button.style.display = '';
+        button.textContent = String(index + 1);
+      });
+    }
     
     // Clone the furniture mesh for preview
     this.vocabPreview.innerHTML = '';
@@ -159,16 +206,21 @@ export class UIManager {
     preview.style.cssText = 'font-size:72px; font-weight:900; color:#facc15; text-shadow:0 0 22px rgba(250,204,21,0.65);';
     this.vocabPreview.appendChild(preview);
     this.speakerRow.style.display = 'grid';
+    this.speakerRow.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+    this.speakerRow.style.justifyContent = '';
     this.speakerAnswerRow.style.display = 'grid';
+    this.speakerAnswerRow.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
     this.speakerButtons.forEach((button, index) => {
       button.className = 'speaker-btn';
       button.disabled = false;
+      button.style.display = '';
       button.title = `Speaker ${index + 1}`;
       button.setAttribute('aria-label', `Play speaker ${index + 1}`);
     });
     this.speakerAnswerButtons.forEach((button, index) => {
       button.className = 'speaker-answer-btn';
       button.disabled = false;
+      button.style.display = '';
       button.textContent = String(index + 1);
       button.title = `Choose option ${index + 1}`;
       button.setAttribute('aria-label', `Choose option ${index + 1}`);
@@ -220,10 +272,12 @@ export class UIManager {
     this.speakerButtons.forEach((button) => {
       button.className = 'speaker-btn';
       button.disabled = false;
+      button.style.display = '';
     });
     this.speakerAnswerButtons.forEach((button) => {
       button.className = 'speaker-answer-btn';
       button.disabled = false;
+      button.style.display = '';
     });
     this.setTimerVisible(true);
     this._removeHintButton();
@@ -341,6 +395,20 @@ export class UIManager {
     this.baseIncome.textContent = `+${incomePerSec.toFixed(1)}`;
   }
 
+  updateResources(resources = {}) {
+    if (!this.baseResources) return;
+    const entries = Object.entries(resources)
+      .filter(([, amount]) => amount > 0)
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (!entries.length) {
+      this.baseResources.innerHTML = '<span style="opacity:0.55;">Catch things to gather resources.</span>';
+      return;
+    }
+    this.baseResources.innerHTML = entries.map(([name, amount]) =>
+      `<span style="display:inline-flex; align-items:center; gap:6px; padding:6px 9px; border-radius:8px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.1);"><strong style="color:#a5b4fc;">${name}</strong> ${amount}</span>`
+    ).join('');
+  }
+
   hideBase() {
     this.baseScreen.style.display = 'none';
     this.hud.style.display = 'flex';
@@ -363,6 +431,40 @@ export class UIManager {
 
   bindExpedition(callback) {
     this.btnExpedition.addEventListener('click', callback);
+  }
+
+  bindBiomeSelect(callback) {
+    this.biomeCards.forEach((card) => {
+      card.addEventListener('click', () => {
+        const biome = card.dataset.biome;
+        this.setSelectedBiome(biome);
+        if (callback) callback(biome);
+      });
+    });
+  }
+
+  setSelectedBiome(biomeKey) {
+    this.biomeCards.forEach((card) => {
+      const selected = card.dataset.biome === biomeKey;
+      card.style.borderColor = selected ? 'rgba(165,180,252,0.85)' : 'rgba(255,255,255,0.1)';
+      card.style.background = selected ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.05)';
+      card.style.boxShadow = selected ? '0 0 18px rgba(99,102,241,0.18)' : 'none';
+    });
+  }
+
+  showBiomeSelect(onConfirm) {
+    if (!this.biomeSelectScreen) return;
+    this.biomeSelectScreen.style.display = 'block';
+    document.body.style.cursor = 'auto';
+    if (this.btnBiomeConfirm) {
+      this.btnBiomeConfirm.onclick = () => {
+        if (onConfirm) onConfirm();
+      };
+    }
+  }
+
+  hideBiomeSelect() {
+    if (this.biomeSelectScreen) this.biomeSelectScreen.style.display = 'none';
   }
 
   showCharSelect(characters, startIndex, onChange, onConfirm) {

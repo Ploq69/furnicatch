@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SBS Spelling Ace — Grade 3 Word Work</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-keyboard@3.7.82/build/css/index.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <img src="logo.avif" alt="SBS International School Bangkok" class="sbs-logo">
+      <button class="back-btn hidden" id="backBtn" onclick="goBack()">← Back</button>
+    </div>
+    <div class="header-center">
+      <img src="SpellingAceGraphic.png" alt="Spelling Ace">
+    </div>
+    <div class="header-right" id="headerStats">
+      <button class="btn btn-race hidden" id="raceToggleBtn" onclick="toggleRaceFromHeader()">Start Race! ⏱️</button>
+      <span class="stat-pill hidden" id="scorePill">⭐ <span id="scoreVal">0</span></span>
+      <span class="stat-pill hidden" id="streakPill">🔥 <span id="streakVal">0</span></span>
+      <span class="stat-pill hidden timer-display" id="timerPill">⏱️ <span id="timerVal">03:00</span></span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- CATEGORY SELECTION -->
+    <section id="screen-categories" class="fade-in">
+      <div class="text-center mb-8 mt-4">
+        <h2 class="text-3xl font-extrabold mb-2">Choose a Category</h2>
+        <p class="text-slate-500">Pick a word group to practice spelling!</p>
+      </div>
+      <div class="categories-grid" id="categoriesGrid"></div>
+    </section>
+
+    <!-- WORD LIST -->
+    <section id="screen-wordlist" class="hidden fade-in">
+      <div class="word-list-header">
+        <div>
+          <h2 id="wlTitle">Category</h2>
+          <p class="text-slate-500 text-sm" id="wlSubtitle">10 words</p>
+        </div>
+        <div class="mode-buttons" id="wlModeButtons">
+          <button class="btn btn-primary" onclick="startSpelling()">▶ Play Spelling Ace!</button>
+        </div>
+      </div>
+      <div class="tab-bar hidden" id="col05Tabs">
+        <button class="tab-btn active" id="tabSingulars" onclick="switchCol05Tab('singulars')">Singulars</button>
+        <button class="tab-btn" id="tabPlurals" onclick="switchCol05Tab('plurals')">Plurals</button>
+      </div>
+      <div id="wordListContainer">
+        <div class="word-list" id="wordList"></div>
+      </div>
+    </section>
+
+    <!-- SPELLING PRACTICE / RACE (shared UI) -->
+    <section id="screen-spelling" class="hidden fade-in">
+      <div class="quiz-area">
+        <div class="race-info hidden" id="raceInfo">
+          <div class="flex justify-center gap-6">
+            <div>⏱️ <span class="timer-display" id="raceTimer">03:00</span></div>
+            <div>🏁 Score: <span id="raceScore">0</span></div>
+          </div>
+        </div>
+        <div class="hidden text-lg font-bold text-red-600 mt-2" id="raceEndMsg"></div>
+
+        <button class="big-play-btn" id="spellingPlayBtn" onclick="playCurrentWordAudio()">▶️</button>
+        <div class="quiz-instruction" id="spellingInstruction">Listen and spell the word.</div>
+
+        <input type="text" class="spelling-input" id="spellingInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+        <div class="hint-text hidden" id="letterCountHint"></div>
+        <div class="hint-revealed hidden" id="revealedLettersHint"></div>
+        <button class="btn btn-hint hidden mt-2" id="revealLetterBtn" onclick="revealNextLetterHint()">Reveal Next Letter</button>
+
+        <div class="feedback-text feedback-info" id="spellingFeedback">Listen and spell the word.</div>
+
+        <button class="btn btn-primary" id="checkAnswerBtn" onclick="checkSpelling()">Check ✅</button>
+      </div>
+      <div class="simple-keyboard" id="spellingKeyboard"></div>
+    </section>
+
+    <!-- DEFINITION QUIZ -->
+    <section id="screen-definition" class="hidden fade-in">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="md:col-span-2">
+          <div class="quiz-area">
+            <div class="quiz-instruction text-lg font-bold text-slate-700 mb-2" id="defInstruction">What word matches this definition?</div>
+            <div class="bg-gray-50 border border-gray-200 p-4 rounded-lg mb-4 min-h-[5em] flex items-center justify-center" id="defDisplay">
+              <span class="text-slate-600">Loading...</span>
+            </div>
+            <button class="big-play-btn" id="defPlayBtn" onclick="playCurrentDefAudio()">▶️</button>
+            <input type="text" class="spelling-input lowercase" id="defInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <div class="feedback-text feedback-info" id="defFeedback">What word matches this definition?</div>
+            <button class="btn btn-primary" id="checkDefBtn" onclick="checkDefinition()">Check ✅</button>
+          </div>
+          <div class="simple-keyboard" id="defKeyboard"></div>
+        </div>
+        <div class="def-sidebar hidden md:block">
+          <h4>Word Bank</h4>
+          <div id="defWordBank"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MULTIPLE CHOICE QUIZ -->
+    <section id="screen-quiz" class="hidden fade-in">
+      <div class="quiz-area">
+        <div class="quiz-question" id="quizQuestion">What is the plural of...?</div>
+        <button class="big-play-btn" id="quizPlayBtn" onclick="playCurrentQuizAudio()">▶️</button>
+        <div class="choice-grid" id="choiceGrid"></div>
+        <div class="feedback-text feedback-info" id="quizFeedback">Choose the correct plural!</div>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/simple-keyboard@3.7.82/build/index.min.js"></script>
+  <script src="js/data.js"></script>
+  <script>
+    // ================= STATE =================
+    let currentScreen = 'categories';
+    let currentCategory = null;
+    let currentMode = null; // 'spelling', 'race', 'definition'
+    let wordsForQuiz = [];
+    let currentWordIndex = -1;
+    let currentWordObject = null;
+    let score = 0;
+    let streak = 0;
+    let incorrectGuessCount = 0;
+    let revealedHintChars = [];
+
+    // Audio
+    let currentAudioPlayer = null;
+    let isAudioPlaying = false;
+    let correctSound = null;
+    let wrongSound = null;
+
+    // Race
+    let isRaceMode = false;
+    let raceTimerInterval = null;
+    let raceTimeRemaining = 180;
+    let raceScore = 0;
+
+    // Definition
+    let isDefinitionMode = false;
+    let definitionWords = [];
+    let currentDefWordObject = null;
+    let currentDefWordIndex = -1;
+    let defScore = 0;
+    let defStreak = 0;
+
+    // col05 tab state
+    let col05ActiveTab = 'singulars'; // 'singulars' | 'plurals'
+
+    // Quiz mode
+    let isQuizMode = false;
+    let quizWords = [];
+    let currentQuizIndex = -1;
+    let currentQuizPair = null;
+
+    // Keyboards
+    let spellingKeyboard = null;
+    let defKeyboard = null;
+
+    // ================= INIT =================
+    function init() {
+      renderCategories();
+      initKeyboards();
+      setupEventListeners();
+      loadSounds();
+    }
+
+    function loadSounds() {
+      try {
+        correctSound = new Audio('js/Sounds/correctsound.mp3');
+        wrongSound = new Audio('js/Sounds/wrong.mp3');
+        correctSound.load();
+        wrongSound.load();
+      } catch (e) {
+        // Fallback to generated beeps if files don't exist
+        correctSound = null;
+        wrongSound = null;
+      }
+    }
+
+    function initKeyboards() {
+      const commonLayout = {
+        default: [
+          "q w e r t y u i o p",
+          "a s d f g h j k l",
+          "{shift} z x c v b n m {bksp}",
+          "{space} {enter}"
+        ],
+        shift: [
+          "Q W E R T Y U I O P",
+          "A S D F G H J K L",
+          "{shiftactivated} Z X C V B N M {bksp}",
+          "{space} {enter}"
+        ]
+      };
+      const commonDisplay = {
+        '{bksp}': '⌫ Bksp',
+        '{enter}': 'Enter ↵',
+        '{shift}': '⇧ Shift',
+        '{shiftactivated}': '⇧ Shift',
+        '{space}': 'Space'
+      };
+
+      const spellContainer = document.getElementById('spellingKeyboard');
+      const spellInput = document.getElementById('spellingInput');
+      spellingKeyboard = new SimpleKeyboard.default(spellContainer, {
+        onChange: input => {
+          if (spellInput.value !== input) {
+            spellInput.value = input;
+          }
+          spellInput.dispatchEvent(new Event('input', { bubbles: true }));
+        },
+        onKeyPress: (button, event) => handleOskKeyPress(button, 'spelling'),
+        theme: "simple-keyboard hg-theme-default myTheme",
+        layout: commonLayout,
+        display: commonDisplay,
+        inputName: 'spellAnswerOsk',
+        syncInstanceInputs: false,
+        useButtonTag: true,
+        preventMouseDownDefault: false,
+        physicalKeyboardHighlight: false,
+        physicalKeyboardHighlightPress: false,
+      });
+
+      const defContainer = document.getElementById('defKeyboard');
+      const defInput = document.getElementById('defInput');
+      defKeyboard = new SimpleKeyboard.default(defContainer, {
+        onChange: input => {
+          const lower = input.toLowerCase();
+          if (defInput.value !== lower) {
+            defInput.value = lower;
+          }
+          defInput.dispatchEvent(new Event('input', { bubbles: true }));
+        },
+        onKeyPress: (button, event) => handleOskKeyPress(button, 'definition'),
+        theme: "simple-keyboard hg-theme-default myTheme",
+        layout: commonLayout,
+        display: commonDisplay,
+        inputName: 'definitionAnswerOsk',
+        syncInstanceInputs: false,
+        useButtonTag: true,
+        preventMouseDownDefault: false,
+        physicalKeyboardHighlight: false,
+        physicalKeyboardHighlightPress: false,
+      });
+    }
+
+    function handleOskKeyPress(button, mode) {
+      const currentKeyboard = mode === 'spelling' ? spellingKeyboard : defKeyboard;
+      const currentInput = document.getElementById(mode === 'spelling' ? 'spellingInput' : 'defInput');
+      const checkBtn = document.getElementById(mode === 'spelling' ? 'checkAnswerBtn' : 'checkDefBtn');
+
+      if (!currentKeyboard || !currentInput) return;
+      if (currentInput.disabled) return;
+
+      if (button === "{shift}" || button === "{shiftactivated}") {
+        const currentLayout = currentKeyboard.options.layoutName || 'default';
+        const newLayout = (currentLayout === "default") ? "shift" : "default";
+        currentKeyboard.setOptions({ layoutName: newLayout });
+        return;
+      }
+
+      if (button.length === 1 && currentKeyboard.options.layoutName === 'shift') {
+        if (mode === 'spelling') {
+          currentKeyboard.setOptions({ layoutName: 'default' });
+        }
+      }
+
+      if (button === "{enter}") {
+        if (checkBtn && !checkBtn.disabled) {
+          if (mode === 'spelling') checkSpelling();
+          else checkDefinition();
+        }
+        if (currentKeyboard.options.layoutName === 'shift') {
+          currentKeyboard.setOptions({ layoutName: 'default' });
+        }
+      }
+
+      if (button === "{space}" && currentKeyboard.options.layoutName === 'shift') {
+        currentKeyboard.setOptions({ layoutName: 'default' });
+      }
+    }
+
+    function setupEventListeners() {
+      const spellInput = document.getElementById('spellingInput');
+      spellInput.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.keyCode === 13) && !document.getElementById('checkAnswerBtn').disabled && !spellInput.disabled) {
+          e.preventDefault();
+          checkSpelling();
+        }
+      });
+
+      const defInput = document.getElementById('defInput');
+      defInput.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.keyCode === 13) && !document.getElementById('checkDefBtn').disabled && !defInput.disabled) {
+          e.preventDefault();
+          checkDefinition();
+        }
+      });
+
+      // Global fallback
+      document.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.keyCode !== 13) return;
+        const active = document.activeElement;
+        if (active === spellInput && !document.getElementById('checkAnswerBtn').disabled && !spellInput.disabled) {
+          e.preventDefault();
+          checkSpelling();
+        } else if (active === defInput && !document.getElementById('checkDefBtn').disabled && !defInput.disabled) {
+          e.preventDefault();
+          checkDefinition();
+        }
+      });
+    }
+
+    // ================= SCREEN NAVIGATION =================
+    function showScreen(name) {
+      document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+      document.getElementById('screen-' + name).classList.remove('hidden');
+      currentScreen = name;
+      updateHeader();
+    }
+
+    function updateHeader() {
+      const backBtn = document.getElementById('backBtn');
+      const scorePill = document.getElementById('scorePill');
+      const streakPill = document.getElementById('streakPill');
+      const timerPill = document.getElementById('timerPill');
+      const raceBtn = document.getElementById('raceToggleBtn');
+
+      backBtn.classList.toggle('hidden', currentScreen === 'categories');
+
+      if (currentScreen === 'spelling') {
+        scorePill.classList.remove('hidden');
+        streakPill.classList.remove('hidden');
+        // Show race button only in spelling practice (not race mode itself)
+        raceBtn.classList.toggle('hidden', isRaceMode);
+        timerPill.classList.toggle('hidden', !isRaceMode);
+      } else if (currentScreen === 'definition' || currentScreen === 'quiz') {
+        scorePill.classList.remove('hidden');
+        streakPill.classList.remove('hidden');
+        raceBtn.classList.add('hidden');
+        timerPill.classList.add('hidden');
+      } else {
+        scorePill.classList.add('hidden');
+        streakPill.classList.add('hidden');
+        raceBtn.classList.add('hidden');
+        timerPill.classList.add('hidden');
+      }
+    }
+
+    function goBack() {
+      stopAudio();
+      if (isRaceMode) stopRace();
+      if (currentScreen === 'wordlist') {
+        currentCategory = null;
+        showScreen('categories');
+      } else if (currentScreen === 'spelling' || currentScreen === 'definition' || currentScreen === 'quiz') {
+        resetQuizState();
+        showScreen('wordlist');
+      }
+    }
+
+    function resetQuizState() {
+      stopAudio();
+      stopRace();
+      isRaceMode = false;
+      isDefinitionMode = false;
+      isQuizMode = false;
+      score = 0;
+      streak = 0;
+      incorrectGuessCount = 0;
+      revealedHintChars = [];
+      currentWordIndex = -1;
+      currentWordObject = null;
+      wordsForQuiz = [];
+      quizWords = [];
+      currentQuizIndex = -1;
+      currentQuizPair = null;
+      updateScoreDisplay();
+      document.getElementById('raceInfo').classList.add('hidden');
+      document.getElementById('raceEndMsg').classList.add('hidden');
+      document.getElementById('spellingInstruction').textContent = 'Listen and spell the word.';
+    }
+
+    function updateScoreDisplay() {
+      document.getElementById('scoreVal').textContent = score;
+      document.getElementById('streakVal').textContent = streak;
+      document.getElementById('timerVal').textContent = formatTime(raceTimeRemaining);
+      document.getElementById('raceTimer').textContent = formatTime(raceTimeRemaining);
+      document.getElementById('raceScore').textContent = raceScore;
+    }
+
+    function formatTime(s) {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
+
+    // ================= CATEGORIES =================
+    function renderCategories() {
+      const grid = document.getElementById('categoriesGrid');
+      grid.innerHTML = CATEGORIES.map(cat => `
+        <div class="category-card" onclick="selectCategory('${cat.id}')" style="border-color: ${cat.color}33;">
+          <div class="icon">${cat.icon}</div>
+          <h3 style="color: ${cat.color}">${cat.title}</h3>
+          <p>${cat.subtitle}</p>
+        </div>
+      `).join('');
+    }
+
+    function selectCategory(catId) {
+      currentCategory = CATEGORIES.find(c => c.id === catId);
+      renderWordList();
+      showScreen('wordlist');
+    }
+
+    // ================= WORD LIST =================
+    function renderWordList() {
+      document.getElementById('wlTitle').textContent = currentCategory.title;
+      document.getElementById('wlSubtitle').textContent = `${currentCategory.words.length} words — ${currentCategory.subtitle}`;
+
+      const isCol05 = currentCategory.id === 'col05';
+      const tabs = document.getElementById('col05Tabs');
+      const modeButtons = document.getElementById('wlModeButtons');
+      const container = document.getElementById('wordListContainer');
+
+      if (isCol05) {
+        tabs.classList.remove('hidden');
+        modeButtons.innerHTML = `
+          <button class="btn btn-primary" onclick="startSpelling()">▶ Play Spelling Ace!</button>
+          <button class="btn btn-warning" onclick="startQuiz()">❓ Quiz Mode</button>
+        `;
+        container.innerHTML = `
+          <div class="dual-list" id="col05DualList">
+            <div class="word-list" id="singularList"></div>
+            <div class="word-list" id="pluralList"></div>
+          </div>
+        `;
+        renderCol05Lists();
+      } else {
+        tabs.classList.add('hidden');
+        modeButtons.innerHTML = `
+          <button class="btn btn-primary" onclick="startSpelling()">▶ Play Spelling Ace!</button>
+        `;
+        container.innerHTML = `<div class="word-list" id="wordList"></div>`;
+        const list = document.getElementById('wordList');
+        list.innerHTML = currentCategory.words.map((w, i) => {
+          const audioPath = getAudioPath(currentCategory.id, w.word, 'en_word');
+          return `
+            <div class="word-row">
+              <button class="play-btn" onclick="playAudio('${audioPath}')">▶</button>
+              <div class="word-text">${w.word}</div>
+              <div class="word-def">${w.def}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function renderCol05Lists() {
+      const singularList = document.getElementById('singularList');
+      const pluralList = document.getElementById('pluralList');
+      if (!singularList || !pluralList) return;
+
+      singularList.innerHTML = currentCategory.words.map(w => {
+        const audioPath = getSingularAudioPath(currentCategory.id, w.singular);
+        return `
+          <div class="word-row">
+            <button class="play-btn" onclick="playAudio('${audioPath}')">▶</button>
+            <div class="word-text">${w.singular}</div>
+            <div class="word-def">${w.def}</div>
+          </div>
+        `;
+      }).join('');
+
+      pluralList.innerHTML = currentCategory.words.map(w => {
+        const audioPath = getAudioPath(currentCategory.id, w.word, 'en_plural');
+        return `
+          <div class="word-row">
+            <button class="play-btn" onclick="playAudio('${audioPath}')">▶</button>
+            <div class="word-text">${w.word}</div>
+            <div class="word-def">${w.def}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function switchCol05Tab(tab) {
+      col05ActiveTab = tab;
+      document.getElementById('tabSingulars').classList.toggle('active', tab === 'singulars');
+      document.getElementById('tabPlurals').classList.toggle('active', tab === 'plurals');
+      const singularList = document.getElementById('singularList');
+      const pluralList = document.getElementById('pluralList');
+      if (singularList) singularList.style.display = tab === 'singulars' ? 'block' : 'none';
+      if (pluralList) pluralList.style.display = tab === 'plurals' ? 'block' : 'none';
+    }
+
+    // ================= AUDIO =================
+    function playAudio(path) {
+      stopAudio();
+      isAudioPlaying = true;
+      updateAudioButtons();
+
+      currentAudioPlayer = new Audio(path);
+      currentAudioPlayer.onended = () => {
+        isAudioPlaying = false;
+        updateAudioButtons();
+        enableInputIfActive();
+      };
+      currentAudioPlayer.onerror = () => {
+        isAudioPlaying = false;
+        updateAudioButtons();
+        enableInputIfActive();
+      };
+      currentAudioPlayer.play().catch(() => {
+        isAudioPlaying = false;
+        updateAudioButtons();
+        enableInputIfActive();
+      });
+    }
+
+    function stopAudio() {
+      if (currentAudioPlayer) {
+        currentAudioPlayer.pause();
+        currentAudioPlayer = null;
+      }
+      isAudioPlaying = false;
+      updateAudioButtons();
+    }
+
+    function updateAudioButtons() {
+      const bigBtn = document.getElementById('spellingPlayBtn');
+      if (bigBtn) {
+        bigBtn.disabled = isAudioPlaying;
+        bigBtn.textContent = isAudioPlaying ? '⏸️' : '▶️';
+      }
+      const defBtn = document.getElementById('defPlayBtn');
+      if (defBtn) {
+        defBtn.disabled = isAudioPlaying;
+        defBtn.textContent = isAudioPlaying ? '⏸️' : '▶️';
+      }
+    }
+
+    function enableInputIfActive() {
+      const spellInput = document.getElementById('spellingInput');
+      const defInput = document.getElementById('defInput');
+      if (spellInput && currentScreen === 'spelling') {
+        spellInput.disabled = false;
+        spellInput.focus();
+      }
+      if (defInput && currentScreen === 'definition') {
+        defInput.disabled = false;
+        defInput.focus();
+      }
+    }
+
+    function playCurrentWordAudio() {
+      if (!currentWordObject) return;
+      let path;
+      if (currentCategory.id === 'col05' && col05ActiveTab === 'singulars') {
+        path = getSingularAudioPath(currentCategory.id, currentWordObject.singular);
+      } else if (currentCategory.id === 'col05') {
+        path = getAudioPath(currentCategory.id, currentWordObject.word, 'en_plural');
+      } else {
+        path = getAudioPath(currentCategory.id, currentWordObject.word, 'en_word');
+      }
+      playAudio(path);
+    }
+
+    function playCurrentDefAudio() {
+      if (!currentDefWordObject) return;
+      const path = getAudioPath(currentCategory.id, currentDefWordObject.word, 'en_def');
+      playAudio(path);
+    }
+
+    // ================= SHUFFLE =================
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    // ================= SPELLING PRACTICE (INFINITE) =================
+    function startSpelling() {
+      resetQuizState();
+      isRaceMode = false;
+      wordsForQuiz = [...currentCategory.words];
+      shuffleArray(wordsForQuiz);
+      currentWordIndex = 0;
+      score = 0;
+      streak = 0;
+      updateScoreDisplay();
+      showScreen('spelling');
+      displayNextWord();
+    }
+
+    function getSpellingWord(w) {
+      // For col05, use singular or plural based on active tab
+      if (currentCategory.id === 'col05' && col05ActiveTab === 'singulars') {
+        return w.singular || w.word;
+      }
+      return w.word;
+    }
+
+    function displayNextWord() {
+      stopAudio();
+
+      // Infinite loop: reshuffle when exhausted
+      if (currentWordIndex === -1 || currentWordIndex >= wordsForQuiz.length) {
+        if (wordsForQuiz.length === 0) return;
+        shuffleArray(wordsForQuiz);
+        currentWordIndex = 0;
+      }
+
+      currentWordObject = wordsForQuiz[currentWordIndex];
+      incorrectGuessCount = 0;
+      revealedHintChars = [];
+      const spellWord = getSpellingWord(currentWordObject);
+
+      // Reset UI
+      const input = document.getElementById('spellingInput');
+      const feedback = document.getElementById('spellingFeedback');
+      const checkBtn = document.getElementById('checkAnswerBtn');
+      const instruction = document.getElementById('spellingInstruction');
+      const letterHint = document.getElementById('letterCountHint');
+      const revealedHint = document.getElementById('revealedLettersHint');
+      const revealBtn = document.getElementById('revealLetterBtn');
+
+      if (input) {
+        input.value = '';
+        input.className = 'spelling-input';
+        input.disabled = true;
+      }
+      if (spellingKeyboard) spellingKeyboard.setInput('', undefined, true);
+      if (feedback) {
+        feedback.textContent = 'Listen and spell the word.';
+        feedback.className = 'feedback-text feedback-info';
+      }
+      if (checkBtn) checkBtn.disabled = false;
+      if (instruction) {
+        if (isRaceMode && currentWordObject.singular) {
+          instruction.textContent = `Spell the plural of "${currentWordObject.singular}"`;
+        } else if (currentCategory.id === 'col05' && col05ActiveTab === 'singulars') {
+          instruction.textContent = `Spell the singular word`;
+        } else {
+          instruction.textContent = 'Listen and spell the word.';
+        }
+      }
+      if (letterHint) letterHint.classList.add('hidden');
+      if (revealedHint) revealedHint.classList.add('hidden');
+      if (revealBtn) {
+        revealBtn.classList.add('hidden');
+        revealBtn.disabled = true;
+      }
+
+      // Auto-play audio
+      playCurrentWordAudio();
+
+      // If audio doesn't play or fails quickly, enable input
+      setTimeout(() => {
+        if (!isAudioPlaying && input && !isRaceMode) {
+          input.disabled = false;
+          input.focus();
+        }
+      }, 300);
+
+      currentWordIndex++;
+    }
+
+    // ================= HINT SYSTEM (EXACT COPY FROM ORIGINAL) =================
+    function generateHintDisplay(correctWord, revealedChars) {
+      let display = "";
+      const lowerRevealed = revealedChars.map(c => c.toLowerCase());
+      for (let i = 0; i < correctWord.length; i++) {
+        const charToTest = correctWord[i];
+        const lowerChar = charToTest.toLowerCase();
+        if (lowerRevealed.includes(lowerChar)) {
+          display += charToTest + " ";
+        } else {
+          display += "_ ";
+        }
+      }
+      return display.trim();
+    }
+
+    function applyHints() {
+      if (!currentWordObject || isRaceMode) return;
+      const correctAnswer = getSpellingWord(currentWordObject);
+      const letterHint = document.getElementById('letterCountHint');
+      const revealedHint = document.getElementById('revealedLettersHint');
+      const revealBtn = document.getElementById('revealLetterBtn');
+
+      if (incorrectGuessCount >= 1) {
+        if (letterHint) {
+          letterHint.textContent = `The word has ${correctAnswer.length} letters.`;
+          letterHint.classList.remove('hidden');
+        }
+
+        // Auto-reveal first letter if not already revealed
+        if (revealedHintChars.length === 0 && correctAnswer.length > 0) {
+          const firstChar = correctAnswer[0];
+          if (!revealedHintChars.includes(firstChar)) {
+            revealedHintChars.push(firstChar);
+          }
+        }
+
+        if (revealedHint) {
+          revealedHint.textContent = generateHintDisplay(correctAnswer, revealedHintChars);
+          revealedHint.classList.remove('hidden');
+        }
+
+        if (revealBtn) {
+          const uniqueLetters = new Set(correctAnswer.toLowerCase().split('')).size;
+          const revealedUnique = revealedHintChars.map(c => c.toLowerCase()).filter((v, i, a) => a.indexOf(v) === i).length;
+          if (revealedUnique >= uniqueLetters) {
+            revealBtn.classList.add('hidden');
+            revealBtn.disabled = true;
+          } else {
+            revealBtn.classList.remove('hidden');
+            revealBtn.disabled = false;
+          }
+        }
+      } else {
+        if (letterHint) letterHint.classList.add('hidden');
+        if (revealedHint) revealedHint.classList.add('hidden');
+        if (revealBtn) {
+          revealBtn.classList.add('hidden');
+          revealBtn.disabled = true;
+        }
+      }
+    }
+
+    function revealNextLetterHint() {
+      if (!currentWordObject || isRaceMode) return;
+      const correctAnswer = getSpellingWord(currentWordObject);
+      const lowerCorrect = correctAnswer.toLowerCase();
+      const lowerRevealed = revealedHintChars.map(c => c.toLowerCase());
+      let nextCharToReveal = null;
+
+      for (let i = 0; i < correctAnswer.length; i++) {
+        const charActual = correctAnswer[i];
+        const charLower = lowerCorrect[i];
+        if (!lowerRevealed.includes(charLower)) {
+          nextCharToReveal = charActual;
+          break;
+        }
+      }
+
+      if (nextCharToReveal) {
+        revealedHintChars.push(nextCharToReveal);
+        const revealedHint = document.getElementById('revealedLettersHint');
+        if (revealedHint) {
+          revealedHint.textContent = generateHintDisplay(correctAnswer, revealedHintChars);
+        }
+        const uniqueLetters = new Set(correctAnswer.toLowerCase().split('')).size;
+        const revealedUnique = revealedHintChars.map(c => c.toLowerCase()).filter((v, i, a) => a.indexOf(v) === i).length;
+        const revealBtn = document.getElementById('revealLetterBtn');
+        if (revealedUnique >= uniqueLetters && revealBtn) {
+          revealBtn.classList.add('hidden');
+          revealBtn.disabled = true;
+        }
+      }
+    }
+
+    // ================= CHECK SPELLING =================
+    function checkSpelling() {
+      const input = document.getElementById('spellingInput');
+      const checkBtn = document.getElementById('checkAnswerBtn');
+      const feedback = document.getElementById('spellingFeedback');
+
+      if (!currentWordObject || input.disabled || isAudioPlaying) return;
+
+      const userAnswer = input.value.trim().toLowerCase();
+      const correctAnswer = getSpellingWord(currentWordObject).toLowerCase();
+
+      // Reset border
+      input.className = 'spelling-input';
+
+      if (userAnswer === "") {
+        feedback.textContent = "Please type your spelling.";
+        feedback.className = 'feedback-text feedback-warning';
+        input.focus();
+        return;
+      }
+
+      stopAudio();
+
+      if (userAnswer === correctAnswer) {
+        // CORRECT
+        playSound(correctSound);
+        triggerConfetti();
+
+        input.disabled = true;
+        input.classList.add('input-correct');
+        checkBtn.disabled = true;
+
+        // Hide hints
+        document.getElementById('letterCountHint').classList.add('hidden');
+        document.getElementById('revealedLettersHint').classList.add('hidden');
+        document.getElementById('revealLetterBtn').classList.add('hidden');
+
+        if (isRaceMode) {
+          raceScore++;
+          updateScoreDisplay();
+          feedback.textContent = "Correct!";
+          feedback.className = 'feedback-text feedback-correct';
+          setTimeout(displayNextWord, 600);
+        } else {
+          incorrectGuessCount = 0;
+          revealedHintChars = [];
+          streak++;
+          score++;
+          updateScoreDisplay();
+          feedback.textContent = "Correct! 🎉";
+          feedback.className = 'feedback-text feedback-correct';
+          setTimeout(displayNextWord, 1000);
+        }
+      } else {
+        // INCORRECT
+        playSound(wrongSound);
+
+        if (isRaceMode) {
+          input.disabled = true;
+          input.classList.add('input-incorrect');
+          checkBtn.disabled = true;
+          feedback.textContent = `Incorrect. It's: ${getSpellingWord(currentWordObject)}`;
+          feedback.className = 'feedback-text feedback-incorrect';
+          setTimeout(displayNextWord, 1500);
+        } else {
+          feedback.textContent = "Not quite, try again! 🤔";
+          feedback.className = 'feedback-text feedback-incorrect';
+          input.classList.add('input-incorrect');
+          input.select();
+          input.focus();
+          incorrectGuessCount++;
+          streak = 0;
+          updateScoreDisplay();
+          applyHints();
+        }
+      }
+    }
+
+    // ================= RACE MODE =================
+    function toggleRaceFromHeader() {
+      if (!isRaceMode && currentScreen === 'spelling') {
+        startRace();
+      }
+    }
+
+    function startRace() {
+      isRaceMode = true;
+      raceScore = 0;
+      raceTimeRemaining = 180;
+      wordsForQuiz = [...currentCategory.words];
+      shuffleArray(wordsForQuiz);
+      currentWordIndex = 0;
+
+      document.getElementById('raceInfo').classList.remove('hidden');
+      document.getElementById('raceEndMsg').classList.add('hidden');
+      updateScoreDisplay();
+      updateHeader();
+
+      if (raceTimerInterval) clearInterval(raceTimerInterval);
+      raceTimerInterval = setInterval(() => {
+        raceTimeRemaining--;
+        updateScoreDisplay();
+        const timerEl = document.getElementById('raceTimer');
+        if (raceTimeRemaining <= 10) timerEl.classList.add('timer-low');
+        else timerEl.classList.remove('timer-low');
+        if (raceTimeRemaining <= 0) stopRace(true);
+      }, 1000);
+
+      displayNextWord();
+    }
+
+    function stopRace(timeUp = false) {
+      if (raceTimerInterval) {
+        clearInterval(raceTimerInterval);
+        raceTimerInterval = null;
+      }
+      const endMsg = document.getElementById('raceEndMsg');
+      if (timeUp) {
+        endMsg.textContent = `Time's Up! Final Score: ${raceScore}`;
+        endMsg.className = 'text-lg font-bold text-red-600 mt-2';
+      } else {
+        endMsg.textContent = `Race Finished! Final Score: ${raceScore}`;
+        endMsg.className = 'text-lg font-bold text-yellow-700 mt-2';
+      }
+      endMsg.classList.remove('hidden');
+
+      const input = document.getElementById('spellingInput');
+      const checkBtn = document.getElementById('checkAnswerBtn');
+      if (input) input.disabled = true;
+      if (checkBtn) checkBtn.disabled = true;
+      document.getElementById('revealLetterBtn').classList.add('hidden');
+      isRaceMode = false;
+      updateHeader();
+    }
+
+    // ================= QUIZ MODE (MULTIPLE CHOICE) =================
+    function startQuiz() {
+      resetQuizState();
+      isQuizMode = true;
+      quizWords = [...currentCategory.words];
+      shuffleArray(quizWords);
+      currentQuizIndex = 0;
+      score = 0;
+      streak = 0;
+      updateScoreDisplay();
+      showScreen('quiz');
+      displayNextQuizQuestion();
+    }
+
+    function displayNextQuizQuestion() {
+      stopAudio();
+
+      if (currentQuizIndex >= quizWords.length) {
+        shuffleArray(quizWords);
+        currentQuizIndex = 0;
+      }
+
+      currentQuizPair = quizWords[currentQuizIndex];
+      const singular = currentQuizPair.singular;
+      const correctPlural = currentQuizPair.word;
+
+      document.getElementById('quizQuestion').textContent = `What is the plural of "${singular}"?`;
+      document.getElementById('quizFeedback').textContent = 'Choose the correct plural!';
+      document.getElementById('quizFeedback').className = 'feedback-text feedback-info';
+
+      const choices = generateQuizChoices(correctPlural);
+      const grid = document.getElementById('choiceGrid');
+      grid.innerHTML = choices.map((c, i) => `
+        <button class="choice-btn" id="choice-${i}" onclick="handleQuizChoice('${c}')">${c}</button>
+      `).join('');
+
+      playCurrentQuizAudio();
+      currentQuizIndex++;
+    }
+
+    function generateQuizChoices(correct) {
+      const allPlurals = currentCategory.words.map(w => w.word);
+      const distractors = allPlurals.filter(p => p !== correct);
+      // Pick 2 random distractors
+      const shuffledDistractors = [];
+      for (let i = distractors.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [distractors[i], distractors[j]] = [distractors[j], distractors[i]];
+      }
+      const choices = [correct, distractors[0], distractors[1]];
+      // Shuffle choices
+      for (let i = choices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [choices[i], choices[j]] = [choices[j], choices[i]];
+      }
+      return choices;
+    }
+
+    function handleQuizChoice(choice) {
+      const correct = currentQuizPair.word;
+      const feedback = document.getElementById('quizFeedback');
+      const buttons = document.querySelectorAll('.choice-btn');
+
+      buttons.forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === correct) {
+          btn.classList.add('correct');
+        } else if (btn.textContent === choice && choice !== correct) {
+          btn.classList.add('wrong');
+        }
+      });
+
+      if (choice === correct) {
+        playSound(correctSound);
+        triggerConfetti();
+        streak++;
+        score++;
+        updateScoreDisplay();
+        feedback.textContent = 'Correct! 🎉';
+        feedback.className = 'feedback-text feedback-correct';
+        setTimeout(displayNextQuizQuestion, 1200);
+      } else {
+        playSound(wrongSound);
+        streak = 0;
+        updateScoreDisplay();
+        feedback.textContent = `Not quite. The plural of "${currentQuizPair.singular}" is "${correct}".`;
+        feedback.className = 'feedback-text feedback-incorrect';
+        setTimeout(displayNextQuizQuestion, 2000);
+      }
+    }
+
+    function playCurrentQuizAudio() {
+      if (!currentQuizPair) return;
+      const path = getAudioPath(currentCategory.id, currentQuizPair.word, 'en_prompt');
+      playAudio(path);
+    }
+
+    // ================= DEFINITION MODE (INFINITE) =================
+    function startDefinition() {
+      resetQuizState();
+      isDefinitionMode = true;
+      definitionWords = [...currentCategory.words];
+      shuffleArray(definitionWords);
+      currentDefWordIndex = 0;
+      defScore = 0;
+      defStreak = 0;
+
+      renderDefWordBank();
+      showScreen('definition');
+      displayNextDefinition();
+    }
+
+    function renderDefWordBank() {
+      const bank = document.getElementById('defWordBank');
+      bank.innerHTML = currentCategory.words.map(w => {
+        const display = w.singular ? `${w.singular}→${w.word}` : w.word;
+        return `<div class="def-sidebar-item" onclick="fillDefInput('${w.word}')">${display}</div>`;
+      }).join('');
+    }
+
+    function fillDefInput(word) {
+      const input = document.getElementById('defInput');
+      input.value = word;
+      defKeyboard.setInput(word, undefined, true);
+      input.focus();
+    }
+
+    function displayNextDefinition() {
+      stopAudio();
+
+      if (currentDefWordIndex >= definitionWords.length) {
+        shuffleArray(definitionWords);
+        currentDefWordIndex = 0;
+      }
+
+      currentDefWordObject = definitionWords[currentDefWordIndex];
+
+      const display = document.getElementById('defDisplay');
+      const input = document.getElementById('defInput');
+      const checkBtn = document.getElementById('checkDefBtn');
+      const feedback = document.getElementById('defFeedback');
+
+      display.textContent = currentDefWordObject.def;
+      if (input) {
+        input.value = '';
+        input.className = 'spelling-input lowercase';
+        input.disabled = true;
+      }
+      if (defKeyboard) defKeyboard.setInput('', undefined, true);
+      if (checkBtn) checkBtn.disabled = false;
+      if (feedback) {
+        feedback.textContent = 'What word matches this definition?';
+        feedback.className = 'feedback-text feedback-info';
+      }
+
+      playCurrentDefAudio();
+
+      setTimeout(() => {
+        if (!isAudioPlaying && input) {
+          input.disabled = false;
+          input.focus();
+        }
+      }, 300);
+
+      currentDefWordIndex++;
+    }
+
+    function checkDefinition() {
+      const input = document.getElementById('defInput');
+      const checkBtn = document.getElementById('checkDefBtn');
+      const feedback = document.getElementById('defFeedback');
+
+      if (!currentDefWordObject || input.disabled || isAudioPlaying) return;
+
+      const userAnswer = input.value.trim().toLowerCase();
+      const correctAnswer = currentDefWordObject.word.toLowerCase();
+
+      input.className = 'spelling-input lowercase';
+
+      if (userAnswer === "") {
+        feedback.textContent = "Please type a word.";
+        feedback.className = 'feedback-text feedback-warning';
+        input.focus();
+        return;
+      }
+
+      stopAudio();
+      input.disabled = true;
+      checkBtn.disabled = true;
+
+      if (userAnswer === correctAnswer) {
+        playSound(correctSound);
+        triggerConfetti();
+        defScore++;
+        defStreak++;
+        score = defScore;
+        streak = defStreak;
+        updateScoreDisplay();
+        feedback.textContent = "Correct! 🎉";
+        feedback.className = 'feedback-text feedback-correct';
+        input.classList.add('input-correct');
+        setTimeout(displayNextDefinition, 1200);
+      } else {
+        playSound(wrongSound);
+        defStreak = 0;
+        streak = 0;
+        updateScoreDisplay();
+        feedback.textContent = `Not quite. The word was: ${currentDefWordObject.word}. Try the next one!`;
+        feedback.className = 'feedback-text feedback-incorrect';
+        input.classList.add('input-incorrect');
+        setTimeout(displayNextDefinition, 2000);
+      }
+    }
+
+    // ================= EFFECTS =================
+    function triggerConfetti() {
+      const input = document.getElementById('spellingInput') || document.getElementById('defInput');
+      if (!input || input.offsetParent === null) {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#1B3A6B', '#E8734A', '#ec4899', '#f59e0b', '#10b981'] });
+        return;
+      }
+      const rect = input.getBoundingClientRect();
+      const originLeft = { x: rect.left / window.innerWidth, y: (rect.top + rect.height / 2) / window.innerHeight };
+      const originRight = { x: rect.right / window.innerWidth, y: (rect.top + rect.height / 2) / window.innerHeight };
+      const defaults = {
+        colors: ['#1B3A6B', '#E8734A', '#ec4899', '#f59e0b', '#10b981'],
+        particleCount: 80, spread: 70, startVelocity: 55, gravity: 0.8, scalar: 0.9, ticks: 250, zIndex: 10000
+      };
+      confetti({ ...defaults, origin: originLeft, angle: 45 });
+      confetti({ ...defaults, origin: originRight, angle: 135 });
+    }
+
+    function playSound(soundElement) {
+      if (soundElement && typeof soundElement.play === 'function') {
+        soundElement.currentTime = 0;
+        soundElement.play().catch(() => {});
+        return;
+      }
+      // Fallback beeps
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        if (soundElement === correctSound) {
+          osc.frequency.setValueAtTime(523, ctx.currentTime);
+          osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+          osc.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.4);
+        } else {
+          osc.frequency.setValueAtTime(200, ctx.currentTime);
+          osc.frequency.setValueAtTime(150, ctx.currentTime + 0.15);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.3);
+        }
+      } catch (e) {}
+    }
+
+    // ================= START =================
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KayKit Animation + Weapon Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 20px;
+      background: #1a1a3e;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+    .top-bar h1 {
+      font-size: 18px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #c084fc, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      white-space: nowrap;
+    }
+    .char-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+    .char-btn {
+      padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: #e0e0e0; font-size: 13px;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .char-btn:hover { background: #222250; border-color: #6366f1; }
+    .char-btn.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+    .status-text { margin-left: auto; font-size: 12px; color: #888; white-space: nowrap; }
+
+    .weapon-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 20px; background: #1a1a3e;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0; overflow-x: auto;
+    }
+    .weapon-cat-tabs { display: flex; gap: 4px; flex-shrink: 0; }
+    .weapon-cat-tab {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: #888; font-size: 11px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .weapon-cat-tab.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+    .weapon-picker { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+    .weapon-btn {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: #e0e0e0; font-size: 12px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .weapon-btn:hover { background: #222250; border-color: #6366f1; }
+    .weapon-btn.active { background: rgba(99,102,241,0.25); border-color: #6366f1; }
+    .clear-weapon-btn {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04); color: #888; font-size: 11px;
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+
+    .main { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 96px); }
+    .sidebar-left {
+      width: 280px; background: #1a1a3e;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .search-box { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .search-box input {
+      width: 100%; padding: 8px 12px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.25); color: #e0e0e0; font-size: 13px; outline: none;
+    }
+    .anim-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .category { margin-bottom: 4px; }
+    .cat-header {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+      border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .cat-header:hover { background: rgba(255,255,255,0.04); }
+    .cat-indicator { width: 8px; height: 8px; border-radius: 50%; }
+    .cat-chevron { margin-left: auto; font-size: 10px; color: #888; }
+    .cat-clips { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 18px; }
+    .clip-btn {
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      border-radius: 6px; border: 1px solid transparent; background: transparent;
+      color: #e0e0e0; font-size: 12px; cursor: pointer; text-align: left;
+      transition: all 0.1s;
+    }
+    .clip-btn:hover { background: rgba(255,255,255,0.05); }
+    .clip-btn.active { background: rgba(99,102,241,0.2); border-color: #6366f1; }
+    .clip-btn.rec { border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.08); }
+    .clip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .clip-dur { font-size: 10px; color: #888; }
+
+    .sidebar-right {
+      width: 220px; background: #1a1a3e;
+      border-left: 1px solid rgba(255,255,255,0.08);
+      display: flex; flex-direction: column; overflow: hidden;
+      padding: 12px;
+    }
+    .sidebar-right h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .weapon-info { font-size: 12px; margin-bottom: 16px; }
+    .weapon-info-name { font-weight: 700; margin-bottom: 4px; }
+    .weapon-info-meta { color: #888; font-size: 11px; margin-bottom: 8px; }
+    .rec-chip {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3);
+      font-size: 11px; color: #a5b4fc; margin: 2px; cursor: pointer;
+    }
+    .rec-chip:hover { background: rgba(99,102,241,0.3); }
+
+    .preview-wrap { flex: 1; display: flex; flex-direction: column; position: relative; }
+    #canvas-container { flex: 1; position: relative; min-height: 0; background: #0a0a1a; }
+    #canvas-container canvas { display: block; width: 100%; height: 100%; }
+
+    .controls-bar {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+      background: #1a1a3e; border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .ctrl-btn {
+      padding: 6px 14px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.05); color: #e0e0e0; font-size: 13px;
+      cursor: pointer;
+    }
+    .ctrl-btn:hover { background: #222250; }
+    .ctrl-btn.primary { background: #6366f1; border-color: #6366f1; }
+    .ctrl-label { font-size: 11px; color: #888; }
+    .speed-slider { width: 80px; }
+    .clip-info { margin-left: auto; font-size: 12px; color: #888; text-align: right; }
+
+    .loading-overlay {
+      position: fixed; inset: 0; background: #0a0a1a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; z-index: 1000;
+    }
+    .loading-overlay.hidden { display: none; }
+    .loading-spinner {
+      width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #6366f1; border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div style="font-size:13px;color:#888">Loading...</div>
+  </div>
+
+  <div class="top-bar">
+    <h1>🎬 KayKit Animation + Weapon Preview</h1>
+    <div class="char-picker" id="char-picker"></div>
+    <div class="status-text" id="status-text">Loading...</div>
+  </div>
+
+  <div class="weapon-bar" id="weapon-bar">
+    <div class="weapon-cat-tabs" id="weapon-cat-tabs"></div>
+    <div class="weapon-picker" id="weapon-picker"></div>
+    <button class="clear-weapon-btn" id="btn-clear-weapon">✕ Clear</button>
+  </div>
+
+  <div class="main">
+    <div class="sidebar-left">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search animations...">
+      </div>
+      <div class="anim-list" id="anim-list"></div>
+    </div>
+
+    <div class="preview-wrap">
+      <div id="canvas-container"></div>
+      <div class="controls-bar">
+        <button class="ctrl-btn primary" id="btn-play">▶ Play</button>
+        <button class="ctrl-btn" id="btn-pause">⏸ Pause</button>
+        <button class="ctrl-btn" id="btn-stop">⏹ Stop</button>
+        <span class="ctrl-label">Speed</span>
+        <input type="range" class="speed-slider" id="speed-slider" min="0.1" max="2" step="0.1" value="1">
+        <span class="ctrl-label" id="speed-label">1.0x</span>
+        <div class="clip-info" id="clip-info">
+          <span id="clip-info-name">—</span><br>
+          <span id="clip-info-meta">Select an animation</span>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-right" id="sidebar-right">
+      <h3>Weapon Info</h3>
+      <div class="weapon-info" id="weapon-info">
+        <div class="weapon-info-name" id="weapon-info-name">No weapon</div>
+        <div class="weapon-info-meta" id="weapon-info-meta">Select a weapon to see recommended animations</div>
+        <div id="weapon-recs"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import {
+      WEAPON_CATEGORIES, WEAPON_ANIMATION_MAP,
+      getWeaponById, getWeaponsByCategory, getAllCategories,
+      getRecommendedClips, getHandConfig,
+    } from './js/WeaponAnimationMap.js';
+
+    const CHARACTERS = [
+      { key: 'barbarian', name: 'Barbarian', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb' },
+      { key: 'knight', name: 'Knight', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Knight.glb' },
+      { key: 'mage', name: 'Mage', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Mage.glb' },
+      { key: 'ranger', name: 'Ranger', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Ranger.glb' },
+      { key: 'rogue', name: 'Rogue', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue.glb' },
+      { key: 'rogue_hooded', name: 'Rogue Hooded', path: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue_Hooded.glb' },
+    ];
+
+    const ANIM_FILES = [
+      { category: 'General', color: '#6b7280', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_General.glb' },
+      { category: 'Movement Basic', color: '#3b82f6', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb' },
+      { category: 'Movement Advanced', color: '#3b82f6', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementAdvanced.glb' },
+      { category: 'Combat Melee', color: '#ef4444', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_CombatMelee.glb' },
+      { category: 'Combat Ranged', color: '#ef4444', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_CombatRanged.glb' },
+      { category: 'Simulation', color: '#22c55e', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Simulation.glb' },
+      { category: 'Tools', color: '#f97316', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Tools.glb' },
+      { category: 'Special', color: '#a855f7', path: 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_Special.glb' },
+    ];
+
+    let scene, camera, renderer, mixer, clock;
+    let currentMesh = null;
+    let currentCharIndex = 0;
+    let currentClipName = null;
+    let currentAction = null;
+    let isPlaying = false;
+    let animClips = [];
+    let clipActions = new Map();
+    let speed = 1.0;
+    let currentWeaponId = null;
+    let currentWeaponMesh = null;
+    let handBoneR = null;
+    let handBoneL = null;
+    let weaponCatFilter = 'all';
+
+    async function init() {
+      console.log('[INIT] Starting...');
+      clock = new THREE.Clock();
+
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a1a);
+
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 50);
+      camera.position.set(2, 2, 3);
+      camera.lookAt(0, 0.5, 0);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+      console.log('[INIT] Renderer:', renderer.domElement.width, 'x', renderer.domElement.height);
+
+      // Lights - EXACTLY like diagnostic
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const key = new THREE.DirectionalLight(0xfff5e6, 1.5);
+      key.position.set(3, 5, 3);
+      scene.add(key);
+
+      // Ground
+      const ground = new THREE.Mesh(
+        new THREE.CircleGeometry(2, 64),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a3e })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+
+      // Debug cube - rendered immediately
+      const debugCube = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xff0000 })
+      );
+      debugCube.position.set(0, 1, 0);
+      scene.add(debugCube);
+      console.log('[INIT] Debug cube added');
+
+      // RENDER NOW - before anything else
+      renderer.render(scene, camera);
+      console.log('[INIT] First render done');
+
+      // UI
+      setupUI();
+      console.log('[INIT] UI ready');
+
+      // Load animations
+      await loadAnimations();
+      console.log('[INIT] Animations:', animClips.length);
+
+      // Load first character
+      await loadCharacter(0);
+      console.log('[INIT] Character loaded');
+
+      // Start loop
+      renderer.setAnimationLoop(() => {
+        const dt = clock.getDelta();
+        if (mixer) mixer.update(dt);
+        debugCube.rotation.y += dt;
+        renderer.render(scene, camera);
+      });
+      console.log('[INIT] Loop started');
+
+      document.getElementById('loading-overlay').classList.add('hidden');
+      console.log('[INIT] Done');
+    }
+
+    async function loadAnimations() {
+      const loader = new GLTFLoader();
+      const seen = new Set();
+      animClips = [];
+
+      for (const file of ANIM_FILES) {
+        try {
+          const gltf = await new Promise((resolve, reject) =>
+            loader.load(file.path, resolve, undefined, reject)
+          );
+          for (const clip of gltf.animations) {
+            if (seen.has(clip.name)) continue;
+            seen.add(clip.name);
+            animClips.push({
+              name: clip.name,
+              duration: clip.duration || 0,
+              category: file.category,
+              color: file.color,
+              isPose: clip.duration < 0.01,
+              clip
+            });
+          }
+        } catch (err) {
+          console.warn('[ANIM] Failed:', file.path, err.message);
+        }
+      }
+
+      const catOrder = ['General','Movement Basic','Movement Advanced','Combat Melee','Combat Ranged','Simulation','Tools','Special'];
+      animClips.sort((a, b) => {
+        const ci = catOrder.indexOf(a.category) - catOrder.indexOf(b.category);
+        return ci !== 0 ? ci : a.name.localeCompare(b.name);
+      });
+
+      renderAnimList();
+      updateStatus(`${animClips.length} animations loaded`);
+    }
+
+    async function loadCharacter(index) {
+      const char = CHARACTERS[index];
+      updateStatus(`Loading ${char.name}...`);
+      console.log('[CHAR] Loading', char.name);
+
+      if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh = null;
+      }
+      if (mixer) {
+        mixer.stopAllAction();
+        mixer = null;
+      }
+      clipActions.clear();
+
+      const loader = new GLTFLoader();
+      const gltf = await new Promise((resolve, reject) =>
+        loader.load(char.path, resolve, undefined, reject)
+      );
+      currentMesh = gltf.scene;
+      console.log('[CHAR] GLB loaded');
+
+      // Scale and center
+      const box = new THREE.Box3().setFromObject(currentMesh);
+      const height = box.max.y - box.min.y;
+      const scale = 0.55 / height;
+      currentMesh.scale.setScalar(scale);
+      currentMesh.updateMatrixWorld(true);
+      const box2 = new THREE.Box3().setFromObject(currentMesh);
+      const cx = (box2.min.x + box2.max.x) * 0.5;
+      const cz = (box2.min.z + box2.max.z) * 0.5;
+      currentMesh.position.set(-cx, -box2.min.y, -cz);
+      console.log('[CHAR] Scaled', scale.toFixed(3), 'height', height.toFixed(3));
+
+      // Log bones and meshes
+      let meshCount = 0;
+      const bones = [];
+      handBoneR = null;
+      handBoneL = null;
+      currentMesh.traverse(c => {
+        if (c.isMesh) {
+          meshCount++;
+          c.castShadow = true;
+        }
+        if (c.isBone) {
+          bones.push(c.name);
+          const n = c.name.toLowerCase();
+          if (n === 'handslotr') handBoneR = c;
+          if (n === 'handslotl') handBoneL = c;
+        }
+      });
+      console.log('[CHAR] Meshes:', meshCount, 'Bones:', bones.length);
+      console.log('[CHAR] Hand bones: R=', handBoneR?.name, 'L=', handBoneL?.name);
+
+      scene.add(currentMesh);
+      console.log('[CHAR] Added to scene');
+
+      // Create mixer with clips
+      mixer = new THREE.AnimationMixer(currentMesh);
+      for (const anim of animClips) {
+        const action = mixer.clipAction(anim.clip);
+        action.clampWhenFinished = true;
+        clipActions.set(anim.name, action);
+      }
+      console.log('[CHAR] Mixer with', clipActions.size, 'actions');
+
+      currentCharIndex = index;
+      updateCharButtons();
+
+      // Re-attach weapon if one was selected
+      if (currentWeaponId) {
+        await loadWeapon(currentWeaponId);
+      }
+
+      // Play idle
+      if (clipActions.has('Idle_A')) {
+        playClip('Idle_A');
+      }
+
+      updateStatus(`${char.name} ready — ${animClips.length} clips`);
+    }
+
+    function playClip(name) {
+      const action = clipActions.get(name);
+      if (!action) { console.warn('Clip not found:', name); return; }
+
+      if (currentAction && currentAction !== action) {
+        currentAction.fadeOut(0.15);
+      }
+
+      const anim = animClips.find(a => a.name === name);
+      action.reset();
+      action.loop = THREE.LoopRepeat;
+      action.timeScale = speed;
+      action.fadeIn(0.1).play();
+
+      currentAction = action;
+      currentClipName = name;
+      isPlaying = true;
+
+      document.getElementById('clip-info-name').textContent = anim.name;
+      document.getElementById('clip-info-meta').textContent = `${anim.duration.toFixed(2)}s · ${anim.category}`;
+      updateClipButtons();
+      updatePlayButtons();
+    }
+
+    function pausePlayback() {
+      if (currentAction) {
+        currentAction.paused = true;
+        isPlaying = false;
+        updatePlayButtons();
+      }
+    }
+
+    function resumePlayback() {
+      if (currentAction) {
+        currentAction.paused = false;
+        isPlaying = true;
+        updatePlayButtons();
+      }
+    }
+
+    function stopPlayback() {
+      if (currentAction) {
+        currentAction.fadeOut(0.2);
+        currentAction = null;
+        currentClipName = null;
+        isPlaying = false;
+      }
+      updateClipButtons();
+      updatePlayButtons();
+      document.getElementById('clip-info-name').textContent = '—';
+      document.getElementById('clip-info-meta').textContent = 'Select an animation';
+    }
+
+    function setSpeed(val) {
+      speed = parseFloat(val);
+      if (currentAction) currentAction.timeScale = speed;
+      document.getElementById('speed-label').textContent = speed.toFixed(1) + 'x';
+    }
+
+    // UI
+    function setupUI() {
+      const picker = document.getElementById('char-picker');
+      CHARACTERS.forEach((char, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'char-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = char.name;
+        btn.addEventListener('click', () => loadCharacter(i));
+        picker.appendChild(btn);
+      });
+
+      setupWeaponUI();
+
+      document.getElementById('search-input').addEventListener('input', (e) => {
+        renderAnimList(e.target.value.toLowerCase());
+      });
+
+      document.getElementById('btn-play').addEventListener('click', () => {
+        if (currentAction && currentAction.paused) resumePlayback();
+        else if (currentClipName) playClip(currentClipName);
+        else if (animClips.length > 0) playClip(animClips[0].name);
+      });
+      document.getElementById('btn-pause').addEventListener('click', pausePlayback);
+      document.getElementById('btn-stop').addEventListener('click', stopPlayback);
+      document.getElementById('speed-slider').addEventListener('input', (e) => setSpeed(e.target.value));
+    }
+
+    function setupWeaponUI() {
+      const catTabs = document.getElementById('weapon-cat-tabs');
+      const picker = document.getElementById('weapon-picker');
+
+      const allTab = document.createElement('button');
+      allTab.className = 'weapon-cat-tab active';
+      allTab.textContent = 'All';
+      allTab.addEventListener('click', () => {
+        weaponCatFilter = 'all';
+        document.querySelectorAll('.weapon-cat-tab').forEach(t => t.classList.remove('active'));
+        allTab.classList.add('active');
+        renderWeaponPicker();
+      });
+      catTabs.appendChild(allTab);
+
+      for (const cat of getAllCategories()) {
+        const tab = document.createElement('button');
+        tab.className = 'weapon-cat-tab';
+        tab.textContent = cat.label;
+        tab.addEventListener('click', () => {
+          weaponCatFilter = cat.key;
+          document.querySelectorAll('.weapon-cat-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          renderWeaponPicker();
+        });
+        catTabs.appendChild(tab);
+      }
+
+      document.getElementById('btn-clear-weapon').addEventListener('click', clearWeapon);
+      renderWeaponPicker();
+    }
+
+    function renderWeaponPicker() {
+      const picker = document.getElementById('weapon-picker');
+      picker.innerHTML = '';
+      const weapons = weaponCatFilter === 'all'
+        ? WEAPON_ANIMATION_MAP
+        : getWeaponsByCategory(weaponCatFilter);
+      for (const w of weapons) {
+        const btn = document.createElement('button');
+        btn.className = 'weapon-btn' + (w.id === currentWeaponId ? ' active' : '');
+        btn.innerHTML = `${w.icon || '🔧'} ${w.name}`;
+        btn.addEventListener('click', () => loadWeapon(w.id));
+        picker.appendChild(btn);
+      }
+    }
+
+    async function loadWeapon(weaponId) {
+      console.log('[WEAPON] Loading', weaponId);
+      const weapon = getWeaponById(weaponId);
+      if (!weapon) return;
+
+      if (currentWeaponMesh) {
+        if (currentWeaponMesh.parent) currentWeaponMesh.parent.remove(currentWeaponMesh);
+        currentWeaponMesh = null;
+      }
+
+      const loader = new GLTFLoader();
+      try {
+        const gltf = await new Promise((resolve, reject) =>
+          loader.load(weapon.model, resolve, undefined, reject)
+        );
+        currentWeaponMesh = gltf.scene.clone();
+        console.log('[WEAPON] Model loaded:', weapon.model);
+
+        const cfg = getHandConfig(weaponId) || { scale: 0.25 };
+        currentWeaponMesh.scale.setScalar(cfg.scale || 0.25);
+        currentWeaponMesh.position.set(cfg.x || 0, cfg.y || 0, cfg.z || 0);
+        currentWeaponMesh.rotation.set(cfg.rx || 0, cfg.ry || 0, cfg.rz || 0);
+
+        const cat = WEAPON_CATEGORIES[weapon.category];
+        const slot = cat?.slot || 'rightHand';
+        let parentBone = null;
+        if (slot === 'rightHand' && handBoneR) parentBone = handBoneR;
+        else if (slot === 'leftHand' && handBoneL) parentBone = handBoneL;
+        else if (slot === 'bothHands' && handBoneR) parentBone = handBoneR;
+
+        if (parentBone) {
+          parentBone.add(currentWeaponMesh);
+          console.log('[WEAPON] Attached to', parentBone.name);
+        } else {
+          currentMesh.add(currentWeaponMesh);
+          currentWeaponMesh.position.set(0, 0.3, 0.2);
+          console.log('[WEAPON] Attached to root fallback');
+        }
+
+        currentWeaponId = weaponId;
+        renderWeaponPicker();
+        updateWeaponInfo();
+        renderAnimList(document.getElementById('search-input').value.toLowerCase());
+        updateStatus(`${weapon.name} equipped`);
+      } catch (err) {
+        console.warn('[WEAPON] Failed:', err.message);
+      }
+    }
+
+    function clearWeapon() {
+      if (currentWeaponMesh) {
+        if (currentWeaponMesh.parent) currentWeaponMesh.parent.remove(currentWeaponMesh);
+        currentWeaponMesh = null;
+      }
+      currentWeaponId = null;
+      renderWeaponPicker();
+      updateWeaponInfo();
+      renderAnimList(document.getElementById('search-input').value.toLowerCase());
+      updateStatus('Weapon cleared');
+    }
+
+    function updateWeaponInfo() {
+      const nameEl = document.getElementById('weapon-info-name');
+      const metaEl = document.getElementById('weapon-info-meta');
+      const recsEl = document.getElementById('weapon-recs');
+
+      if (!currentWeaponId) {
+        nameEl.textContent = 'No weapon';
+        metaEl.textContent = 'Select a weapon to see recommended animations';
+        recsEl.innerHTML = '';
+        return;
+      }
+
+      const weapon = getWeaponById(currentWeaponId);
+      nameEl.textContent = `${weapon.icon || '🔧'} ${weapon.name}`;
+      metaEl.textContent = `${WEAPON_CATEGORIES[weapon.category]?.label || weapon.category} · ${weapon.sourcePack}`;
+
+      const recs = getRecommendedClips(currentWeaponId);
+      recsEl.innerHTML = '';
+      for (const rec of recs.slice(0, 10)) {
+        const chip = document.createElement('span');
+        chip.className = 'rec-chip';
+        chip.textContent = rec.action;
+        chip.title = rec.clip;
+        chip.addEventListener('click', () => {
+          if (clipActions.has(rec.clip)) playClip(rec.clip);
+          else if (rec.fallbacks.length && clipActions.has(rec.fallbacks[0])) playClip(rec.fallbacks[0]);
+        });
+        recsEl.appendChild(chip);
+      }
+    }
+
+    function renderAnimList(filter = '') {
+      const list = document.getElementById('anim-list');
+      list.innerHTML = '';
+
+      const recommendedClips = new Set();
+      if (currentWeaponId) {
+        const recs = getRecommendedClips(currentWeaponId);
+        for (const rec of recs) {
+          recommendedClips.add(rec.clip);
+          for (const fb of rec.fallbacks) recommendedClips.add(fb);
+        }
+      }
+
+      const grouped = {};
+      for (const anim of animClips) {
+        if (filter && !anim.name.toLowerCase().includes(filter)) continue;
+        if (!grouped[anim.category]) grouped[anim.category] = [];
+        grouped[anim.category].push(anim);
+      }
+
+      const catOrder = ['General','Movement Basic','Movement Advanced','Combat Melee','Combat Ranged','Simulation','Tools','Special'];
+      for (const cat of catOrder) {
+        const clips = grouped[cat];
+        if (!clips) continue;
+
+        const catEl = document.createElement('div');
+        catEl.className = 'category';
+
+        const header = document.createElement('div');
+        header.className = 'cat-header';
+        header.innerHTML = `<span class="cat-indicator" style="background:${clips[0].color}"></span><span>${cat}</span><span style="font-size:10px;color:#888;margin-left:4px">${clips.length}</span><span class="cat-chevron">▼</span>`;
+
+        const clipsContainer = document.createElement('div');
+        clipsContainer.className = 'cat-clips';
+
+        header.addEventListener('click', () => {
+          clipsContainer.style.display = clipsContainer.style.display === 'none' ? 'flex' : 'none';
+        });
+
+        for (const anim of clips) {
+          const isRec = recommendedClips.has(anim.name);
+          const btn = document.createElement('button');
+          btn.className = 'clip-btn' + (anim.name === currentClipName ? ' active' : '') + (isRec ? ' rec' : '');
+          btn.innerHTML = `<span class="clip-name">${anim.name}</span>${isRec ? '<span style="color:#fbbf24">★</span>' : ''}<span class="clip-dur">${anim.isPose ? 'POSE' : anim.duration.toFixed(2) + 's'}</span>`;
+          btn.addEventListener('click', () => playClip(anim.name));
+          clipsContainer.appendChild(btn);
+        }
+
+        catEl.appendChild(header);
+        catEl.appendChild(clipsContainer);
+        list.appendChild(catEl);
+      }
+    }
+
+    function updateCharButtons() {
+      document.querySelectorAll('.char-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === currentCharIndex);
+      });
+    }
+
+    function updateClipButtons() {
+      document.querySelectorAll('.clip-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.querySelector('.clip-name').textContent === currentClipName);
+      });
+    }
+
+    function updatePlayButtons() {
+      document.getElementById('btn-play').classList.toggle('primary', !isPlaying);
+      document.getElementById('btn-pause').classList.toggle('primary', isPlaying);
+    }
+
+    function updateStatus(text) {
+      document.getElementById('status-text').textContent = text;
+    }
+
+    window.addEventListener('resize', () => {
+      const container = document.getElementById('canvas-container');
+      if (!camera || !renderer) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    console.log('[MAIN] Starting init...');
+    init().catch(err => {
+      console.error('[MAIN] Init failed:', err);
+      document.querySelector('#loading-overlay div:last-child').textContent = 'Error: ' + err.message;
+    });
+  </script>
+</body>
+</html>

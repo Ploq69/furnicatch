@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voidloop Level Builder</title>
+  <link rel="stylesheet" href="./css/levelbuilder.css" />
+</head>
+<body>
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="brand">
+      <span class="logo">🛠️</span>
+      <h1>Voidloop Level Builder</h1>
+    </div>
+    <div class="actions">
+      <button id="btn-undo" title="Undo (Ctrl+Z)">↩️ Undo</button>
+      <button id="btn-redo" title="Redo (Ctrl+Y)">↪️ Redo</button>
+      <div class="spacer"></div>
+      <button id="btn-save">💾 Save</button>
+      <button id="btn-load">📂 Load</button>
+      <button id="btn-export">📤 Export JSON</button>
+      <button id="btn-import">📥 Import JSON</button>
+      <button id="btn-magic-fix" title="Auto-fix level issues">🪄 Magic Fix</button>
+      <button id="btn-playtest" class="primary">▶️ Playtest</button>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <div class="workspace">
+    <!-- Left Tool Rail -->
+    <aside class="tool-rail" id="tool-rail"></aside>
+
+    <!-- Viewport -->
+    <main class="viewport">
+      <canvas id="lb-canvas"></canvas>
+      <div class="grid-overlay">
+        <span id="level-stats">0 tiles · 0 props · 0 enemies · 0 tokens</span>
+      </div>
+    </main>
+
+    <!-- Right Inspector -->
+    <aside class="inspector">
+      <section class="panel">
+        <h3>Level Info</h3>
+        <label>Title</label>
+        <input type="text" id="inp-title" placeholder="Level Title" />
+        <label>Timer (seconds)</label>
+        <input type="number" id="inp-timer" value="120" min="10" max="600" />
+        <label>Grid Width</label>
+        <input type="number" id="inp-grid-w" value="24" min="8" max="64" step="1" />
+        <label>Grid Depth</label>
+        <input type="number" id="inp-grid-d" value="24" min="8" max="64" step="1" />
+      </section>
+
+      <section class="panel">
+        <h3>New from Template</h3>
+        <select id="sel-template"></select>
+        <button id="btn-new-template">Create</button>
+      </section>
+
+      <section class="panel">
+        <h3>Camera</h3>
+        <label>Zoom</label>
+        <input type="range" id="inp-zoom" min="3" max="40" value="18" step="0.5" />
+        <span id="zoom-val" class="muted">18</span>
+        <label class="inline">
+          <input type="checkbox" id="chk-grid" checked />
+          Show Grid
+        </label>
+      </section>
+
+      <section class="panel">
+        <h3>Keyboard Shortcuts</h3>
+        <ul class="shortcuts">
+          <li><kbd>W</kbd> Move forward</li>
+          <li><kbd>S</kbd> Move back</li>
+          <li><kbd>A</kbd> Rotate left</li>
+          <li><kbd>D</kbd> Rotate right</li>
+          <li><kbd>1</kbd> Paint</li>
+          <li><kbd>2</kbd> Raise</li>
+          <li><kbd>3</kbd> Lower</li>
+          <li><kbd>4</kbd> Erase</li>
+          <li><kbd>5</kbd> Fill</li>
+          <li><kbd>6</kbd> Prop</li>
+          <li><kbd>7</kbd> Floating Block</li>
+          <li><kbd>8</kbd> Token</li>
+          <li><kbd>9</kbd> Start</li>
+          <li><kbd>0</kbd> Exit</li>
+          <li><kbd>-</kbd> Enemy</li>
+          <li><kbd>Ctrl+Z</kbd> Undo</li>
+          <li><kbd>Ctrl+Y</kbd> Redo</li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Bottom Tool Belt -->
+  <footer class="tool-belt">
+    <div id="cfg-terrain" class="config-group">
+      <label>Terrain Type</label>
+      <select id="sel-terrain"></select>
+    </div>
+    <div id="cfg-prop" class="config-group hidden">
+      <label>Prop</label>
+      <select id="sel-prop"></select>
+    </div>
+    <div id="cfg-floatblock" class="config-group hidden">
+      <label>Floating Block</label>
+      <select id="sel-floatblock"></select>
+      <label>Hover Height</label>
+      <input type="number" id="inp-floatblock-y" value="2" min="1" max="8" step="1" />
+    </div>
+    <div id="cfg-token" class="config-group hidden">
+      <label>Token Letter</label>
+      <select id="sel-token"></select>
+    </div>
+    <div id="cfg-enemy" class="config-group hidden">
+      <label>Enemy Type</label>
+      <select id="sel-enemy"></select>
+    </div>
+  </footer>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import { LevelBuilderApp } from './js/levelbuilder/LevelBuilderApp.js';
+    const canvas = document.getElementById('lb-canvas');
+    const app = new LevelBuilderApp(canvas);
+  </script>
+</body>
+</html>

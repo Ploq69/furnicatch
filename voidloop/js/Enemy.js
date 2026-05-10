@@ -5,6 +5,21 @@ import { SFXMapper } from './SFXMapper.js';
 
 const STATES = { IDLE: 0, CHASE: 1, ATTACK: 2, DEAD: 3 };
 
+let _kaykitAnimCache = null;
+async function _getKayKitAnimations() {
+  if (_kaykitAnimCache) return _kaykitAnimCache;
+  const { KAYKIT_ANIMATION_PATHS } = await import('./KayKitLoadout.js');
+  const clips = [];
+  for (const path of KAYKIT_ANIMATION_PATHS) {
+    try {
+      const gltf = await assetLoader.loadGLTF(path);
+      if (gltf.animations) clips.push(...gltf.animations);
+    } catch (e) { /* ignore preload failures */ }
+  }
+  _kaykitAnimCache = clips;
+  return clips;
+}
+
 export class Enemy {
   constructor(typeKey, x, z) {
     this.typeKey = typeKey;
@@ -27,6 +42,7 @@ export class Enemy {
     this.proceduralData = {};
     this.baseScale = 1;
     this.currentAnim = null;
+    this.world = null;
 
     // HP bar
     this.hpBarGroup = null;
@@ -56,9 +72,14 @@ export class Enemy {
 
       scene.add(this.mesh);
 
-      if (cloned.animations && cloned.animations.length > 0) {
+      // Load KayKit shared animations if model has none (KayKit character GLBs are separate from anims)
+      let animClips = cloned.animations || [];
+      if (animClips.length < 3 && this.def.model.includes('KayKit')) {
+        animClips = await _getKayKitAnimations();
+      }
+      if (animClips.length > 0) {
         this.mixer = new THREE.AnimationMixer(this.mesh);
-        this.animations = cloned.animations;
+        this.animations = animClips;
         this.playAnim('idle');
       }
     } catch (e) {
@@ -253,6 +274,12 @@ export class Enemy {
     }
 
     this._applyProceduralAnim(dt);
+
+    // Snap to ground height (3D terrain support)
+    if (this.world) {
+      const topY = this.world.getColumnTop(Math.round(this.position.x), Math.round(this.position.z));
+      if (topY > -999) this.position.y = topY;
+    }
 
     if (this.mesh) {
       const flyOffset = this.def.flying ? (1.5 + Math.sin(this.proceduralTime * 1.5) * 0.3) : 0;

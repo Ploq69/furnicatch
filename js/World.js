@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { assetLoader } from './AssetLoader.js';
-import { ASSETS, BIOMES, GAME, LETTER_WORDS, VOCABULARY, PROP_VOCABULARY } from './constants.js';
+import { ASSETS, BIOMES, GAME, LETTER_WORDS, VOCABULARY, PROP_VOCABULARY, CATCHABLE_BY_KEY } from './constants.js';
 import { Furniture } from './Furniture.js';
 import { LetterCreature } from './LetterCreature.js';
 import { PropCreature } from './PropCreature.js';
@@ -461,7 +461,7 @@ export class World {
     const count = GAME.CATCHABLE_PROPS_PER_CHUNK;
     for (let i = 0; i < count; i++) {
       const propKey = biome.propPool[Math.floor(this._noise(chunk.cx, chunk.cz, i + 150, i + 150) * biome.propPool.length)];
-      const propConfig = PROP_VOCABULARY.find(p => p.key === propKey);
+      const propConfig = CATCHABLE_BY_KEY[propKey] || PROP_VOCABULARY.find(p => p.key === propKey);
       if (!propConfig) continue;
       const x = chunk.cx * chunkWorldSize + (this._noise(chunk.cx, chunk.cz, i + 160, 0) - 0.5) * chunkWorldSize * 0.75;
       const z = chunk.cz * chunkWorldSize + (this._noise(chunk.cx, chunk.cz, i + 170, 0) - 0.5) * chunkWorldSize * 0.75;

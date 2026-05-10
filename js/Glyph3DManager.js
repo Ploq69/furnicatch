@@ -129,6 +129,8 @@ export class Glyph3DManager {
       combo: { color: 0x7dd3fc, emissive: 0x0891b2, intensity: 0.8, opacity: 1 },
       reward: { color: 0xfacc15, emissive: 0xf59e0b, intensity: 0.95, opacity: 1 },
       level: { color: 0xc084fc, emissive: 0x9333ea, intensity: 1.05, opacity: 1 },
+      ruby: { color: 0xf87171, emissive: 0xef4444, intensity: 1.3, opacity: 1 },
+      evolved: { color: 0xffffff, emissive: 0xa5f3fc, intensity: 1.1, opacity: 1 },
       slot: { color: 0x334155, emissive: 0x111827, intensity: 0.05, opacity: 0.7 },
     };
     const cfg = configs[style] || configs.typed;
