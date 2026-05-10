@@ -35,7 +35,7 @@ export class LobbyManager {
     this.approvalAccept = document.getElementById('approval-accept');
     this.approvalReject = document.getElementById('approval-reject');
 
-    this.pendingConn = null; // PeerJS connection waiting for approval
+    // (no pending connection object needed with Firebase)
     this.game = null;
 
     this._bindEvents();
@@ -73,8 +73,7 @@ export class LobbyManager {
     });
 
     net.on('join_request', ({ peerId, conn }) => {
-      this.pendingConn = conn;
-      this._showApproval(peerId);
+      this._showApproval();
     });
 
     net.on('connected', () => {
@@ -125,7 +124,12 @@ export class LobbyManager {
     this.hostBtn.disabled = true;
 
     try {
-      await net.host();
+      const res = await net.host({ name: 'Dad' });
+      this.hostCodeDisplay.textContent = res.code;
+      this.hostCodeRow.style.display = 'flex';
+      this.hostStatus.textContent = 'Room created! Share this code.';
+      this.hostStatus.className = 'lobby-status ok';
+      this.startBtn.style.display = 'block';
     } catch (err) {
       this.hostStatus.textContent = err.message;
       this.hostStatus.className = 'lobby-status err';
@@ -134,7 +138,7 @@ export class LobbyManager {
   }
 
   async _onJoin() {
-    const code = this.joinCode.value.trim();
+    const code = this.joinCode.value.trim().toUpperCase();
     if (!code) {
       this.joinStatus.textContent = 'Enter the code from dad';
       this.joinStatus.className = 'lobby-status err';
@@ -146,7 +150,11 @@ export class LobbyManager {
     this.joinBtn.disabled = true;
 
     try {
-      await net.join(code);
+      const res = await net.join(code, { name: this.joinName.value.trim() || 'Guest' });
+      if (res.status === 'waiting_for_approval') {
+        this.joinStatus.textContent = 'Waiting for dad to approve...';
+        this.joinStatus.className = 'lobby-status warn';
+      }
     } catch (err) {
       this.joinStatus.textContent = 'Failed: ' + err.message;
       this.joinStatus.className = 'lobby-status err';
@@ -154,17 +162,14 @@ export class LobbyManager {
     }
   }
 
-  _showApproval(peerId) {
-    this.approvalText.textContent = `Player ${peerId} wants to join.`;
+  _showApproval() {
+    this.approvalText.textContent = 'Someone wants to join your game.';
     this.approvalPopup.classList.add('active');
   }
 
   _onApproval(approve) {
     this.approvalPopup.classList.remove('active');
-    if (!this.pendingConn) return;
-
-    net.approveConnection(this.pendingConn, approve);
-    this.pendingConn = null;
+    net.approve(approve);
 
     if (!approve && net.isHost) {
       this.hostStatus.textContent = 'Join request rejected.';

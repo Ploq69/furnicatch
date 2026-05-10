@@ -1,156 +1,200 @@
 /**
- * NetworkManager — PeerJS-based P2P multiplayer
- * Zero servers. Zero terminals. Just browsers talking directly.
- * Uses PeerJS cloud (free) for initial handshake, then WebRTC data channels.
+ * NetworkManager — Firebase Realtime Database multiplayer
+ * Zero servers. Zero terminals. Works across any network.
  */
 
-const _Peer = typeof window !== 'undefined' ? window.Peer : null;
+import {
+  ref,
+  set,
+  onValue,
+  push,
+  onChildAdded,
+  onDisconnect,
+  remove,
+  get,
+  off,
+} from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-database.js';
+import { db } from './firebase-config.js';
+
+function generateRoomCode() {
+  const words = ['WOLF','BEAR','LION','FROG','DUCK','FISH','BIRD','MOON','STAR','SUN','FIRE','WIND','RAIN','SNOW','LEAF','TREE','ROCK','GOLD','RUBY','JADE'];
+  const w = words[Math.floor(Math.random() * words.length)];
+  const n = Math.floor(Math.random() * 8999) + 1000;
+  return `${w}-${n}`;
+}
 
 export class NetworkManager {
   constructor() {
-    this.peer = null;        // Our PeerJS peer
-    this.conn = null;        // Active data connection to remote peer
     this.isHost = false;
-    this.remoteId = null;    // The other player's peer ID
-    this.myId = null;
+    this.roomCode = null;
+    this.role = null; // 'host' or 'guest'
     this.connected = false;
     this._handlers = new Map();
+    this._unsubs = [];
   }
 
-  // ── Host: create a peer and get an ID ──
-  host() {
-    return new Promise((resolve, reject) => {
-      if (!_Peer) { reject(new Error('PeerJS not loaded')); return; }
+  // ── Host: create a room ──
+  async host(opts = {}) {
+    if (!db) throw new Error('Firebase not initialized. Check firebase-config.js');
 
-      this.peer = new Peer({
-        host: 'peerjs.com',
-        port: 443,
-        secure: true,
-        debug: 1,
-      });
-
-      this.peer.on('open', (id) => {
-        this.myId = id;
-        this.isHost = true;
-        console.log('[Net] Hosting as', id);
-        this._emit('host_ready', { id });
-        resolve({ id });
-      });
-
-      this.peer.on('error', (err) => {
-        console.error('[Net] Peer error:', err);
-        this._emit('error', { message: err.message });
-        reject(err);
-      });
-
-      // Listen for incoming connections
-      this.peer.on('connection', (conn) => {
-        console.log('[Net] Incoming connection from', conn.peer);
-        // Don't accept yet — wait for host approval
-        this._emit('join_request', { peerId: conn.peer, conn });
-      });
-    });
-  }
-
-  // ── Host: approve or reject a pending connection ──
-  approveConnection(conn, approve) {
-    if (!this.isHost) return;
-
-    if (!approve) {
-      conn.close();
-      return;
+    let code;
+    // Ensure code is unique
+    for (let attempts = 0; attempts < 10; attempts++) {
+      code = generateRoomCode();
+      const snap = await get(ref(db, `voidloop-rooms/${code}`));
+      if (!snap.exists()) break;
     }
 
-    this.conn = conn;
-    this.remoteId = conn.peer;
-    this._setupConnection(conn);
-    this._emit('player_joined', { peerId: conn.peer });
+    this.roomCode = code;
+    this.isHost = true;
+    this.role = 'host';
+
+    const roomRef = ref(db, `voidloop-rooms/${code}`);
+    await set(roomRef, {
+      host: { connected: true, name: opts.name || 'Host', joinedAt: Date.now() },
+      guest: { connected: false },
+      approval: 'pending',
+      createdAt: Date.now(),
+    });
+
+    // Auto-cleanup when host disconnects
+    onDisconnect(roomRef).remove();
+
+    // Listen for guest join requests
+    const guestRef = ref(db, `voidloop-rooms/${code}/guest/connected`);
+    const unsubGuest = onValue(guestRef, (snap) => {
+      if (snap.val() === true) {
+        this._emit('join_request', {});
+      }
+    });
+    this._unsubs.push(() => off(guestRef, 'value', unsubGuest));
+
+    // Listen for messages from guest
+    const msgRef = ref(db, `voidloop-rooms/${code}/messages`);
+    const unsubMsg = onChildAdded(msgRef, (snap) => {
+      const msg = snap.val();
+      if (msg && msg.from === 'guest') {
+        this._emit('data', msg.data);
+      }
+    });
+    this._unsubs.push(() => off(msgRef, 'child_added', unsubMsg));
+
+    return { code };
   }
 
-  // ── Client: connect to a host's peer ID ──
-  join(hostId) {
-    return new Promise((resolve, reject) => {
-      if (!_Peer) { reject(new Error('PeerJS not loaded')); return; }
+  // ── Host: approve or reject guest ──
+  async approve(approve) {
+    if (!this.isHost || !this.roomCode) return;
+    const approvalRef = ref(db, `voidloop-rooms/${this.roomCode}/approval`);
+    await set(approvalRef, approve ? 'approved' : 'rejected');
 
-      this.peer = new Peer({
-        host: 'peerjs.com',
-        port: 443,
-        secure: true,
-        debug: 1,
-      });
-
-      this.peer.on('open', (id) => {
-        this.myId = id;
-        this.isHost = false;
-        console.log('[Net] Joining as', id, '→ host', hostId);
-
-        const conn = this.peer.connect(hostId, {
-          reliable: true,
-          serialization: 'json',
-        });
-
-        conn.on('open', () => {
-          console.log('[Net] Connected to host!');
-          this.conn = conn;
-          this.remoteId = hostId;
-          this.connected = true;
-          this._setupConnection(conn);
-          this._emit('connected', { peerId: hostId });
-          resolve({ peerId: hostId });
-        });
-
-        conn.on('error', (err) => {
-          console.error('[Net] Connection error:', err);
-          reject(err);
-        });
-      });
-
-      this.peer.on('error', (err) => {
-        console.error('[Net] Peer error:', err);
-        this._emit('error', { message: err.message });
-        reject(err);
-      });
-    });
+    if (approve) {
+      this.connected = true;
+      this._emit('player_joined', {});
+    }
   }
 
-  // ── Setup data channel handlers ──
-  _setupConnection(conn) {
-    conn.on('data', (data) => {
-      this._emit('data', data);
-    });
+  // ── Guest: join a room ──
+  async join(code, opts = {}) {
+    if (!db) throw new Error('Firebase not initialized. Check firebase-config.js');
 
-    conn.on('close', () => {
-      console.log('[Net] Connection closed');
-      this.connected = false;
-      this.conn = null;
-      this._emit('disconnected', { reason: 'Connection closed' });
-    });
+    const roomRef = ref(db, `voidloop-rooms/${code}`);
+    const snap = await get(roomRef);
+    if (!snap.exists()) {
+      throw new Error('Room not found');
+    }
 
-    conn.on('error', (err) => {
-      console.error('[Net] Data channel error:', err);
-      this._emit('error', { message: err.message });
-    });
-  }
+    const room = snap.val();
+    if (room.guest && room.guest.connected) {
+      throw new Error('Room is full');
+    }
+    if (room.approval === 'rejected') {
+      throw new Error('You were rejected from this room');
+    }
 
-  disconnect() {
-    if (this.conn) { this.conn.close(); this.conn = null; }
-    if (this.peer) { this.peer.destroy(); this.peer = null; }
-    this.connected = false;
+    this.roomCode = code;
     this.isHost = false;
-    this.remoteId = null;
-    this.myId = null;
+    this.role = 'guest';
+
+    // Mark guest as connected
+    await set(ref(db, `voidloop-rooms/${code}/guest`), {
+      connected: true,
+      name: opts.name || 'Guest',
+      joinedAt: Date.now(),
+    });
+
+    // Auto-cleanup on disconnect
+    onDisconnect(ref(db, `voidloop-rooms/${code}/guest`)).set({ connected: false });
+
+    // Listen for approval
+    const approvalRef = ref(db, `voidloop-rooms/${code}/approval`);
+    const unsubApproval = onValue(approvalRef, (snap) => {
+      const val = snap.val();
+      if (val === 'approved') {
+        this.connected = true;
+        this._emit('join_approved', {});
+      } else if (val === 'rejected') {
+        this._emit('join_rejected', { reason: 'Host declined your request' });
+      }
+    });
+    this._unsubs.push(() => off(approvalRef, 'value', unsubApproval));
+
+    // Listen for messages from host
+    const msgRef = ref(db, `voidloop-rooms/${code}/messages`);
+    const unsubMsg = onChildAdded(msgRef, (snap) => {
+      const msg = snap.val();
+      if (msg && msg.from === 'host') {
+        this._emit('data', msg.data);
+      }
+    });
+    this._unsubs.push(() => off(msgRef, 'child_added', unsubMsg));
+
+    // Listen for host disconnect
+    const hostRef = ref(db, `voidloop-rooms/${code}/host/connected`);
+    const unsubHost = onValue(hostRef, (snap) => {
+      if (snap.val() === false) {
+        this._emit('disconnected', { reason: 'Host left' });
+      }
+    });
+    this._unsubs.push(() => off(hostRef, 'value', unsubHost));
+
+    return { status: 'waiting_for_approval' };
   }
 
-  // ── Send data to remote peer ──
-  send(msg) {
-    if (!this.conn || !this.connected) return false;
+  // ── Send message to other player ──
+  async send(msg) {
+    if (!this.roomCode) return false;
+    const from = this.isHost ? 'host' : 'guest';
+    const msgRef = ref(db, `voidloop-rooms/${this.roomCode}/messages`);
     try {
-      this.conn.send(msg);
+      await push(msgRef, { from, data: msg, timestamp: Date.now() });
       return true;
     } catch (e) {
       console.error('[Net] Send failed:', e);
       return false;
     }
+  }
+
+  // ── Disconnect and cleanup ──
+  async disconnect() {
+    // Unsubscribe all listeners
+    this._unsubs.forEach(u => u());
+    this._unsubs = [];
+
+    if (this.roomCode) {
+      if (this.isHost) {
+        // Host leaving: delete the whole room
+        await remove(ref(db, `voidloop-rooms/${this.roomCode}`));
+      } else {
+        // Guest leaving: just mark as disconnected
+        await set(ref(db, `voidloop-rooms/${this.roomCode}/guest`), { connected: false });
+      }
+    }
+
+    this.connected = false;
+    this.isHost = false;
+    this.roomCode = null;
+    this.role = null;
   }
 
   // ── Event system ──
