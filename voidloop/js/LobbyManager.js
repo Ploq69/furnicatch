@@ -25,7 +25,6 @@ export class LobbyManager {
     this.hostPassword = document.getElementById('host-password');
 
     this.joinCode = document.getElementById('join-code');
-    this.joinPassword = document.getElementById('join-password');
     this.joinName = document.getElementById('join-name');
     this.joinBtn = document.getElementById('join-btn');
     this.joinStatus = document.getElementById('join-status');
@@ -137,7 +136,7 @@ export class LobbyManager {
   async _onJoin() {
     const code = this.joinCode.value.trim();
     if (!code) {
-      this.joinStatus.textContent = 'Enter a room code';
+      this.joinStatus.textContent = 'Enter the code from dad';
       this.joinStatus.className = 'lobby-status err';
       return;
     }

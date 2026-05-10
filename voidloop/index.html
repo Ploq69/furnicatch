@@ -19,7 +19,12 @@
       background: #0a0a0a;
       font-family: 'Segoe UI', system-ui, sans-serif;
       color: #fff;
+      -webkit-user-select: none;
       user-select: none;
+    }
+    input, textarea {
+      -webkit-user-select: text;
+      user-select: text;
     }
     canvas { display: block; }
 
@@ -1033,13 +1038,18 @@
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 16px;
-      padding: 28px 32px;
+      padding: 24px 20px;
       display: flex;
       flex-direction: column;
       gap: 14px;
-      min-width: 320px;
+      min-width: 280px;
       max-width: 420px;
       width: 100%;
+    }
+    @media (max-width: 500px) {
+      .lobby-panel { padding: 20px 16px; gap: 12px; }
+      .lobby-title { font-size: 32px; }
+      .lobby-code-display { font-size: 24px; }
     }
     .lobby-input-row {
       display: flex;
@@ -1047,14 +1057,16 @@
     }
     .lobby-input {
       flex: 1;
-      padding: 12px 16px;
-      font-size: 16px;
+      padding: 14px 16px;
+      font-size: 18px;
       font-weight: 700;
-      border-radius: 10px;
+      border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.2);
       background: rgba(0,0,0,0.4);
       color: #fff;
       outline: none;
+      -webkit-appearance: none;
+      min-height: 48px;
     }
     .lobby-input:focus {
       border-color: #a855f7;
@@ -1062,14 +1074,16 @@
     }
     .lobby-input::placeholder { color: rgba(255,255,255,0.3); }
     .lobby-btn {
-      padding: 12px 24px;
-      font-size: 16px;
+      padding: 14px 24px;
+      font-size: 18px;
       font-weight: 800;
-      border-radius: 10px;
+      border-radius: 12px;
       border: none;
       cursor: pointer;
       transition: all 0.15s;
       color: #fff;
+      min-height: 52px;
+      -webkit-tap-highlight-color: transparent;
     }
     .lobby-btn.primary {
       background: linear-gradient(90deg, #a855f7, #7c3aed);
@@ -1386,8 +1400,7 @@
       <!-- Join panel -->
       <div class="lobby-panel">
         <div class="lobby-divider">Join a Game</div>
-        <input class="lobby-input" id="join-code" type="text" placeholder="Room code (e.g. WOLF-1234)" style="text-transform:uppercase;" />
-        <input class="lobby-input" id="join-password" type="password" placeholder="Password (if required)" />
+        <input class="lobby-input" id="join-code" type="text" placeholder="Enter code from dad" autocapitalize="off" autocomplete="off" autocorrect="off" />
         <input class="lobby-input" id="join-name" type="text" placeholder="Your name" value="Guest" />
         <button class="lobby-btn secondary" id="join-btn" style="width:100%;">Join Room</button>
         <div class="lobby-status" id="join-status"></div>
