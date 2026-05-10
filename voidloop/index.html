@@ -1002,10 +1002,170 @@
       background: rgba(239,68,68,0.25);
       border-color: rgba(239,68,68,0.5);
     }
+    /* Lobby / Multiplayer UI */
+    #lobby-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,10,0.97);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      gap: 20px;
+      padding: 40px;
+    }
+    #lobby-overlay.hidden { display: none; }
+    .lobby-title {
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #a855f7;
+      text-shadow: 0 0 24px rgba(168,85,247,0.4);
+      margin-bottom: 8px;
+    }
+    .lobby-subtitle {
+      font-size: 16px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 24px;
+    }
+    .lobby-panel {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 320px;
+      max-width: 420px;
+      width: 100%;
+    }
+    .lobby-input-row {
+      display: flex;
+      gap: 10px;
+    }
+    .lobby-input {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.4);
+      color: #fff;
+      outline: none;
+    }
+    .lobby-input:focus {
+      border-color: #a855f7;
+      box-shadow: 0 0 12px rgba(168,85,247,0.3);
+    }
+    .lobby-input::placeholder { color: rgba(255,255,255,0.3); }
+    .lobby-btn {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 800;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: #fff;
+    }
+    .lobby-btn.primary {
+      background: linear-gradient(90deg, #a855f7, #7c3aed);
+    }
+    .lobby-btn.primary:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 20px rgba(168,85,247,0.4);
+    }
+    .lobby-btn.secondary {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .lobby-btn.secondary:hover {
+      background: rgba(255,255,255,0.18);
+    }
+    .lobby-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    .lobby-status {
+      font-size: 14px;
+      font-weight: 600;
+      min-height: 20px;
+      text-align: center;
+    }
+    .lobby-status.ok { color: #4ade80; }
+    .lobby-status.warn { color: #fbbf24; }
+    .lobby-status.err { color: #f87171; }
+    .lobby-divider {
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin: 4px 0;
+    }
+    .lobby-code-display {
+      font-size: 32px;
+      font-weight: 900;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 2px;
+      color: #fbbf24;
+      text-align: center;
+      text-shadow: 0 0 12px rgba(251,191,36,0.3);
+      user-select: all;
+      cursor: pointer;
+    }
+    .lobby-code-display:hover {
+      color: #fcd34d;
+    }
+    /* Host approval popup */
+    #approval-popup {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2500;
+    }
+    #approval-popup.active { display: flex; }
+    .approval-box {
+      background: rgba(20,20,25,0.98);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 16px;
+      padding: 28px 32px;
+      max-width: 360px;
+      text-align: center;
+    }
+    .approval-box h3 {
+      font-size: 20px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .approval-box p {
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .approval-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    .approval-buttons .lobby-btn.accept {
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+    }
+    .approval-buttons .lobby-btn.reject {
+      background: linear-gradient(90deg, #ef4444, #dc2626);
+    }
   </style>
 </head>
 <body>
-  <div id="loading">
+  <div id="loading" style="display:none;">
     <h1>VOIDLOOP</h1>
     <div id="loading-bar"><div id="loading-bar-fill"></div></div>
     <div id="loading-text" style="opacity:0.6">Loading assets...</div>
@@ -1201,6 +1361,64 @@
     </div>
   </div>
 
+  <!-- Multiplayer Lobby Overlay -->
+  <div id="lobby-overlay">
+    <div class="lobby-title">VOIDLOOP</div>
+    <div class="lobby-subtitle">Multiplayer Co-op</div>
+
+    <!-- Server URL input -->
+    <div class="lobby-panel" id="lobby-connect-panel">
+      <label style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:700;">Relay Server URL</label>
+      <input class="lobby-input" id="lobby-url" type="text" placeholder="ws://localhost:3000" value="ws://localhost:3000" />
+      <button class="lobby-btn primary" id="lobby-connect-btn" style="width:100%;">Connect to Server</button>
+      <div class="lobby-status" id="lobby-connect-status"></div>
+    </div>
+
+    <!-- Host / Join panels (hidden until connected) -->
+    <div id="lobby-action-panels" style="display:none;flex-direction:column;gap:20px;align-items:center;width:100%;max-width:420px;">
+      <!-- Host panel -->
+      <div class="lobby-panel">
+        <div class="lobby-divider">Host a Game</div>
+        <input class="lobby-input" id="host-password" type="password" placeholder="Optional password" />
+        <button class="lobby-btn primary" id="host-btn" style="width:100%;">Create Room</button>
+        <div class="lobby-status" id="host-status"></div>
+        <div id="host-code-row" style="display:none;flex-direction:column;gap:8px;margin-top:8px;">
+          <div style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:700;text-align:center;">Room Code</div>
+          <div class="lobby-code-display" id="host-code" title="Click to copy"></div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;">Share this code with your friend</div>
+        </div>
+      </div>
+
+      <div class="lobby-divider">— or —</div>
+
+      <!-- Join panel -->
+      <div class="lobby-panel">
+        <div class="lobby-divider">Join a Game</div>
+        <input class="lobby-input" id="join-code" type="text" placeholder="Room code (e.g. WOLF-1234)" style="text-transform:uppercase;" />
+        <input class="lobby-input" id="join-password" type="password" placeholder="Password (if required)" />
+        <input class="lobby-input" id="join-name" type="text" placeholder="Your name" value="Guest" />
+        <button class="lobby-btn secondary" id="join-btn" style="width:100%;">Join Room</button>
+        <div class="lobby-status" id="join-status"></div>
+      </div>
+    </div>
+
+    <!-- Start game button (hidden until in a room) -->
+    <button class="lobby-btn primary" id="lobby-start-btn" style="display:none;padding:14px 48px;font-size:18px;">Start Game</button>
+  </div>
+
+  <!-- Host Approval Popup -->
+  <div id="approval-popup">
+    <div class="approval-box">
+      <h3>Join Request</h3>
+      <p id="approval-text">Someone wants to join your game.</p>
+      <div class="approval-buttons">
+        <button class="lobby-btn accept" id="approval-accept">Accept</button>
+        <button class="lobby-btn reject" id="approval-reject">Reject</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

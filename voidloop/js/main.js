@@ -1,3 +1,3 @@
-import { Game } from './Game.js';
+import { LobbyManager } from './LobbyManager.js';
 
-const game = new Game(document.body);
+const lobby = new LobbyManager(document.body);
