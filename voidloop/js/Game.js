@@ -8,6 +8,7 @@ import { Player } from './Player.js';
 import { World } from './World.js';
 import { UIManager } from './UIManager.js';
 import { SFXMapper } from './SFXMapper.js';
+import { TouchControls } from './TouchControls.js';
 import { LootDrop, LOOT_CONFIG } from './LootDrop.js';
 import { GAME, BIOMES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES } from './constants.js';
 import { getKayKitPaths } from './KayKitLoadout.js';
@@ -144,6 +145,9 @@ export class Game {
     // Mining combo system
     this.mineCombo = 0;
     this.mineComboTimer = 0;
+
+    // Touch controls for iPad/tablet
+    this.touchControls = new TouchControls();
 
     // Start loading
     this._loadAssets();
