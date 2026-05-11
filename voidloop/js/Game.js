@@ -19,6 +19,7 @@ import { glyph3D } from '../../js/Glyph3DManager.js';
 import { PetManager } from './PetManager.js';
 import { PetLetter } from './PetLetter.js';
 import { RemotePlayer } from './RemotePlayer.js';
+import { settings } from './SettingsManager.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -39,6 +40,7 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this._applyGraphicsSettings();
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.5;
     this.container.appendChild(this.renderer.domElement);
@@ -76,7 +78,7 @@ export class Game {
     this.torches = [];
 
     // Floor plane (dark ground)
-    const floorGeo = new THREE.PlaneGeometry(100, 100);
+    const floorGeo = new THREE.PlaneGeometry(300, 300);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1510, roughness: 0.9 });
     this.floorPlane = new THREE.Mesh(floorGeo, floorMat);
     this.floorPlane.rotation.x = -Math.PI / 2;
@@ -132,6 +134,14 @@ export class Game {
     // Resize
     window.addEventListener('resize', () => this._onResize());
 
+    // Listen for settings changes
+    this._settingsUnsub = settings.onChange((key, value) => {
+      if (key === 'graphicsQuality') this._applyGraphicsSettings();
+      if (key === 'masterVolume' || key === 'sfxVolume' || key === 'musicVolume') {
+        settings.applyToAudio(audio);
+      }
+    });
+
     // Playtest mode detection
     const params = new URLSearchParams(location.search);
     this.playtestKey = params.get('playtest');
@@ -149,6 +159,11 @@ export class Game {
 
     // Touch controls for iPad/tablet
     this.touchControls = new TouchControls();
+
+    // Pause state
+    this.paused = false;
+    this._pauseBind = null;
+    this._bindPauseMenu();
 
     // Multiplayer sync state
     this.isMultiplayer = false;
@@ -342,6 +357,7 @@ export class Game {
       if (this._audioInitialized) return;
       this._audioInitialized = true;
       audio.init();
+      settings.applyToAudio(audio);
       window.removeEventListener('click', init);
       window.removeEventListener('keydown', init);
     };
@@ -371,19 +387,26 @@ export class Game {
     const dt = Math.min(this.clock.getDelta(), 0.05);
 
     if (this.state === STATES.PLAYING) {
-      if (input.pressed('KeyI')) {
+      // Escape handling: pause takes priority, then loadout/petden close
+      if (input.pressed('Escape')) {
+        if (this.ui.loadoutOpen) {
+          this.ui.hideLoadout();
+        } else if (this.ui.petDenOpen) {
+          this.ui.hidePetDenOverlay();
+        } else {
+          this._togglePause();
+        }
+      }
+
+      if (input.pressed('KeyI') && !this.paused) {
         this.ui.toggleLoadout();
-      } else if (this.ui.loadoutOpen && input.pressed('Escape')) {
-        this.ui.hideLoadout();
       }
 
-      if (input.pressed('KeyP')) {
+      if (input.pressed('KeyP') && !this.paused) {
         this.ui.togglePetDen();
-      } else if (this.ui.petDenOpen && input.pressed('Escape')) {
-        this.ui.hidePetDenOverlay();
       }
 
-      if (!this.ui.loadoutOpen && !this.ui.petDenOpen) {
+      if (!this.ui.loadoutOpen && !this.ui.petDenOpen && !this.paused) {
         this._updatePlaying(dt);
       }
     }
@@ -779,7 +802,37 @@ export class Game {
     this.camera.updateProjectionMatrix();
   }
 
+  _togglePause() {
+    this.paused = !this.paused;
+    if (this.paused) {
+      this.ui.showPauseMenu();
+    } else {
+      this.ui.hidePauseMenu();
+    }
+  }
+
+  _bindPauseMenu() {
+    const onResume = () => {
+      if (this.paused) this._togglePause();
+    };
+    const onSettings = () => {
+      document.dispatchEvent(new CustomEvent('show-settings'));
+    };
+    const onQuit = () => {
+      this.ui.hidePauseMenu();
+      this.paused = false;
+      if (this.mainMenu) {
+        this.mainMenu.returnToMenu();
+      }
+    };
+    document.addEventListener('pause-resume', onResume);
+    document.addEventListener('pause-settings', onSettings);
+    document.addEventListener('pause-quit', onQuit);
+    this._pauseBind = { onResume, onSettings, onQuit };
+  }
+
   _screenShake(intensity, duration) {
+    if (!settings.get('cameraShake')) return;
     this.shakeIntensity = intensity;
     this.shakeDuration = duration;
   }
@@ -1037,6 +1090,12 @@ export class Game {
     if (this.letterPool.allSpelledForLevel()) {
       this.ui.showFloatingText('All letters found!', 0x4ade80);
     }
+  }
+
+  _applyGraphicsSettings() {
+    const size = settings.getShadowMapSize();
+    this.sun.shadow.mapSize.set(size, size);
+    this.sun.shadow.mapSize.needsUpdate = true;
   }
 
   _onResize() {

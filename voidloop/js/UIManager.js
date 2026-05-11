@@ -1,5 +1,6 @@
 import { GAME, UPGRADES, PET_LEVELS } from './constants.js';
 import { SFXMapper } from './SFXMapper.js';
+import { settings } from './SettingsManager.js';
 import { LoadoutPreview } from './LoadoutPreview.js';
 import {
   DEFAULT_LOADOUT,
@@ -96,6 +97,10 @@ export class UIManager {
 
     // Touch controls
     this.elTouchControls = document.getElementById('touch-controls');
+
+    // Pause menu
+    this.elPause = document.getElementById('pause-overlay');
+    this._bindPause();
 
     // Spelling overlay elements
     this.elSpellingOverlay = document.getElementById('spelling-overlay');
@@ -312,9 +317,39 @@ export class UIManager {
   }
 
   _setTouchControlsVisible(visible) {
-    if (this.elTouchControls) {
-      this.elTouchControls.style.display = visible ? 'block' : 'none';
+    if (!this.elTouchControls) return;
+    const tc = this.elTouchControls;
+    if (!visible) {
+      tc.style.display = 'none';
+      return;
     }
+    if (settings.shouldShowTouchControls()) {
+      tc.style.display = 'block';
+    } else {
+      tc.style.display = 'none';
+    }
+  }
+
+  _bindPause() {
+    document.getElementById('pause-resume')?.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('pause-resume'));
+    });
+    document.getElementById('pause-settings')?.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('pause-settings'));
+    });
+    document.getElementById('pause-quit')?.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('pause-quit'));
+    });
+  }
+
+  showPauseMenu() {
+    if (this.elPause) this.elPause.classList.add('active');
+    this._setTouchControlsVisible(false);
+  }
+
+  hidePauseMenu() {
+    if (this.elPause) this.elPause.classList.remove('active');
+    this._setTouchControlsVisible(true);
   }
 
   hideLoading() {

@@ -69,6 +69,13 @@ export class Block {
   }
 
   async createMesh(scene, options = {}) {
+    // If an instancer is provided and this is a ground block, use instanced rendering
+    this._instancer = options.instancer || null;
+    if (this._instancer && !this.isFloating) {
+      await this._instancer.addBlock(this);
+      return null; // No individual mesh
+    }
+
     // Try to load the KayKit 3D model
     if (this.def.model) {
       try {
@@ -209,34 +216,40 @@ export class Block {
     // Scale pulse on hit
     this._scalePulse = 0.08;
 
-    // Flash white on hit (supports GLTF groups with multiple meshes)
-    const meshes = this._getMeshMaterials();
-    if (meshes.length > 0) {
-      if (!this.mesh.userData.origMats) {
-        this.mesh.userData.origMats = meshes.map(m => m.material);
-        meshes.forEach(m => {
-          m.material = Array.isArray(m.material)
-            ? m.material.map(mat => mat.clone())
-            : m.material.clone();
-        });
-      }
-      meshes.forEach(m => {
-        // Guard: only materials that actually support emissive
-        if (m.material.emissive !== undefined) {
-          m.material.emissive = new THREE.Color(0xffffff);
-          m.material.emissiveIntensity = 0.6;
-        }
-      });
+    // Flash white on hit
+    if (this._instancer && !this.isFloating) {
+      this._instancer.flashBlock(this, 0xffffff, 0.6);
       setTimeout(() => {
-        if (this.mesh && this.mesh.userData.origMats) {
+        if (!this.destroyed) this._instancer.unflashBlock(this);
+      }, 80);
+    } else {
+      const meshes = this._getMeshMaterials();
+      if (meshes.length > 0) {
+        if (!this.mesh.userData.origMats) {
+          this.mesh.userData.origMats = meshes.map(m => m.material);
           meshes.forEach(m => {
-            if (m.material && m.material.emissive !== undefined && m.material.emissive.setHex) {
-              m.material.emissive.setHex(0x000000);
-              m.material.emissiveIntensity = 0;
-            }
+            m.material = Array.isArray(m.material)
+              ? m.material.map(mat => mat.clone())
+              : m.material.clone();
           });
         }
-      }, 80);
+        meshes.forEach(m => {
+          if (m.material.emissive !== undefined) {
+            m.material.emissive = new THREE.Color(0xffffff);
+            m.material.emissiveIntensity = 0.6;
+          }
+        });
+        setTimeout(() => {
+          if (this.mesh && this.mesh.userData.origMats) {
+            meshes.forEach(m => {
+              if (m.material && m.material.emissive !== undefined && m.material.emissive.setHex) {
+                m.material.emissive.setHex(0x000000);
+                m.material.emissiveIntensity = 0;
+              }
+            });
+          }
+        }, 80);
+      }
     }
 
     this._updateHpBar();
@@ -256,6 +269,29 @@ export class Block {
         this.hpBar.visible = false;
       }
     }
+
+    // Update instancer transform for shake/scale
+    if (this._instancer && !this.isFloating) {
+      if (this.shakeTimer > 0 || this._scalePulse > 0) {
+        this._instancer.updateBlockTransform(this);
+        if (this.shakeTimer > 0) {
+          this.shakeTimer -= dt;
+          if (this.shakeTimer <= 0) {
+            this.shakeOffset.set(0, 0, 0);
+            this._instancer.updateBlockTransform(this);
+          }
+        }
+        if (this._scalePulse > 0) {
+          this._scalePulse -= dt * 0.5;
+          if (this._scalePulse < 0) {
+            this._scalePulse = 0;
+            this._instancer.updateBlockTransform(this);
+          }
+        }
+        return;
+      }
+    }
+
     const v = this._visualPos();
     if (this.shakeTimer > 0 && this.mesh) {
       this.shakeTimer -= dt;
@@ -279,7 +315,9 @@ export class Block {
   destroy(scene, particleSystem) {
     if (this.destroyed) return null;
     this.destroyed = true;
-    if (this.mesh) {
+    if (this._instancer && !this.isFloating) {
+      this._instancer.removeBlock(this);
+    } else if (this.mesh) {
       scene.remove(this.mesh);
     }
     if (this._glowLight) {

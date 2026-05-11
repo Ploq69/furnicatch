@@ -227,7 +227,21 @@ export class Enemy {
       return;
     }
 
+    // Distance culling: far enemies only get minimal animation updates
+    const distToPlayer = this.position.distanceTo(playerPos);
+    const SLEEP_DIST = 30;
+    const isAsleep = distToPlayer > SLEEP_DIST;
+
     if (this.mixer) this.mixer.update(dt);
+    if (isAsleep) {
+      // Minimal update: just play idle anim, no AI, no movement
+      if (this.mesh) {
+        const flyOffset = this.def.flying ? (1.5 + Math.sin(this.proceduralTime * 1.5) * 0.3) : 0;
+        this.mesh.position.set(this.position.x, this.position.y + this.groundOffset + flyOffset, this.position.z);
+      }
+      return;
+    }
+
     if (this.animLockTimer > 0) this.animLockTimer -= dt;
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
 
@@ -235,8 +249,6 @@ export class Enemy {
     if (this.hpBarGroup) {
       this.hpBarGroup.lookAt(20, 20, 20);
     }
-
-    const distToPlayer = this.position.distanceTo(playerPos);
     const detectRange = 6;
     const attackRange = 1.5;
 

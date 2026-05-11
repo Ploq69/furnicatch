@@ -1,3 +1,5 @@
-import { LobbyManager } from './LobbyManager.js';
+import { MainMenu } from './MainMenu.js';
+import { SettingsMenu } from './SettingsMenu.js';
 
-const lobby = new LobbyManager(document.body);
+const mainMenu = new MainMenu(document.body);
+const settingsMenu = new SettingsMenu();

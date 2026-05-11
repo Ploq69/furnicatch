@@ -22,6 +22,10 @@ class AudioManager {
     this.sfxGain.gain.value = 0.9;
     this.musicGain.gain.value = 0.3;
     this.initialized = true;
+    // Apply settings asynchronously if available
+    import('./SettingsManager.js').then(({ settings }) => {
+      settings.applyToAudio(this);
+    }).catch(() => {});
   }
 
   async loadBuffer(path) {

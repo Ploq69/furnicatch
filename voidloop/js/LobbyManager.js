@@ -3,11 +3,11 @@
  */
 
 import { net } from './NetworkManager.js';
-import { Game } from './Game.js';
 
 export class LobbyManager {
-  constructor(container) {
+  constructor(container, onStartGame) {
     this.container = container;
+    this.onStartGame = onStartGame;
     this.overlay = document.getElementById('lobby-overlay');
     this.approvalPopup = document.getElementById('approval-popup');
 
@@ -35,15 +35,14 @@ export class LobbyManager {
     this.approvalAccept = document.getElementById('approval-accept');
     this.approvalReject = document.getElementById('approval-reject');
 
-    this.game = null;
     this._hasStarted = false;
 
     this._bindEvents();
   }
 
   _bindEvents() {
-    // Solo play (diagnostic — bypasses all multiplayer)
-    this.soloBtn?.addEventListener('click', () => this._onSolo());
+    // Solo play button goes back to main menu
+    this.soloBtn?.addEventListener('click', () => this._onBackToMenu());
 
     // Host
     this.hostBtn?.addEventListener('click', () => this._onHost());
@@ -123,29 +122,11 @@ export class LobbyManager {
     });
   }
 
-  // ── Solo play: bypass all multiplayer, start game immediately ──
-  _onSolo() {
-    if (this._hasStarted) return;
-    this.soloBtn.disabled = true;
-    this.soloBtn.textContent = 'Loading...';
-    this._hasStarted = true;
-
-    // Hide lobby and touch controls
+  _onBackToMenu() {
     this.overlay.classList.add('hidden');
     this.approvalPopup.classList.remove('active');
-    const tc = document.getElementById('touch-controls');
-    if (tc) tc.style.display = 'none';
-    const loading = document.getElementById('loading');
-    if (loading) loading.style.display = 'flex';
-
-    try {
-      this.game = new Game(this.container);
-      this.game.isMultiplayer = false;
-      this.game.isHost = true;
-      this.game.net = null;
-    } catch (err) {
-      this._showStartError(err);
-    }
+    // Notify parent to show main menu
+    document.dispatchEvent(new CustomEvent('show-main-menu'));
   }
 
   async _onHost() {
@@ -177,7 +158,6 @@ export class LobbyManager {
     this._setJoinState('connecting');
 
     try {
-      // Race against a 10s timeout so the user never hangs forever
       const res = await this._joinWithTimeout(code, 10000);
       if (res.status === 'waiting_for_approval') {
         this._setJoinState('waiting');
@@ -211,7 +191,6 @@ export class LobbyManager {
       this.joinBtn.textContent = 'Pending...';
       this.joinBtn.classList.remove('lobby-btn-loading');
     } else {
-      // idle / error
       this.joinBtn.disabled = false;
       this.joinBtn.textContent = this._joinOriginalText;
       this.joinBtn.classList.remove('lobby-btn-loading');
@@ -248,9 +227,7 @@ export class LobbyManager {
     this.startBtn.textContent = 'Starting...';
     this.hostStatus.textContent = 'Starting game...';
 
-    // Signal guest via persistent flag
     await net.startGame();
-
     this._startGame();
   }
 
@@ -261,7 +238,6 @@ export class LobbyManager {
   }
 
   _startGame() {
-    // Hide ALL overlays before starting
     this.overlay.classList.add('hidden');
     this.approvalPopup.classList.remove('active');
     const tc = document.getElementById('touch-controls');
@@ -270,45 +246,8 @@ export class LobbyManager {
     const loading = document.getElementById('loading');
     if (loading) loading.style.display = 'flex';
 
-    // Safety timeout: if game doesn't start in 10s, show error
-    const timeoutId = setTimeout(() => {
-      if (this._hasStarted && !this.game) {
-        this._showStartError(new Error('Game loading timed out. Check console for details.'));
-      }
-    }, 10000);
-
-    try {
-      this.game = new Game(this.container);
-      this.game.isMultiplayer = true;
-      this.game.isHost = net.isHost;
-      this.game.net = net;
-      clearTimeout(timeoutId);
-    } catch (err) {
-      clearTimeout(timeoutId);
-      this._showStartError(err);
+    if (this.onStartGame) {
+      this.onStartGame(net, net.isHost);
     }
-  }
-
-  _showStartError(err) {
-    console.error('[Lobby] Game start failed:', err);
-    const msg = err?.message || 'Unknown error';
-    const statusEl = net.isHost ? this.hostStatus : this.joinStatus;
-    statusEl.textContent = 'Failed to start: ' + msg;
-    statusEl.className = 'lobby-status err';
-
-    // Bring lobby back so user can retry
-    this.overlay.classList.remove('hidden');
-    const loading = document.getElementById('loading');
-    if (loading) loading.style.display = 'none';
-    // Hide touch controls so they don't block the lobby
-    const tc = document.getElementById('touch-controls');
-    if (tc) tc.style.display = 'none';
-
-    // Reset buttons
-    this._hasStarted = false;
-    this.startBtn.disabled = false;
-    this.startBtn.textContent = 'Start Game';
-    this.soloBtn.disabled = false;
-    this.soloBtn.textContent = 'Play Solo';
   }
 }

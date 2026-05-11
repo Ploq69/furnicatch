@@ -6,6 +6,7 @@ import { SFXMapper } from './SFXMapper.js';
 import { assetLoader } from './AssetLoader.js';
 import { getBlockTypeForTile, PROP_CATALOG } from './levelbuilder/LevelCatalog.js';
 import { SeededRNG } from './SeededRNG.js';
+import { BlockInstancer } from './BlockInstancer.js';
 
 // Biome-specific floating block types for procedural generation
 const FLOAT_BLOCK_TYPES = {
@@ -31,6 +32,7 @@ export class World {
     this.authoredDoc = null;
     this.rng = null;
     this._nextEnemyId = 1;
+    this.instancer = new BlockInstancer(scene);
   }
 
   setFloor(floorNum) {
@@ -51,6 +53,9 @@ export class World {
 
     const size = GAME.FLOOR_SIZE;
     const types = this.biome.blocks;
+
+    // Preload block geometries for instancer
+    await this.instancer.preloadTypes(types);
 
     // --- denseCave generation: 60-80% block coverage ---
     // Use cellular automata approach for organic caves
@@ -125,7 +130,7 @@ export class World {
           // Skip exact center for player spawn
           if (Math.abs(worldX) <= 1 && Math.abs(worldZ) <= 1) continue;
           const type = rng.choice(types);
-          await this._placeBlock(type, worldX, 0, worldZ);
+          this._placeBlock(type, worldX, 0, worldZ, { useInstancer: true });
         }
       }
     }
@@ -145,13 +150,14 @@ export class World {
     // Place a spawn platform so the player doesn't fall into the void
     for (let sx = -1; sx <= 1; sx++) {
       for (let sz = -1; sz <= 1; sz++) {
-        await this._placeBlock('stone', sx, 0, sz);
+        this._placeBlock('stone', sx, 0, sz, { useInstancer: true });
       }
     }
     this.startPosition = new THREE.Vector3(0, 1, 0);
 
-    // Spawn enemies
-    const enemyCount = Math.min(3 + Math.floor(this.floor / 3), 12);
+    // Spawn enemies — scale with world area but cap for performance
+    const areaFactor = (GAME.FLOOR_SIZE / 16) ** 2;
+    const enemyCount = Math.min(Math.floor((3 + Math.floor(this.floor / 3)) * areaFactor), 40);
     const enemyTypes = this.biome.enemies;
     for (let i = 0; i < enemyCount; i++) {
       const et = rng.choice(enemyTypes);
@@ -236,7 +242,7 @@ export class World {
     for (const t of levelDoc.tiles) {
       const blockType = getBlockTypeForTile(t.type);
       for (let dy = 0; dy < t.height; dy++) {
-        await this._placeBlock(blockType, t.x, t.y + dy, t.z);
+        this._placeBlock(blockType, t.x, t.y + dy, t.z, { useInstancer: true });
       }
     }
 
@@ -359,11 +365,15 @@ export class World {
     }
   }
 
-  async _placeBlock(typeKey, x, y, z) {
+  _placeBlock(typeKey, x, y, z, options = {}) {
     const key = `${x},${y},${z}`;
     if (this.blocks.has(key)) return;
     const block = new Block(typeKey, x, y, z);
-    await block.createMesh(this.scene);
+    if (options.useInstancer) {
+      block.createMesh(this.scene, { instancer: this.instancer });
+    } else {
+      block.createMesh(this.scene);
+    }
     this.blocks.set(key, block);
     // Update column height tracking
     const colKey = `${x},${z}`;
@@ -407,6 +417,9 @@ export class World {
   }
 
   update(dt, playerPos, particles, audio, player) {
+    // Update chunk visibility based on player position
+    this.instancer.updateVisibility(playerPos, 45);
+
     for (const block of this.blocks.values()) {
       block.update(dt);
       // Floating block bobbing animation
@@ -437,6 +450,7 @@ export class World {
   }
 
   clear() {
+    this.instancer.clear();
     for (const block of this.blocks.values()) {
       if (block.mesh) this.scene.remove(block.mesh);
     }
