@@ -188,47 +188,84 @@ export class World {
 
   async _spawnFloatingBlocksZone(zone, rng) {
     const types = zone.floatingBlockTypes || ['crystal'];
-    // Many clusters: 20+ per zone, scaling with zone order
-    const clusterCount = Math.min(20 + zone.order * 8, 40);
+    const targetClusters = Math.min(15 + zone.order * 5, 30);
     const b = zone.bounds;
+    const sp = zone.spawnPoint;
+    const placed = []; // {x, y, z} of all floating blocks for min-distance checks
 
-    // Use all columns (both empty and occupied by ground blocks)
-    // Floating blocks can float above ground too
+    // 1. Pick cluster centers with minimum 4-unit separation
     const allColumns = [];
-    for (let x = b.minX; x < b.maxX; x++) {
-      for (let z = b.minZ; z < b.maxZ; z++) {
-        // Skip spawn area
-        const sp = zone.spawnPoint;
-        const distFromSpawn = Math.sqrt((x - sp.x) ** 2 + (z - sp.z) ** 2);
-        if (distFromSpawn < 4) continue;
+    for (let x = b.minX + 2; x < b.maxX - 2; x++) {
+      for (let z = b.minZ + 2; z < b.maxZ - 2; z++) {
+        const dSpawn = Math.sqrt((x - sp.x) ** 2 + (z - sp.z) ** 2);
+        if (dSpawn < 5) continue;
+        if (zone.exitGateway) {
+          const gw = zone.exitGateway;
+          if (Math.abs(x - gw.x) < 3 && Math.abs(z - gw.z) < 3) continue;
+        }
         allColumns.push({ x, z });
       }
     }
 
     rng.shuffle(allColumns);
-    const selected = allColumns.slice(0, clusterCount);
 
-    for (const col of selected) {
-      // Each cluster has 3-5 floating blocks
-      const blocksPerCluster = 3 + Math.floor(rng.random() * 3);
-      for (let i = 0; i < blocksPerCluster; i++) {
-        const y = 2 + i + Math.floor(rng.random() * 2);
-        const bx = col.x + Math.round(rng.random() * 2 - 1);
-        const bz = col.z + Math.round(rng.random() * 2 - 1);
+    const centers = [];
+    for (const col of allColumns) {
+      if (centers.length >= targetClusters) break;
+      let tooClose = false;
+      for (const c of centers) {
+        const dx = col.x - c.x;
+        const dz = col.z - c.z;
+        if (Math.sqrt(dx * dx + dz * dz) < 4.0) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) centers.push(col);
+    }
 
-        // Bounds check
-        if (bx < b.minX || bx >= b.maxX || bz < b.minZ || bz >= b.maxZ) continue;
-        if (this.getBlock(bx, y, bz)) continue;
+    // 2. Spawn blocks in rings around each center
+    for (const center of centers) {
+      const clusterY = rng.random() < 0.9 ? 2.0 : 2.5;
+      const blockCount = 2 + Math.floor(rng.random() * 3); // 2-4 blocks
+      const baseRadius = 1.2 + rng.random() * 0.8; // 1.2-2.0
+      const baseAngle = rng.random() * Math.PI * 2;
+
+      for (let i = 0; i < blockCount; i++) {
+        const angleStep = (Math.PI * 2) / blockCount;
+        const angle = baseAngle + i * angleStep + (rng.random() - 0.5) * 0.5;
+        const radius = baseRadius + (rng.random() - 0.5) * 0.3;
+        const bx = center.x + Math.cos(angle) * radius;
+        const bz = center.z + Math.sin(angle) * radius;
+        const by = clusterY;
+
+        // Global minimum distance check against all placed floating blocks
+        let tooClose = false;
+        for (const p of placed) {
+          const dx = bx - p.x;
+          const dy = by - p.y;
+          const dz = bz - p.z;
+          if (Math.sqrt(dx * dx + dy * dy + dz * dz) < 1.2) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (tooClose) continue;
+
+        // Ground block collision check
+        if (this.getBlock(bx, by, bz)) continue;
 
         const type = rng.choice(types);
         await this._placeFloatingBlock({
-          x: bx + (rng.random() - 0.5) * 0.3,
-          y,
-          z: bz + (rng.random() - 0.5) * 0.3,
+          x: bx + (rng.random() - 0.5) * 0.2,
+          y: by,
+          z: bz + (rng.random() - 0.5) * 0.2,
           type,
           rotation: rng.random() * 360,
-          scale: 0.8 + rng.random() * 0.4,
+          scale: 0.9 + rng.random() * 0.2,
         }, rng);
+
+        placed.push({ x: bx, y: by, z: bz });
       }
     }
   }
