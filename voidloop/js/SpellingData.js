@@ -430,6 +430,11 @@ export class LetterPool {
     return this.cycleGroups[this.cycleIndex] || [];
   }
 
+  setLetters(letters) {
+    this.cycleGroups[this.cycleIndex] = letters.map(l => l.toUpperCase());
+    this.spelledThisLevel.clear();
+  }
+
   markSpelled(letter) {
     const upper = letter.toUpperCase();
     this.spelledThisCycle.add(upper);

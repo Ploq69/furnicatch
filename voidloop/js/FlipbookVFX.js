@@ -202,4 +202,10 @@ export const FLIPBOOK_EFFECTS = {
     fps: 20,
     scale: 2.5,
   },
+  // Water splash effect for Water Staff impact
+  water_splash: {
+    sheetPath: "Super Pixel Effects Gigapack (Free Version)/spritesheet/Fantasy Spells/spell_attack_up_001/spell_attack_up_001_large_blue/spritesheet.png",
+    fps: 20,
+    scale: 2.5,
+  },
 };

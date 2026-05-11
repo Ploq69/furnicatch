@@ -164,8 +164,12 @@ export class Enemy {
     if (lockDuration > 0) this.animLockTimer = lockDuration;
   }
 
-  takeDamage(dmg) {
+  takeDamage(dmg, attackerWeapon) {
     if (this.dead) return;
+    // Fire zone enemies require water_staff to damage
+    if (this.zoneId === 'fire' && attackerWeapon !== 'water_staff') {
+      return; // Immune without Water Staff
+    }
     this.hp -= dmg;
 
     // White flash on hit (only on materials that natively support emissive)

@@ -152,6 +152,11 @@ export class Player {
     this.level = 1;
     this.xp = 0;
     this.world = null; // set by Game for ground height snapping
+
+    // Functional equipment slots (separate from visual loadout)
+    this.equippedTool = null;
+    this.equippedArmor = null;
+    this.equippedWeapon = null;
   }
 
   async spawn(characterId = DEFAULT_LOADOUT.characterId) {
@@ -560,8 +565,42 @@ export class Player {
     SFXMapper.playerHeal();
   }
 
+  // Hazard interaction — burn damage handled by HazardSystem
+  isInHazard() {
+    return false; // Game.js HazardSystem handles this externally
+  }
+
   addItem(type, count = 1) {
     this.inventory[type] = (this.inventory[type] || 0) + count;
+  }
+
+  // Functional equipment slots
+  equipTool(toolId) {
+    this.equippedTool = toolId;
+  }
+
+  equipArmor(armorId) {
+    this.equippedArmor = armorId;
+  }
+
+  equipFunctionalWeapon(weaponId) {
+    this.equippedWeapon = weaponId;
+  }
+
+  getEquippedTool() {
+    return this.equippedTool;
+  }
+
+  getEquippedArmor() {
+    return this.equippedArmor;
+  }
+
+  getEquippedWeapon() {
+    return this.equippedWeapon;
+  }
+
+  hasItem(itemId) {
+    return this.inventory[itemId] > 0;
   }
 
   attack(origin, direction, scene, audio, particles, enemies) {

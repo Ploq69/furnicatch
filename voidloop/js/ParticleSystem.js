@@ -110,6 +110,11 @@ class ParticleSystem {
     this.spawn({ pos, count, color: 0xa855f7, speed: 3, life: 0.6, size: 0.2 });
   }
 
+  // Water aura for Water Suit equipment
+  waterAura(pos, count = 12) {
+    this.spawn({ pos, count, color: 0x4488ff, speed: 1.5, life: 0.8, size: 0.18, texture: 'spark' });
+  }
+
   debris(pos, color = 0x888888) {
     // Spawn 3-4 small cube fragments that fly outward with gravity
     const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);

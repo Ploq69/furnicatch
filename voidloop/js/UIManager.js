@@ -259,6 +259,16 @@ export class UIManager {
       this.game.startDescent(this._campFromDeath);
     });
 
+    // Shop button
+    this.elShopBtn = document.getElementById('btn-shop');
+    if (this.elShopBtn) {
+      this.elShopBtn.addEventListener('click', () => {
+        SFXMapper.uiClick();
+        this.showShop();
+      });
+    }
+
+    // Legacy inline upgrades (also accessible via shop)
     const containers = {
       pickaxe: document.getElementById('blacksmith-upgrades'),
       combat: document.getElementById('combat-upgrades'),
@@ -769,6 +779,10 @@ export class UIManager {
       }
     });
     this._renderPetDen();
+    // Update shop coins if shop UI exists
+    if (this.game.shopUI) {
+      this.game.shopUI.setCoins(this.game.player.coins);
+    }
   }
 
   hideCamp() {
@@ -782,6 +796,49 @@ export class UIManager {
     if (this.elZoom) this.elZoom.style.display = 'flex';
     if (this.elFps) this.elFps.style.display = 'block';
     this._updatePetHud();
+  }
+
+  showShop() {
+    if (this.game.shopUI) {
+      this.game.shopUI.setCoins(this.game.player.coins);
+      this.game.shopUI.show();
+    }
+  }
+
+  hideShop() {
+    if (this.game.shopUI) {
+      this.game.shopUI.hide();
+    }
+  }
+
+  // Gateway indicator UI
+  showGatewayIndicator(zoneName, locked, requirements) {
+    if (!this._gatewayIndicator) {
+      this._gatewayIndicator = document.createElement('div');
+      this._gatewayIndicator.className = 'gateway-indicator';
+      document.body.appendChild(this._gatewayIndicator);
+    }
+    const icon = locked ? '🔒' : '✅';
+    const text = locked ? `Requires: ${requirements.join(', ')}` : 'Press E to enter';
+    this._gatewayIndicator.innerHTML = `<div>${icon} ${zoneName}</div><div class="gateway-req">${text}</div>`;
+    this._gatewayIndicator.style.display = 'block';
+  }
+
+  hideGatewayIndicator() {
+    if (this._gatewayIndicator) {
+      this._gatewayIndicator.style.display = 'none';
+    }
+  }
+
+  // Burn warning indicator
+  showBurnWarning(show) {
+    if (!this._burnWarning) {
+      this._burnWarning = document.createElement('div');
+      this._burnWarning.className = 'burn-warning';
+      this._burnWarning.textContent = '🔥 BURNING! Equip Water Suit!';
+      document.body.appendChild(this._burnWarning);
+    }
+    this._burnWarning.style.display = show ? 'block' : 'none';
   }
 
   setFPS(fps) {

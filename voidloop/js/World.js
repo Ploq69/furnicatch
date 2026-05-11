@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GAME, BIOMES, BLOCK_TYPES, ENEMY_TYPES } from './constants.js';
+import { GAME, BIOMES, BLOCK_TYPES, ENEMY_TYPES, ZONE_LOOT_TABLES } from './constants.js';
+import { ZONES, getZoneById } from './ZoneData.js';
 import { Block } from './Block.js';
 import { Enemy } from './Enemy.js';
 import { SFXMapper } from './SFXMapper.js';
@@ -46,51 +47,55 @@ export class World {
     SFXMapper.ambientBiome(this.biome.name);
   }
 
-  async generateFloor(seed) {
-    this.clear();
+  async generateZone(zoneId, seed, spawnEnemies = true) {
+    const zone = getZoneById(zoneId);
+    if (!zone) throw new Error(`Unknown zone: ${zoneId}`);
+
     this.rng = seed != null ? new SeededRNG(seed) : null;
     const rng = this.rng || { random: () => Math.random(), rangeInt: (a, b) => a + Math.floor(Math.random() * (b - a + 1)), choice: (arr) => arr[Math.floor(Math.random() * arr.length)], shuffle: (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; } };
 
-    const size = GAME.FLOOR_SIZE;
-    const types = this.biome.blocks;
+    const b = zone.bounds;
+    const types = zone.blockTypes;
+    const size = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2;
 
     // Preload block geometries for instancer
     await this.instancer.preloadTypes(types);
 
-    // --- denseCave generation: 60-80% block coverage ---
-    // Use cellular automata approach for organic caves
-    const gridSize = size * 2 + 1;
-    const grid = new Array(gridSize * gridSize).fill(0);
+    // --- denseCave generation within zone bounds ---
+    const gridW = b.maxX - b.minX;
+    const gridD = b.maxZ - b.minZ;
+    const grid = new Array(gridW * gridD).fill(0);
 
     // Initialize with random noise (65% chance of block)
-    for (let gx = 0; gx < gridSize; gx++) {
-      for (let gz = 0; gz < gridSize; gz++) {
-        const dx = gx - size;
-        const dz = gz - size;
+    for (let gx = 0; gx < gridW; gx++) {
+      for (let gz = 0; gz < gridD; gz++) {
+        const worldX = b.minX + gx;
+        const worldZ = b.minZ + gz;
+        const dx = worldX - (b.minX + b.maxX) / 2;
+        const dz = worldZ - (b.minZ + b.maxZ) / 2;
         const dist = Math.max(Math.abs(dx), Math.abs(dz));
 
         if (dist >= size) {
-          // Always wall at boundary
-          grid[gz * gridSize + gx] = 1;
+          grid[gz * gridW + gx] = 1;
         } else if (dist >= size - 1) {
-          // Near boundary: 90% wall
-          grid[gz * gridSize + gx] = rng.random() < 0.9 ? 1 : 0;
+          grid[gz * gridW + gx] = rng.random() < 0.9 ? 1 : 0;
         } else {
-          // Interior: 65% wall chance
-          grid[gz * gridSize + gx] = rng.random() < 0.65 ? 1 : 0;
+          grid[gz * gridW + gx] = rng.random() < 0.65 ? 1 : 0;
         }
       }
     }
 
     // Smooth with cellular automata (3 iterations)
     for (let iter = 0; iter < 3; iter++) {
-      const newGrid = new Array(gridSize * gridSize).fill(0);
-      for (let gx = 0; gx < gridSize; gx++) {
-        for (let gz = 0; gz < gridSize; gz++) {
-          const dx = gx - size;
-          const dz = gz - size;
+      const newGrid = new Array(gridW * gridD).fill(0);
+      for (let gx = 0; gx < gridW; gx++) {
+        for (let gz = 0; gz < gridD; gz++) {
+          const worldX = b.minX + gx;
+          const worldZ = b.minZ + gz;
+          const dx = worldX - (b.minX + b.maxX) / 2;
+          const dz = worldZ - (b.minZ + b.maxZ) / 2;
           if (Math.max(Math.abs(dx), Math.abs(dz)) >= size) {
-            newGrid[gz * gridSize + gx] = 1;
+            newGrid[gz * gridW + gx] = 1;
             continue;
           }
 
@@ -100,94 +105,132 @@ export class World {
               if (nx === 0 && nz === 0) continue;
               const ax = gx + nx;
               const az = gz + nz;
-              if (ax >= 0 && ax < gridSize && az >= 0 && az < gridSize) {
-                if (grid[az * gridSize + ax]) neighbors++;
+              if (ax >= 0 && ax < gridW && az >= 0 && az < gridD) {
+                if (grid[az * gridW + ax]) neighbors++;
               } else {
-                neighbors++; // Out of bounds counts as wall
+                neighbors++;
               }
             }
           }
 
-          if (grid[gz * gridSize + gx]) {
-            // Stay alive if enough neighbors
-            newGrid[gz * gridSize + gx] = neighbors >= 4 ? 1 : 0;
+          if (grid[gz * gridW + gx]) {
+            newGrid[gz * gridW + gx] = neighbors >= 4 ? 1 : 0;
           } else {
-            // Birth if enough neighbors
-            newGrid[gz * gridSize + gx] = neighbors >= 5 ? 1 : 0;
+            newGrid[gz * gridW + gx] = neighbors >= 5 ? 1 : 0;
           }
         }
       }
-      // Copy back
       for (let i = 0; i < grid.length; i++) grid[i] = newGrid[i];
     }
 
     // Place blocks from grid
-    for (let gx = 0; gx < gridSize; gx++) {
-      for (let gz = 0; gz < gridSize; gz++) {
-        if (grid[gz * gridSize + gx]) {
-          const worldX = gx - size;
-          const worldZ = gz - size;
-          // Skip exact center for player spawn
-          if (Math.abs(worldX) <= 1 && Math.abs(worldZ) <= 1) continue;
+    for (let gx = 0; gx < gridW; gx++) {
+      for (let gz = 0; gz < gridD; gz++) {
+        if (grid[gz * gridW + gx]) {
+          const worldX = b.minX + gx;
+          const worldZ = b.minZ + gz;
+          // Skip spawn area
+          const sp = zone.spawnPoint;
+          if (Math.abs(worldX - sp.x) <= 1 && Math.abs(worldZ - sp.z) <= 1) continue;
           const type = rng.choice(types);
-          this._placeBlock(type, worldX, 0, worldZ, { useInstancer: true });
+          this._placeBlock(type, worldX, 0, worldZ, { useInstancer: true, zoneId });
         }
       }
     }
 
-    // Ensure there's a path from center by clearing a radius-3 circle
-    for (let x = -3; x <= 3; x++) {
-      for (let z = -3; z <= 3; z++) {
-        const key = `${x},0,${z}`;
-        if (this.blocks.has(key)) {
-          const b = this.blocks.get(key);
-          if (b.mesh) this.scene.remove(b.mesh);
-          this.blocks.delete(key);
-        }
-      }
-    }
-
-    // Place a spawn platform so the player doesn't fall into the void
+    // Ensure spawn platform
+    const sp = zone.spawnPoint;
     for (let sx = -1; sx <= 1; sx++) {
       for (let sz = -1; sz <= 1; sz++) {
-        this._placeBlock('stone', sx, 0, sz, { useInstancer: true });
+        this._placeBlock('stone', sp.x + sx, 0, sp.z + sz, { useInstancer: true, zoneId });
       }
     }
-    this.startPosition = new THREE.Vector3(0, 1, 0);
 
-    // Spawn enemies — scale with world area but cap for performance
-    const areaFactor = (GAME.FLOOR_SIZE / 16) ** 2;
-    const enemyCount = Math.min(Math.floor((3 + Math.floor(this.floor / 3)) * areaFactor), 40);
-    const enemyTypes = this.biome.enemies;
-    for (let i = 0; i < enemyCount; i++) {
-      const et = rng.choice(enemyTypes);
-      // Pick a spot that's not blocked (avoid walls)
-      let ex, ez, attempts = 0;
-      do {
-        const angle = rng.random() * Math.PI * 2;
-        const dist = 4 + rng.random() * (size - 7);
-        ex = Math.cos(angle) * dist;
-        ez = Math.sin(angle) * dist;
-        attempts++;
-      } while (this.getBlock(ex, 0, ez) && attempts < 20);
-      const enemy = new Enemy(et, ex, ez);
-      enemy.world = this;
-      enemy._netId = this._nextEnemyId++;
-      await enemy.spawn(this.scene);
-      this.enemies.push(enemy);
+    // Place gateway if this zone has one
+    if (zone.exitGateway) {
+      this._placeGateway(zone.exitGateway, zone.id);
     }
 
-    // Spawn floating blocks for kids to mine
-    await this._spawnFloatingBlocks(size, this.floor, rng);
+    // Spawn enemies
+    if (spawnEnemies) {
+      const enemyCount = Math.min(Math.floor(5 + size / 8), 25);
+      const enemyTypes = zone.enemyTypes;
+      for (let i = 0; i < enemyCount; i++) {
+        const et = rng.choice(enemyTypes);
+        let ex, ez, attempts = 0;
+        do {
+          const angle = rng.random() * Math.PI * 2;
+          const dist = 4 + rng.random() * (size - 7);
+          ex = sp.x + Math.cos(angle) * dist;
+          ez = sp.z + Math.sin(angle) * dist;
+          attempts++;
+        } while (this.getBlock(ex, 0, ez) && attempts < 20);
+        const enemy = new Enemy(et, ex, ez);
+        enemy.world = this;
+        enemy.zoneId = zone.id;
+        enemy._netId = this._nextEnemyId++;
+        await enemy.spawn(this.scene);
+        this.enemies.push(enemy);
+      }
+    }
 
-    // Exit position (random edge)
-    const exitAngle = rng.random() * Math.PI * 2;
-    const exitDist = size - 1;
-    this.exitPosition = new THREE.Vector3(
-      Math.cos(exitAngle) * exitDist,
-      0,
-      Math.sin(exitAngle) * exitDist
-    );
+    // Spawn floating blocks
+    await this._spawnFloatingBlocksZone(zone, rng);
+
+    this.startPosition = new THREE.Vector3(sp.x, 1, sp.z);
+    this.biome = { name: zone.name, blocks: zone.blockTypes, enemies: zone.enemyTypes, fogColor: zone.fogColor, fogNear: zone.fogNear, fogFar: zone.fogFar };
+  }
+
+  async generateFloor(seed) {
+    // Backward compatibility: delegate to zone generation for forest
+    return this.generateZone('forest', seed);
+  }
+
+  async _spawnFloatingBlocksZone(zone, rng) {
+    const types = zone.floatingBlockTypes || ['crystal'];
+    const clusterCount = Math.min(5 + zone.order * 2, 12);
+    const b = zone.bounds;
+
+    const emptyColumns = [];
+    for (let x = b.minX; x < b.maxX; x++) {
+      for (let z = b.minZ; z < b.maxZ; z++) {
+        if (!this.getBlock(x, 0, z)) {
+          emptyColumns.push({ x, z });
+        }
+      }
+    }
+
+    rng.shuffle(emptyColumns);
+    const selected = emptyColumns.slice(0, clusterCount);
+
+    for (const col of selected) {
+      const y = 2 + Math.floor(rng.random() * 3);
+      if (this.getBlock(col.x, y, col.z)) continue;
+
+      const type = rng.choice(types);
+      await this._placeFloatingBlock({
+        x: col.x + (rng.random() - 0.5) * 0.3,
+        y,
+        z: col.z + (rng.random() - 0.5) * 0.3,
+        type,
+        rotation: rng.random() * 360,
+        scale: 0.8 + rng.random() * 0.4,
+      }, rng);
+    }
+  }
+
+  _placeGateway(gateway, fromZoneId) {
+    const { x, z, targetZone } = gateway;
+    // Place a distinctive arch/blocks at gateway
+    for (let gy = 0; gy < 3; gy++) {
+      this._placeBlock('stone_dark', x, gy, z, { useInstancer: true });
+      this._placeBlock('stone_dark', x, gy, z + 1, { useInstancer: true });
+      this._placeBlock('stone_dark', x, gy, z - 1, { useInstancer: true });
+    }
+    // Top arch
+    this._placeBlock('stone_dark', x, 3, z, { useInstancer: true });
+    this._placeBlock('stone_dark', x, 3, z + 1, { useInstancer: true });
+    this._placeBlock('stone_dark', x, 3, z - 1, { useInstancer: true });
   }
 
   async _spawnFloatingBlocks(floorSize, floorNum, rng) {
@@ -369,6 +412,9 @@ export class World {
     const key = `${x},${y},${z}`;
     if (this.blocks.has(key)) return;
     const block = new Block(typeKey, x, y, z);
+    if (options.zoneId) {
+      block.zoneId = options.zoneId;
+    }
     if (options.useInstancer) {
       block.createMesh(this.scene, { instancer: this.instancer });
     } else {

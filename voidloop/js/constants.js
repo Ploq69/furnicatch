@@ -272,3 +272,37 @@ export const UPGRADES = {
     { id: 'regen', name: 'Health Regen', max: 5, cost: (lvl) => 40 * (lvl + 1), desc: '+1 HP/sec regen' },
   ],
 };
+
+// Zone-specific loot tables
+export const ZONE_BLOCK_LOOT_TABLES = {
+  forest: {
+    grass:  { always: [{type:'coin', count:1}], common:[{type:'coin',count:1}], uncommon:[{type:'gem_green',count:1}], rare:[{type:'gold_bag',count:1}], veryRare:[{type:'crystal',count:1}] },
+    dirt:   { always: [{type:'coin', count:1}], common:[{type:'coin',count:1}], uncommon:[{type:'gem_blue',count:1}], rare:[{type:'gold_bag',count:1}], veryRare:[{type:'gem_pink',count:1}] },
+    stone:  { always: [{type:'coin', count:1}], common:[{type:'ore_stone',count:1}], uncommon:[{type:'gem_blue',count:1}], rare:[{type:'crystal',count:1}], veryRare:[{type:'gem_pink',count:1}] },
+    wood:   { always: [{type:'coin', count:1}], common:[{type:'coin',count:1}], uncommon:[{type:'gem_green',count:1}], rare:[{type:'gold_bag',count:1}], veryRare:[{type:'key',count:1}] },
+  },
+  fire: {
+    lava:        { always: [{type:'coin', count:2}], common:[{type:'ore_coal',count:1}], uncommon:[{type:'gem_pink',count:1}], rare:[{type:'crystal',count:1}], veryRare:[{type:'energy_orb',count:1}] },
+    stone_dark:  { always: [{type:'coin', count:1}], common:[{type:'ore_stone',count:1}], uncommon:[{type:'gem_blue',count:1}], rare:[{type:'crystal',count:1}], veryRare:[{type:'gem_pink',count:1}] },
+    coal:        { always: [{type:'coin', count:2}], common:[{type:'ore_coal',count:1}], uncommon:[{type:'ore_coal',count:2}], rare:[{type:'gem_blue',count:1}], veryRare:[{type:'crystal',count:1}] },
+    brick:       { always: [{type:'coin', count:1}], common:[{type:'ore_stone',count:1}], uncommon:[{type:'gem_green',count:1}], rare:[{type:'gold_bag',count:1}], veryRare:[{type:'key',count:1}] },
+  },
+};
+
+// Shop item definitions for zone progression
+export const SHOP_ITEM_DEFS = {
+  water_pickaxe: { id: 'water_pickaxe', name: 'Water Pickaxe', type: 'tool', cost: 500 },
+  water_suit:    { id: 'water_suit',    name: 'Water Suit',    type: 'armor', cost: 800 },
+  water_staff:   { id: 'water_staff',   name: 'Water Staff',   type: 'weapon', cost: 600 },
+};
+
+export const ZONE_ENEMY_LOOT_TABLES = {
+  forest: {
+    goblin: { always: [{type:'coin',count:3}], common:[{type:'coin',count:2}], uncommon:[{type:'health_meat',count:1}], rare:[{type:'gem_green',count:1}], veryRare:[{type:'gold_bag',count:1}] },
+    slime:  { always: [{type:'coin',count:2}], common:[{type:'coin',count:1}], uncommon:[{type:'health_meat',count:1}], rare:[{type:'gem_blue',count:1}], veryRare:[{type:'gem_pink',count:1}] },
+  },
+  fire: {
+    demon: { always: [{type:'coin',count:5}], common:[{type:'coin',count:3}], uncommon:[{type:'gem_pink',count:1}], rare:[{type:'crystal',count:1}], veryRare:[{type:'energy_orb',count:1}] },
+    bat:   { always: [{type:'coin',count:1}], common:[{type:'coin',count:1}], uncommon:[{type:'gem_blue',count:1}], rare:[{type:'gem_green',count:1}], veryRare:[{type:'gem_pink',count:1}] },
+  },
+};

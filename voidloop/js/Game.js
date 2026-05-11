@@ -10,7 +10,13 @@ import { UIManager } from './UIManager.js';
 import { SFXMapper } from './SFXMapper.js';
 import { TouchControls } from './TouchControls.js';
 import { LootDrop, LOOT_CONFIG } from './LootDrop.js';
-import { GAME, BIOMES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES } from './constants.js';
+import { GAME, BIOMES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES, ZONE_BLOCK_LOOT_TABLES, ZONE_ENEMY_LOOT_TABLES } from './constants.js';
+import { ZoneManager } from './ZoneManager.js';
+import { ZONES, getZoneAtPosition } from './ZoneData.js';
+import { Inventory } from './Inventory.js';
+import { ShopManager, SHOP_ITEMS } from './ShopManager.js';
+import { ShopUI } from './ShopUI.js';
+import { HazardSystem } from './HazardSystem.js';
 import { getKayKitPaths } from './KayKitLoadout.js';
 import { LetterPool, SPELLING_WORDS } from './SpellingData.js';
 import { SpellingChallenge } from './SpellingEngine.js';
@@ -157,6 +163,15 @@ export class Game {
     this.mineCombo = 0;
     this.mineComboTimer = 0;
 
+    // Zone progression systems
+    this.zoneManager = new ZoneManager();
+    this.inventory = new Inventory();
+    this.shop = new ShopManager(this.inventory);
+    this.hazards = null;
+    this.shopUI = null;
+    this._gatewayMeshes = [];
+    this._gatewayLabels = [];
+
     // Touch controls for iPad/tablet
     this.touchControls = new TouchControls();
 
@@ -229,13 +244,47 @@ export class Game {
     if (this.playtestKey) {
       await this._loadPlaytestLevel();
     } else {
-      await this._generateFloor(1, this._worldSeed);
+      await this._generateZones(this._worldSeed);
     }
 
     // Create remote player for multiplayer
     if (this.isMultiplayer) {
       this._createRemotePlayer();
     }
+
+    // Create Shop UI
+    this.shopUI = new ShopUI(
+      this.shop,
+      (itemId, isEquip) => {
+        if (isEquip) {
+          const item = SHOP_ITEMS.find(i => i.id === itemId);
+          if (item) {
+            this.inventory.equip(itemId, item.type);
+            this.player.equipTool(this.inventory.getEquippedTool());
+            this.player.equipArmor(this.inventory.getEquippedArmor());
+            this.player.equipFunctionalWeapon(this.inventory.getEquippedWeapon());
+          }
+          return { success: true };
+        } else {
+          const result = this.shop.buyItem(itemId);
+          if (result.success) {
+            const item = SHOP_ITEMS.find(i => i.id === itemId);
+            if (item) {
+              this.inventory.equip(itemId, item.type);
+              this.player.equipTool(this.inventory.getEquippedTool());
+              this.player.equipArmor(this.inventory.getEquippedArmor());
+              this.player.equipFunctionalWeapon(this.inventory.getEquippedWeapon());
+            }
+          }
+          return result;
+        }
+      },
+      (upgradeId) => this.shop.buyUpgrade(upgradeId),
+      () => {
+        // Close shop callback
+        this.shop.setCoins(this.player.coins);
+      }
+    );
 
     this.ui.hideLoading();
     this.state = STATES.PLAYING;
@@ -252,31 +301,50 @@ export class Game {
     throw new Error('Timed out waiting for world seed from host');
   }
 
-  async _generateFloor(floorNum, seed) {
-    this._clearExitPortal();
-    this.world.setFloor(floorNum);
-    const floorSeed = seed != null ? seed + floorNum * 7919 : null;
-    await this.world.generateFloor(floorSeed);
-    if (this.world.startPosition) {
-      this.player.position.copy(this.world.startPosition);
+  async _generateZones(seed) {
+    this.world.clear();
+    const worldSeed = seed != null ? seed : Math.floor(Math.random() * 1000000);
+
+    // Generate all zones (both visible, enemies only in unlocked)
+    for (const zone of ZONES) {
+      const zoneSeed = worldSeed + zone.order * 7919;
+      const spawnEnemies = this.zoneManager.isZoneUnlocked(zone.id);
+      await this.world.generateZone(zone.id, zoneSeed, spawnEnemies);
+    }
+
+    // Spawn player at current zone's spawn point
+    const currentZone = this.zoneManager.getCurrentZone();
+    if (currentZone) {
+      this.player.position.set(currentZone.spawnPoint.x, 1, currentZone.spawnPoint.z);
     } else {
-      this.player.position.set(0, 0, 0);
+      this.player.position.set(0, 1, 0);
     }
     this.player.hp = this.player.maxHp;
     this.exitOpen = false;
-    this.floorTimer = Math.max(15, GAME.COUNTDOWN_BASE + (floorNum - 1) * GAME.COUNTDOWN_PER_FLOOR);
+    this.floorTimer = GAME.COUNTDOWN_BASE;
     this.killCount = 0;
     this.loot.clear();
     this.letterDrops.clear();
     this._clearPet();
-    // Advance letter pool for new floor
-    if (floorNum === 1) this.letterPool.reset();
-    else this.letterPool.advanceLevel();
+    this.letterPool.reset();
+
+    // Set up letter pool for current zone
+    if (currentZone) {
+      this.letterPool.setLetters(currentZone.letterSet);
+    }
+
     const letters = this.letterPool.getCurrentLetters().join(' ');
-    this.ui.setFloorText(`FLOOR ${floorNum} — ${this.world.biome.name.toUpperCase()} — Letters: ${letters}`);
+    this.ui.setFloorText(`ZONE: ${currentZone?.name?.toUpperCase() || 'UNKNOWN'} — Letters: ${letters}`);
     this.ui.showExitOpen(false);
     this._spawnPet();
     this._updateTorches();
+    this._createGateways();
+    this._setupHazards();
+  }
+
+  async _generateFloor(floorNum, seed) {
+    // Backward compatibility
+    return this._generateZones(seed);
   }
 
   async _loadPlaytestLevel() {
@@ -506,8 +574,22 @@ export class Game {
       // Check for nearby enemy first (combat priority)
       const nearestEnemy = this._findNearestEnemy(2.5);
       if (nearestEnemy) {
+        // Check weapon requirements for fire enemies
+        const enemyZone = nearestEnemy.zoneId ? getZoneById(nearestEnemy.zoneId) : null;
+        const equippedWeapon = this.inventory.getEquippedWeapon();
+        if (enemyZone && enemyZone.entryRequirements && enemyZone.entryRequirements.weapon) {
+          const requiredWeapon = enemyZone.entryRequirements.weapon;
+          if (equippedWeapon !== requiredWeapon) {
+            this.ui.showFloatingText(`Need Water Staff!`, 0xff4444);
+            this.player.playAttackAnim();
+            SFXMapper.swingMiss();
+            weapon.cooldown = GAME.ATTACK_COOLDOWN;
+            return;
+          }
+        }
         this.player.playAttackAnim();
-        nearestEnemy.takeDamage(weapon.data.damage);
+        const equippedWeapon = this.inventory.getEquippedWeapon();
+        nearestEnemy.takeDamage(weapon.data.damage, equippedWeapon);
         // Attack VFX
         const hitPos = nearestEnemy.position.clone().add(new THREE.Vector3(0, 0.5, 0));
         this.particles.spawn({ pos: hitPos, count: 6, color: 0xff4444, speed: 4, life: 0.3, size: 0.2, texture: 'slash' });
@@ -658,28 +740,33 @@ export class Game {
       }
     }
 
-    // Check exit
-    if (this.exitOpen && this.world.exitPosition) {
-      if (this.player.position.distanceTo(this.world.exitPosition) < 1.5) {
-        if (this.world.floor >= 20) {
-          this.state = STATES.CAMP;
-          this.ui.showCamp();
-          this.world.clear();
-          this.world.floor = 0;
-          SFXMapper.campEnter();
-          return;
-        }
-        this._generateFloor(this.world.floor + 1);
-      }
+    // Check gateways
+    this._checkGateways();
+
+    // Update hazards
+    if (this.hazards) {
+      this.hazards.update(dt);
+    }
+
+    // Fire zone atmosphere — orange ambient tint when in fire zone
+    const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
+    if (currentZone && currentZone.id === 'fire') {
+      // Fire zone colors: fog 0x2a1a1a, ambient orange tint
+      this.scene.background = new THREE.Color(0x2a1a1a);
+      this.ambient.color.setHex(0xaa6644);
+    } else {
+      // Forest zone: restore default
+      this.scene.background = new THREE.Color(0x0a0a0a);
+      this.ambient.color.setHex(0x8888aa);
     }
 
     // Check death
     if (this.player.hp <= 0) {
       SFXMapper.playerDeath();
       this.state = STATES.CAMP;
+      // Save coins and progress before showing camp
+      this.shop.setCoins(this.player.coins);
       this.ui.showCamp(true);
-      this.world.clear();
-      this.world.floor = 0;
       return;
     }
 
@@ -718,6 +805,7 @@ export class Game {
 
     const weaponId = this.player.weapons[this.player.currentSlot]?.data?.id || 'unknown';
     const isPickaxe = weaponId === 'pickaxe';
+    const equippedTool = this.inventory.getEquippedTool();
 
     for (const block of this.world.blocks.values()) {
       if (block.destroyed) continue;
@@ -725,8 +813,21 @@ export class Game {
       // Ground blocks are only mineable with the pickaxe
       const blockIsFloating = block.isFloating === true;
       if (!blockIsFloating && !isPickaxe) {
-        console.log(`[MineGuard] ${weaponId} → skipping ground block at ${block.position.x},${block.position.y},${block.position.z}`);
         continue;
+      }
+
+      // Check zone-specific tool requirements
+      // Fire zone blocks require water_pickaxe
+      const blockZone = block.zoneId ? getZoneById(block.zoneId) : null;
+      if (blockZone && blockZone.entryRequirements && blockZone.entryRequirements.pickaxe) {
+        const requiredTool = blockZone.entryRequirements.pickaxe; // water_pickaxe
+        if (equippedTool !== requiredTool) {
+          // Tool mismatch — still targetable but will show feedback on swing
+          nearest = block;
+          nearestDist = playerPos.distanceTo(block.position);
+          this._pendingToolCheck = { block, required: requiredTool };
+          continue;
+        }
       }
 
       // Forward cone check — only blocks in front of the player
@@ -748,9 +849,20 @@ export class Game {
         nearest = block;
       }
     }
-    if (nearest) {
-      console.log(`[MineGuard] ${weaponId} → targeting ${nearest.isFloating ? 'floating' : 'ground'} block at ${nearest.position.x},${nearest.position.y},${nearest.position.z}`);
+
+    // Check tool requirement for nearest block
+    // Fire zone requires water_pickaxe to mine
+    if (nearest && nearest.zoneId) {
+      const zone = getZoneById(nearest.zoneId);
+      if (zone && zone.entryRequirements && zone.entryRequirements.pickaxe) {
+        const requiredTool = zone.entryRequirements.pickaxe; // water_pickaxe
+        if (equippedTool !== requiredTool) {
+          this.ui.showFloatingText(`Need Water Pickaxe!`, 0xff4444);
+          return null;
+        }
+      }
     }
+
     return nearest;
   }
 
@@ -790,6 +902,135 @@ export class Game {
       requestAnimationFrame(animate);
     };
     animate();
+  }
+
+  // ===== Zone Gateway System =====
+
+  _createGateways() {
+    this._clearGateways();
+    for (const zone of ZONES) {
+      if (!zone.exitGateway) continue;
+      const gw = zone.exitGateway;
+      const targetZone = getZoneById(gw.targetZone);
+      if (!targetZone) continue;
+
+      // Create barrier mesh
+      const geo = new THREE.PlaneGeometry(4, 4);
+      const isUnlocked = this.zoneManager.isZoneUnlocked(targetZone.id);
+      const color = isUnlocked ? 0x44ff44 : 0xff4444;
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.5,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(gw.x, 2, gw.z);
+      mesh.rotation.y = Math.PI / 2;
+      this.scene.add(mesh);
+      this._gatewayMeshes.push(mesh);
+
+      // Floating label
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 512;
+      canvas.height = 128;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, 512, 128, 16);
+      ctx.fill();
+      ctx.fillStyle = isUnlocked ? '#4ade80' : '#f87171';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      const label = isUnlocked ? `✅ ${targetZone.name}` : `🔒 ${targetZone.name}`;
+      ctx.fillText(label, 256, 80);
+      const tex = new THREE.CanvasTexture(canvas);
+      const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(4, 1, 1);
+      sprite.position.set(gw.x, 5, gw.z);
+      this.scene.add(sprite);
+      this._gatewayLabels.push(sprite);
+    }
+  }
+
+  _clearGateways() {
+    for (const m of this._gatewayMeshes) {
+      this.scene.remove(m);
+      if (m.geometry) m.geometry.dispose();
+      if (m.material) m.material.dispose();
+    }
+    for (const s of this._gatewayLabels) {
+      this.scene.remove(s);
+      if (s.material && s.material.map) s.material.map.dispose();
+      if (s.material) s.material.dispose();
+    }
+    this._gatewayMeshes = [];
+    this._gatewayLabels = [];
+  }
+
+  _checkGateways() {
+    for (const zone of ZONES) {
+      if (!zone.exitGateway) continue;
+      const gw = zone.exitGateway;
+      const targetZone = getZoneById(gw.targetZone);
+      if (!targetZone) continue;
+
+      const dist = this.player.position.distanceTo(new THREE.Vector3(gw.x, this.player.position.y, gw.z));
+      if (dist < 5) {
+        const status = this.zoneManager.getGatewayStatus(targetZone.id, this.inventory);
+        if (status && !status.unlocked) {
+          if (status.canEnter) {
+            this.zoneManager.unlockZone(targetZone.id);
+            this.ui.showFloatingText(`🔓 ${targetZone.name} unlocked!`, 0x4ade80);
+            this._createGateways();
+            // Spawn enemies in newly unlocked zone
+            this._respawnZoneEnemies(targetZone.id);
+          } else {
+            const reqList = status.missing.map(m => m.label).join(', ');
+            this.ui.showFloatingText(`🔒 Requires: ${reqList}`, 0xff4444);
+          }
+        }
+      }
+    }
+  }
+
+  _respawnZoneEnemies(zoneId) {
+    // Enemies for newly unlocked zone are spawned on unlock
+    // This is handled by regenerating the zone with enemies
+    const zone = getZoneById(zoneId);
+    if (!zone) return;
+    const seed = this._worldSeed + zone.order * 7919;
+    // We can't easily regenerate just enemies, so we'll spawn them manually
+    const rng = { random: () => Math.random(), choice: (arr) => arr[Math.floor(Math.random() * arr.length)] };
+    const b = zone.bounds;
+    const size = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2;
+    const enemyCount = Math.min(Math.floor(5 + size / 8), 25);
+    const enemyTypes = zone.enemyTypes;
+    const sp = zone.spawnPoint;
+    for (let i = 0; i < enemyCount; i++) {
+      const et = rng.choice(enemyTypes);
+      let ex, ez, attempts = 0;
+      do {
+        const angle = rng.random() * Math.PI * 2;
+        const dist = 4 + rng.random() * (size - 7);
+        ex = sp.x + Math.cos(angle) * dist;
+        ez = sp.z + Math.sin(angle) * dist;
+        attempts++;
+      } while (this.world.getBlock(ex, 0, ez) && attempts < 20);
+      const enemy = new Enemy(et, ex, ez);
+      enemy.world = this.world;
+      enemy._netId = this.world._nextEnemyId++;
+      enemy.spawn(this.scene).then(() => {
+        this.world.enemies.push(enemy);
+      });
+    }
+  }
+
+  _setupHazards() {
+    this.hazards = new HazardSystem(this.scene, this.player, this.inventory, this.ui);
   }
 
   _updateCameraZoom() {
