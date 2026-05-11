@@ -719,6 +719,32 @@
     }
     .shop-buy-btn:hover:not(:disabled) { background: #9333ea; }
     .shop-buy-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .resource-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 0 4px;
+    }
+    .resource-total {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fbbf24;
+    }
+    .resource-card {
+      text-align: center;
+    }
+    .resource-sell-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    .resource-sell-btn {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       25% { transform: translateX(-6px); }
@@ -749,6 +775,7 @@
     .pet-letter-card {
       aspect-ratio: 1;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       font-size: 14px;
@@ -759,12 +786,27 @@
       transition: transform 0.1s, border-color 0.15s;
       background: rgba(255,255,255,0.06);
       color: #888;
+      position: relative;
+      gap: 1px;
     }
     .pet-letter-card:hover { transform: scale(1.1); }
     .pet-letter-card.locked {
       background: rgba(255,255,255,0.03);
       color: #444;
       cursor: not-allowed;
+    }
+    .pet-card-letter {
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .pet-card-progress {
+      font-size: 9px;
+      font-weight: 700;
+      color: #a855f7;
+      background: rgba(0,0,0,0.5);
+      padding: 1px 4px;
+      border-radius: 4px;
+      line-height: 1;
     }
     .pet-letter-card.equipped {
       border-color: #facc15;

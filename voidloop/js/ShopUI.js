@@ -6,11 +6,13 @@ import { SHOP_ITEMS, SHOP_UPGRADES } from './ShopManager.js';
 import { SFXMapper } from './SFXMapper.js';
 
 export class ShopUI {
-  constructor(shopManager, onBuyItem, onBuyUpgrade, onClose) {
+  constructor(shopManager, onBuyItem, onBuyUpgrade, onClose, getResources, onSellResource) {
     this.shop = shopManager;
     this.onBuyItem = onBuyItem;
     this.onBuyUpgrade = onBuyUpgrade;
     this.onClose = onClose;
+    this.getResources = getResources;
+    this.onSellResource = onSellResource;
     this.activeTab = 'tools';
     this._buildDOM();
     this._bindEvents();
@@ -32,6 +34,7 @@ export class ShopUI {
           <button class="shop-tab" data-tab="armor">Armor</button>
           <button class="shop-tab" data-tab="weapons">Weapons</button>
           <button class="shop-tab" data-tab="upgrades">Upgrades</button>
+          <button class="shop-tab" data-tab="resources">Resources</button>
         </div>
         <div class="shop-content" id="shop-content"></div>
       </div>
@@ -85,6 +88,8 @@ export class ShopUI {
       this._renderItems('weapon');
     } else if (this.activeTab === 'upgrades') {
       this._renderUpgrades();
+    } else if (this.activeTab === 'resources') {
+      this._renderResources();
     }
   }
 
@@ -169,6 +174,69 @@ export class ShopUI {
           btn.style.animation = 'shake 0.3s';
           SFXMapper.uiDenied();
         }
+      });
+
+      grid.appendChild(card);
+    }
+
+    this.elContent.appendChild(grid);
+  }
+
+  _renderResources() {
+    const resources = this.getResources ? this.getResources() : [];
+    const owned = resources.filter(r => r.count > 0);
+
+    if (owned.length === 0) {
+      this.elContent.innerHTML = `
+        <div class="shop-empty">
+          <div style="font-size:48px;margin-bottom:12px;">📦</div>
+          <div>No resources yet.</div>
+          <div style="font-size:13px;color:#888;margin-top:8px;">Mine floating blocks to collect resources!</div>
+        </div>
+      `;
+      return;
+    }
+
+    const totalValue = owned.reduce((sum, r) => sum + r.count * r.value, 0);
+
+    const header = document.createElement('div');
+    header.className = 'resource-header';
+    header.innerHTML = `<div class="resource-total">Total Value: 💰 ${totalValue}</div>`;
+    this.elContent.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'shop-grid';
+
+    for (const res of owned) {
+      const card = document.createElement('div');
+      card.className = 'shop-card resource-card';
+      card.innerHTML = `
+        <div class="shop-card-name">${res.name}</div>
+        <div class="shop-card-desc">Owned: <strong>${res.count}</strong></div>
+        <div class="shop-card-cost">💰 ${res.value} each</div>
+        <div class="resource-sell-row">
+          <button class="shop-buy-btn resource-sell-btn" data-type="${res.type}" data-amount="1">Sell 1</button>
+          <button class="shop-buy-btn resource-sell-btn" data-type="${res.type}" data-amount="${res.count}">Sell All</button>
+        </div>
+      `;
+
+      const btns = card.querySelectorAll('.resource-sell-btn');
+      btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const type = btn.dataset.type;
+          const amount = parseInt(btn.dataset.amount, 10);
+          const result = this.onSellResource(type, amount);
+          if (result.success) {
+            SFXMapper.upgradeBuy();
+            this.setCoins(this.shop.coins);
+            this._renderContent();
+          } else {
+            btn.style.animation = 'none';
+            btn.offsetHeight;
+            btn.style.animation = 'shake 0.3s';
+            SFXMapper.uiDenied();
+          }
+        });
       });
 
       grid.appendChild(card);

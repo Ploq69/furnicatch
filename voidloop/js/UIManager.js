@@ -939,11 +939,18 @@ export class UIManager {
     for (const pet of pets) {
       const card = document.createElement('div');
       card.className = 'pet-letter-card';
-      card.textContent = pet.letter;
 
       if (!pet.unlocked) {
         card.classList.add('locked');
+        // Show unlock progress overlay
+        const progress = pm.getUnlockProgress(pet.letter);
+        card.innerHTML = `
+          <span class="pet-card-letter">${pet.letter}</span>
+          <span class="pet-card-progress">${progress.current}/${progress.required}</span>
+        `;
+        card.title = `Spell ${pet.letter} words: ${progress.current}/${progress.required}`;
       } else {
+        card.textContent = pet.letter;
         const cfg = PET_LEVELS.find(l => l.level === pet.level) || PET_LEVELS[0];
         const colorHex = '#' + cfg.color.toString(16).padStart(6, '0');
         card.style.color = colorHex;

@@ -292,6 +292,18 @@ export class Game {
         // Close shop callback
         this.shop.setCoins(this.player.coins);
         this.player.applyUpgrades(this.shop.upgradeLevels);
+      },
+      // getResources callback
+      () => this.resources.getAll(),
+      // onSellResource callback
+      (type, amount) => {
+        const coins = this.resources.sell(type, amount);
+        if (coins > 0) {
+          this.player.coins += coins;
+          this.shop.setCoins(this.player.coins);
+          return { success: true, coins };
+        }
+        return { success: false };
       }
     );
 
