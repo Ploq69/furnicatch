@@ -481,7 +481,9 @@ export class Game {
     if (this.state === STATES.PLAYING) {
       // Escape handling: pause takes priority, then loadout/petden close
       if (input.pressed('Escape')) {
-        if (this.ui.loadoutOpen) {
+        if (this.shopUI && this.shopUI.isOpen) {
+          this.ui.hideShop();
+        } else if (this.ui.loadoutOpen) {
           this.ui.hideLoadout();
         } else if (this.ui.petDenOpen) {
           this.ui.hidePetDenOverlay();
@@ -490,15 +492,19 @@ export class Game {
         }
       }
 
-      if (input.pressed('KeyI') && !this.paused) {
+      if (input.pressed('KeyI') && !this.paused && !(this.shopUI && this.shopUI.isOpen)) {
         this.ui.toggleLoadout();
       }
 
-      if (input.pressed('KeyP') && !this.paused) {
+      if (input.pressed('KeyP') && !this.paused && !(this.shopUI && this.shopUI.isOpen)) {
         this.ui.togglePetDen();
       }
 
-      if (!this.ui.loadoutOpen && !this.ui.petDenOpen && !this.paused) {
+      if (input.pressed('KeyB') && !this.paused && !this.ui.loadoutOpen && !this.ui.petDenOpen) {
+        this.ui.showShop();
+      }
+
+      if (!this.ui.loadoutOpen && !this.ui.petDenOpen && !this.paused && !(this.shopUI && this.shopUI.isOpen)) {
         this._updatePlaying(dt);
       }
     }

@@ -13,32 +13,32 @@ export const SHOP_ITEMS = [
   // === Zone 1: Forest (starting gear, not in shop) ===
 
   // === Zone 2: Fire ===
-  { id: 'fire_pickaxe', name: 'Fire Pickaxe', type: 'tool', cost: 300, description: 'Mines fire-zone floating blocks. Required for Ember Wastes.', icon: '🔥⛏️' },
+  { id: 'fire_pickaxe', name: 'Fire Pickaxe', type: 'tool', cost: 5, description: 'Mines fire-zone floating blocks. Required for Ember Wastes.', icon: '🔥⛏️' },
   { id: 'fire_suit', name: 'Fire Suit', type: 'armor', cost: 800, description: 'Prevents burn damage in the Ember Wastes.', icon: '🔥🛡️' },
   { id: 'fire_staff', name: 'Fire Staff', type: 'weapon', cost: 600, description: 'Required to damage fire enemies.', icon: '🔥🔱' },
 
   // === Zone 3: Ice ===
-  { id: 'ice_pickaxe', name: 'Ice Pickaxe', type: 'tool', cost: 600, description: 'Mines ice-zone floating blocks. Required for Frostpeak.', icon: '❄️⛏️' },
+  { id: 'ice_pickaxe', name: 'Ice Pickaxe', type: 'tool', cost: 5, description: 'Mines ice-zone floating blocks. Required for Frostpeak.', icon: '❄️⛏️' },
   { id: 'ice_suit', name: 'Ice Suit', type: 'armor', cost: 1200, description: 'Prevents freeze slowdown in Frostpeak.', icon: '❄️🛡️' },
   { id: 'ice_staff', name: 'Ice Staff', type: 'weapon', cost: 900, description: 'Required to damage ice enemies.', icon: '❄️🔱' },
 
   // === Zone 4: Desert ===
-  { id: 'desert_pickaxe', name: 'Desert Pickaxe', type: 'tool', cost: 1000, description: 'Mines desert-zone floating blocks. Required for Sandscape.', icon: '🏜️⛏️' },
+  { id: 'desert_pickaxe', name: 'Desert Pickaxe', type: 'tool', cost: 5, description: 'Mines desert-zone floating blocks. Required for Sandscape.', icon: '🏜️⛏️' },
   { id: 'desert_suit', name: 'Desert Suit', type: 'armor', cost: 2000, description: 'Prevents heat stamina drain in Sandscape.', icon: '🏜️🛡️' },
   { id: 'desert_staff', name: 'Desert Staff', type: 'weapon', cost: 1500, description: 'Required to damage desert enemies.', icon: '🏜️🔱' },
 
   // === Zone 5: Steelworks ===
-  { id: 'steel_pickaxe', name: 'Steel Pickaxe', type: 'tool', cost: 2000, description: 'Mines steelworks floating blocks. Required for Steelworks.', icon: '⚙️⛏️' },
+  { id: 'steel_pickaxe', name: 'Steel Pickaxe', type: 'tool', cost: 5, description: 'Mines steelworks floating blocks. Required for Steelworks.', icon: '⚙️⛏️' },
   { id: 'ventilator_suit', name: 'Ventilator Suit', type: 'armor', cost: 3000, description: 'Prevents toxic fume damage in Steelworks.', icon: '⚙️🛡️' },
   { id: 'tesla_staff', name: 'Tesla Staff', type: 'weapon', cost: 2500, description: 'Required to damage steelworks enemies.', icon: '⚙️🔱' },
 
   // === Zone 6: Mire ===
-  { id: 'mire_pickaxe', name: 'Mire Pickaxe', type: 'tool', cost: 3500, description: 'Mines mire floating blocks. Required for Mire.', icon: '🌿⛏️' },
+  { id: 'mire_pickaxe', name: 'Mire Pickaxe', type: 'tool', cost: 5, description: 'Mines mire floating blocks. Required for Mire.', icon: '🌿⛏️' },
   { id: 'wading_boots', name: 'Wading Boots', type: 'armor', cost: 5000, description: 'Prevents quicksand slowdown in Mire.', icon: '🌿🛡️' },
   { id: 'vine_staff', name: 'Vine Staff', type: 'weapon', cost: 4000, description: 'Required to damage mire enemies.', icon: '🌿🔱' },
 
   // === Zone 7: Citadel ===
-  { id: 'royal_pickaxe', name: 'Royal Pickaxe', type: 'tool', cost: 5000, description: 'Mines citadel floating blocks. Required for Citadel.', icon: '👑⛏️' },
+  { id: 'royal_pickaxe', name: 'Royal Pickaxe', type: 'tool', cost: 5, description: 'Mines citadel floating blocks. Required for Citadel.', icon: '👑⛏️' },
   { id: 'royal_shield', name: 'Royal Shield', type: 'armor', cost: 8000, description: 'Prevents curse stuns in Citadel.', icon: '👑🛡️' },
   { id: 'scepter', name: 'Scepter', type: 'weapon', cost: 6000, description: 'Required to damage citadel enemies.', icon: '👑🔱' },
 ];
