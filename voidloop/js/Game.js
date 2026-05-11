@@ -354,7 +354,7 @@ export class Game {
 
     // Set up letter pool for current zone
     if (currentZone) {
-      this.letterPool.setLetters(currentZone.letterSet);
+      this.letterPool.setLetters(currentZone.letters);
     }
 
     const letters = this.letterPool.getCurrentLetters().join(' ');
