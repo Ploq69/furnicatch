@@ -12,7 +12,7 @@ import { TouchControls } from './TouchControls.js';
 import { LootDrop, LOOT_CONFIG } from './LootDrop.js';
 import { GAME, BIOMES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES, ZONE_BLOCK_LOOT_TABLES, ZONE_ENEMY_LOOT_TABLES } from './constants.js';
 import { ZoneManager } from './ZoneManager.js';
-import { ZONES, getZoneAtPosition } from './ZoneData.js';
+import { ZONES, getZoneById, getZoneAtPosition } from './ZoneData.js';
 import { Inventory } from './Inventory.js';
 import { ShopManager, SHOP_ITEMS } from './ShopManager.js';
 import { ShopUI } from './ShopUI.js';
