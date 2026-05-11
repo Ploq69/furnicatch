@@ -40,7 +40,6 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this._applyGraphicsSettings();
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.5;
     this.container.appendChild(this.renderer.domElement);
@@ -73,6 +72,7 @@ export class Game {
     this.sun.shadow.camera.top = 30;
     this.sun.shadow.camera.bottom = -30;
     this.scene.add(this.sun);
+    this._applyGraphicsSettings();
 
     // Torch lights (added per floor)
     this.torches = [];
