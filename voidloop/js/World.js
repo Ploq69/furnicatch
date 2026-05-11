@@ -34,6 +34,7 @@ export class World {
     this.rng = null;
     this._nextEnemyId = 1;
     this.instancer = new BlockInstancer(scene);
+    this.floatingBlocks = new Set();
   }
 
   setFloor(floorNum) {
@@ -434,6 +435,7 @@ export class World {
       });
     }
     this.blocks.set(key, block);
+    this.floatingBlocks.add(block);
     // Intentionally do NOT update columnHeights — floating blocks don't affect walkable ground
   }
 
@@ -496,6 +498,7 @@ export class World {
     block.destroy(this.scene, particles);
     const key = `${block.position.x},${block.position.y},${block.position.z}`;
     this.blocks.delete(key);
+    this.floatingBlocks.delete(block);
     // Recompute column height
     const colKey = `${block.position.x},${block.position.z}`;
     let maxY = -999;
@@ -517,17 +520,32 @@ export class World {
     // Update chunk visibility based on player position
     this.instancer.updateVisibility(playerPos, 45);
 
+    // Update all blocks (handles shake/scale for ground blocks, hp bars, etc.)
     for (const block of this.blocks.values()) {
       block.update(dt);
-      // Floating block bobbing animation
-      if (block.isFloating && block.mesh) {
-        const bob = Math.sin(Date.now() * 0.0015 + (block.bobPhase || 0)) * 0.08;
-        block.mesh.position.y = block.position.y + 0.5 + bob;
-        block.mesh.rotation.y += dt * 0.3;
-        if (block._glowLight) {
-          block._glowLight.position.y = block.position.y + 0.5 + 0.5 + bob;
-        }
+    }
+
+    // Animate only floating blocks — with distance culling
+    const px = playerPos.x;
+    const pz = playerPos.z;
+    const CULL_DIST_SQ = 35 * 35; // 35 units
+    for (const block of this.floatingBlocks) {
+      if (!block.mesh) continue;
+      const dx = block.position.x - px;
+      const dz = block.position.z - pz;
+      const distSq = dx * dx + dz * dz;
+
+      // Distance-based visibility culling
+      if (distSq > CULL_DIST_SQ) {
+        if (block.mesh.visible) block.mesh.visible = false;
+        continue;
       }
+      if (!block.mesh.visible) block.mesh.visible = true;
+
+      // Bobbing animation (only for nearby blocks)
+      const bob = Math.sin(Date.now() * 0.0015 + (block.bobPhase || 0)) * 0.08;
+      block.mesh.position.y = block.position.y + 0.5 + bob;
+      block.mesh.rotation.y += dt * 0.3;
     }
     for (const enemy of this.enemies) {
       enemy.update(dt, playerPos, particles, audio, player);
@@ -552,6 +570,7 @@ export class World {
       if (block.mesh) this.scene.remove(block.mesh);
     }
     this.blocks.clear();
+    this.floatingBlocks.clear();
     this.columnHeights.clear();
     for (const enemy of this.enemies) {
       enemy.cleanup(this.scene);
