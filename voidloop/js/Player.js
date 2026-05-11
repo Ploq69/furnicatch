@@ -157,6 +157,44 @@ export class Player {
     this.equippedTool = null;
     this.equippedArmor = null;
     this.equippedWeapon = null;
+
+    // Upgrade-applied stats (set by applyUpgrades)
+    this.mineDamage = 1;
+    this.mineSpeed = 1.0;
+  }
+
+  /**
+   * Apply shop upgrade levels to player stats.
+   * Called after buying upgrades or loading saved data.
+   * @param {object} upgradeLevels - { pick_tier: N, mine_speed: N, ... }
+   */
+  applyUpgrades(upgradeLevels) {
+    const pickTier = upgradeLevels?.pick_tier || 0;
+    const mineSpeedLevel = upgradeLevels?.mine_speed || 0;
+
+    // pick_tier: +1 mine damage per level
+    this.mineDamage = 1 + pickTier;
+
+    // mine_speed: +10% per level (max 50%)
+    this.mineSpeed = 1.0 + (mineSpeedLevel * 0.1);
+
+    // max_hp upgrade
+    const maxHpLevel = upgradeLevels?.max_hp || 0;
+    this.maxHp = GAME.MAX_HP + (maxHpLevel * 10);
+    this.hp = Math.min(this.hp, this.maxHp);
+
+    // max_stamina upgrade
+    const maxStamLevel = upgradeLevels?.max_stamina || 0;
+    this.maxStamina = GAME.MAX_STAMINA + (maxStamLevel * 10);
+    this.stamina = Math.min(this.stamina, this.maxStamina);
+  }
+
+  /**
+   * Get the effective swing cooldown based on mineSpeed.
+   * @returns {number} cooldown in seconds
+   */
+  getSwingCooldown() {
+    return GAME.ATTACK_COOLDOWN / this.mineSpeed;
   }
 
   async spawn(characterId = DEFAULT_LOADOUT.characterId) {

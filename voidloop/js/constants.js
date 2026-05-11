@@ -60,24 +60,82 @@ export const WEAPONS = [
 ];
 
 export const BLOCK_TYPES = {
+  // Ground / terrain blocks (fast break, 1-2 HP)
   dirt: { hp: 1, color: 0x8B6914, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt.gltf' },
   grass: { hp: 1, color: 0x4a8f29, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt_with_grass.gltf' },
   stone: { hp: 2, color: 0x777777, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone.gltf' },
   brick: { hp: 2, color: 0xa0522d, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_A.gltf' },
   bricks_B: { hp: 2, color: 0x8a4525, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_B.gltf' },
   coal: { hp: 2, color: 0x222222, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf' },
-  metal: { hp: 3, color: 0x8899aa, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/metal.gltf' },
-  crystal: { hp: 3, color: 0x22ccff, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
-  diamond: { hp: 3, color: 0x00ffff, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
+  metal: { hp: 2, color: 0x8899aa, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/metal.gltf' },
   ice: { hp: 1, color: 0xaaddff, drop: 'ice', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/glass.gltf' },
   snow: { hp: 1, color: 0xeeeeee, drop: 'snow', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/snow.gltf' },
-  lava: { hp: 3, color: 0xff4422, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/lava.gltf' },
+  lava: { hp: 2, color: 0xff4422, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/lava.gltf' },
   water: { hp: 1, color: 0x4488ff, drop: 'ice', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/water.gltf' },
   wood: { hp: 1, color: 0x8B5a2b, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf' },
   stone_dark: { hp: 2, color: 0x333333, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf' },
-  decorative_block_blue: { hp: 3, color: 0x22ccff, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
-  decorative_block_red: { hp: 3, color: 0xff4444, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_red.gltf' },
-  stone_with_gold: { hp: 3, color: 0xffd700, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_gold.gltf' },
+  gravel: { hp: 1, color: 0x666666, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/gravel.gltf' },
+  sand_A: { hp: 1, color: 0xe6c288, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/sand_A.gltf' },
+  sand_B: { hp: 1, color: 0xd4a574, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/sand_B.gltf' },
+  prototype: { hp: 2, color: 0xcccccc, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/prototype.gltf' },
+
+  // Legacy floating blocks (kept for backwards compatibility)
+  crystal: { hp: 5, color: 0x22ccff, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
+  diamond: { hp: 5, color: 0x00ffff, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
+  decorative_block_blue: { hp: 5, color: 0x22ccff, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
+  decorative_block_red: { hp: 5, color: 0xff4444, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_red.gltf' },
+  decorative_block_green: { hp: 5, color: 0x4ade80, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_green.gltf' },
+  decorative_block_yellow: { hp: 5, color: 0xfacc15, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_yellow.gltf' },
+  stone_with_gold: { hp: 5, color: 0xffd700, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_gold.gltf' },
+  stone_with_copper: { hp: 5, color: 0xb87333, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_copper.gltf' },
+  stone_with_silver: { hp: 5, color: 0xc0c0c0, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_silver.gltf' },
+  colored_block_green: { hp: 5, color: 0x4ade80, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/colored_block_green.gltf' },
+  colored_block_yellow: { hp: 5, color: 0xfacc15, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/colored_block_yellow.gltf' },
+  striped_block_blue: { hp: 5, color: 0x7dd3fc, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/striped_block_blue.gltf' },
+  striped_block_yellow: { hp: 5, color: 0xfacc15, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/striped_block_yellow.gltf' },
+  tree: { hp: 5, color: 0x5a7a3a, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf' },
+
+  // === Zone 1: Forest Floating Blocks (Tier 1-4) ===
+  mossy_stone:      { hp: 5, color: 0x6b8e5a, drop: 'moss_chip',      model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone.gltf',                 zone: 'forest', tier: 1, resource: 'moss_chip' },
+  forest_crystal:   { hp: 7, color: 0x4ade80, drop: 'crystal_shard',  model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_green.gltf', zone: 'forest', tier: 2, resource: 'crystal_shard' },
+  amber_ore:        { hp: 10, color: 0xffb700, drop: 'amber',          model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_gold.gltf',      zone: 'forest', tier: 3, resource: 'amber' },
+  ancient_wood:     { hp: 12, color: 0x5a3a1a, drop: 'ancient_bark',  model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf',                  zone: 'forest', tier: 4, resource: 'ancient_bark' },
+
+  // === Zone 2: Fire Floating Blocks (Tier 1-4) ===
+  scorched_rock:    { hp: 5, color: 0x4a4a4a, drop: 'ash',            model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf',            zone: 'fire', tier: 1, resource: 'ash' },
+  magma_crystal:    { hp: 7, color: 0xff6b35, drop: 'magma_shard',    model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_red.gltf',  zone: 'fire', tier: 2, resource: 'magma_shard' },
+  obsidian:         { hp: 10, color: 0x1a1a2e, drop: 'obsidian_fragment', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf',         zone: 'fire', tier: 3, resource: 'obsidian_fragment' },
+  ember_core:       { hp: 12, color: 0xff4500, drop: 'ember_essence', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/lava.gltf',                  zone: 'fire', tier: 4, resource: 'ember_essence' },
+
+  // === Zone 3: Ice Floating Blocks (Tier 1-4) ===
+  packed_ice:       { hp: 5, color: 0xddeeff, drop: 'ice_chunk',      model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/snow.gltf',                  zone: 'ice', tier: 1, resource: 'ice_chunk' },
+  frost_crystal:    { hp: 7, color: 0x7dd3fc, drop: 'frost_shard',    model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf', zone: 'ice', tier: 2, resource: 'frost_shard' },
+  glacial_ore:      { hp: 10, color: 0xaaddff, drop: 'glacial_metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_silver.gltf',     zone: 'ice', tier: 3, resource: 'glacial_metal' },
+  blizzard_core:    { hp: 12, color: 0xe0f0ff, drop: 'blizzard_essence', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/glass.gltf',             zone: 'ice', tier: 4, resource: 'blizzard_essence' },
+
+  // === Zone 4: Desert Floating Blocks (Tier 1-4) ===
+  sandstone_block:  { hp: 5, color: 0xe6c288, drop: 'sand',           model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/sand_A.gltf',                zone: 'desert', tier: 1, resource: 'sand' },
+  desert_crystal:   { hp: 7, color: 0xfacc15, drop: 'desert_shard',   model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_yellow.gltf', zone: 'desert', tier: 2, resource: 'desert_shard' },
+  desert_gold_ore:  { hp: 10, color: 0xffd700, drop: 'gold_nugget',   model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_gold.gltf',       zone: 'desert', tier: 3, resource: 'gold_nugget' },
+  sun_core:         { hp: 12, color: 0xffaa00, drop: 'solar_essence', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/colored_block_yellow.gltf',  zone: 'desert', tier: 4, resource: 'solar_essence' },
+
+  // === Zone 5: Steelworks Floating Blocks (Tier 1-4) ===
+  rusted_scrap:     { hp: 5, color: 0x8b4513, drop: 'rust_chunk',     model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/gravel.gltf',                zone: 'steelworks', tier: 1, resource: 'rust_chunk' },
+  factory_crystal:  { hp: 7, color: 0x7dd3fc, drop: 'gear_shard',     model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/striped_block_blue.gltf',    zone: 'steelworks', tier: 2, resource: 'gear_shard' },
+  alloy_ore:        { hp: 10, color: 0x8899aa, drop: 'alloy_ingot',   model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/metal.gltf',                 zone: 'steelworks', tier: 3, resource: 'alloy_ingot' },
+  furnace_core:     { hp: 12, color: 0xff5500, drop: 'furnace_ember', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/lava.gltf',                  zone: 'steelworks', tier: 4, resource: 'furnace_ember' },
+
+  // === Zone 6: Mire Floating Blocks (Tier 1-4) ===
+  mud_clump:        { hp: 5, color: 0x5a3a1a, drop: 'mud_pie',        model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt.gltf',                  zone: 'mire', tier: 1, resource: 'mud_pie' },
+  moss_crystal:     { hp: 7, color: 0x4ade80, drop: 'moss_clump',     model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_green.gltf', zone: 'mire', tier: 2, resource: 'moss_clump' },
+  petrified_log:    { hp: 10, color: 0x4a3728, drop: 'petrified_bark', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf',                 zone: 'mire', tier: 3, resource: 'petrified_bark' },
+  heart_of_the_mire:{ hp: 12, color: 0x2d5a2d, drop: 'mire_essence',  model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf',                  zone: 'mire', tier: 4, resource: 'mire_essence' },
+
+  // === Zone 7: Citadel Floating Blocks (Tier 1-4) ===
+  castle_brick:     { hp: 5, color: 0xcc6666, drop: 'brick_chip',     model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_A.gltf',              zone: 'citadel', tier: 1, resource: 'brick_chip' },
+  royal_crystal:    { hp: 7, color: 0xff4444, drop: 'royal_shard',    model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_red.gltf',  zone: 'citadel', tier: 2, resource: 'royal_shard' },
+  citadel_gold_ore: { hp: 10, color: 0xffd700, drop: 'gold_nugget',   model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_gold.gltf',       zone: 'citadel', tier: 3, resource: 'gold_nugget' },
+  crown_core:       { hp: 12, color: 0xffee44, drop: 'crown_jewel',   model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/striped_block_yellow.gltf',  zone: 'citadel', tier: 4, resource: 'crown_jewel' },
 };
 
 export const BIOMES = [

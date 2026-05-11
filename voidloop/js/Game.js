@@ -10,7 +10,7 @@ import { UIManager } from './UIManager.js';
 import { SFXMapper } from './SFXMapper.js';
 import { TouchControls } from './TouchControls.js';
 import { LootDrop, LOOT_CONFIG } from './LootDrop.js';
-import { GAME, BIOMES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES, ZONE_BLOCK_LOOT_TABLES, ZONE_ENEMY_LOOT_TABLES } from './constants.js';
+import { GAME, BIOMES, BLOCK_TYPES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES, ZONE_BLOCK_LOOT_TABLES, ZONE_ENEMY_LOOT_TABLES } from './constants.js';
 import { ZoneManager } from './ZoneManager.js';
 import { ZONES, getZoneById, getZoneAtPosition } from './ZoneData.js';
 import { Inventory } from './Inventory.js';
@@ -26,6 +26,7 @@ import { PetManager } from './PetManager.js';
 import { PetLetter } from './PetLetter.js';
 import { RemotePlayer } from './RemotePlayer.js';
 import { settings } from './SettingsManager.js';
+import { ResourceInventory } from './ResourceInventory.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -167,6 +168,7 @@ export class Game {
     this.zoneManager = new ZoneManager();
     this.inventory = new Inventory();
     this.shop = new ShopManager(this.inventory);
+    this.resources = new ResourceInventory();
     this.hazards = null;
     this.shopUI = null;
     this._gatewayMeshes = [];
@@ -279,12 +281,22 @@ export class Game {
           return result;
         }
       },
-      (upgradeId) => this.shop.buyUpgrade(upgradeId),
+      (upgradeId) => {
+        const result = this.shop.buyUpgrade(upgradeId);
+        if (result.success) {
+          this.player.applyUpgrades(this.shop.upgradeLevels);
+        }
+        return result;
+      },
       () => {
         // Close shop callback
         this.shop.setCoins(this.player.coins);
+        this.player.applyUpgrades(this.shop.upgradeLevels);
       }
     );
+
+    // Apply saved upgrades to player on game start
+    this.player.applyUpgrades(this.shop.upgradeLevels);
 
     this.ui.hideLoading();
     this.state = STATES.PLAYING;
@@ -642,12 +654,31 @@ export class Game {
               this.loot.spawnFromTable(blockPos, table);
             }
 
-            // Letter drop chance (~10%)
-            if (Math.random() < 0.10) {
-              const letter = this.letterPool.pickRandomLetter();
-              if (letter) {
-                this.letterDrops.spawn(blockPos, letter);
-                this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+            // Floating blocks: 25% letter drop + resource drop
+            if (isFloat) {
+              // Letter drop (25%)
+              if (Math.random() < 0.25) {
+                const letter = this.letterPool.pickRandomLetter();
+                if (letter) {
+                  this.letterDrops.spawn(blockPos, letter);
+                  this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+                }
+              }
+              // Resource drop from block definition
+              const blockDef = BLOCK_TYPES[nearestBlock.typeKey];
+              if (blockDef && blockDef.resource) {
+                this.resources.add(blockDef.resource, 1);
+                const resName = blockDef.resource.replace(/_/g, ' ');
+                this.ui.showFloatingText(`+1 ${resName}`, 0x88ccff);
+              }
+            } else {
+              // Ground blocks: 5% letter drop
+              if (Math.random() < 0.05) {
+                const letter = this.letterPool.pickRandomLetter();
+                if (letter) {
+                  this.letterDrops.spawn(blockPos, letter);
+                  this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+                }
               }
             }
 
@@ -672,7 +703,8 @@ export class Game {
           this.player.playAttackAnim();
           SFXMapper.swingMiss();
         }
-        weapon.cooldown = GAME.ATTACK_COOLDOWN;
+        // Dynamic swing cooldown based on mineSpeed upgrade
+        weapon.cooldown = this.player.getSwingCooldown();
       }
     }
 
@@ -747,14 +779,22 @@ export class Game {
       this.hazards.update(dt);
     }
 
-    // Fire zone atmosphere — orange ambient tint when in fire zone
+    // Zone atmosphere — dynamic fog and ambient based on current zone
     const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
-    if (currentZone && currentZone.id === 'fire') {
-      // Fire zone colors: fog 0x2a1a1a, ambient orange tint
-      this.scene.background = new THREE.Color(0x2a1a1a);
-      this.ambient.color.setHex(0xaa6644);
+    if (currentZone) {
+      this.scene.background = new THREE.Color(currentZone.fogColor);
+      // Adjust ambient based on zone theme
+      const ambientColors = {
+        forest: 0x88aa88,
+        fire: 0xaa6644,
+        ice: 0x88aacc,
+        desert: 0xccaa66,
+        steelworks: 0x8899aa,
+        mire: 0x669966,
+        citadel: 0xccaa77,
+      };
+      this.ambient.color.setHex(ambientColors[currentZone.id] || 0x8888aa);
     } else {
-      // Forest zone: restore default
       this.scene.background = new THREE.Color(0x0a0a0a);
       this.ambient.color.setHex(0x8888aa);
     }
@@ -804,7 +844,6 @@ export class Game {
 
     const weaponId = this.player.weapons[this.player.currentSlot]?.data?.id || 'unknown';
     const isPickaxe = weaponId === 'pickaxe';
-    const equippedTool = this.inventory.getEquippedTool();
 
     for (const block of this.world.blocks.values()) {
       if (block.destroyed) continue;
@@ -815,17 +854,16 @@ export class Game {
         continue;
       }
 
-      // Check zone-specific tool requirements
-      // Fire zone blocks require water_pickaxe
-      const blockZone = block.zoneId ? getZoneById(block.zoneId) : null;
-      if (blockZone && blockZone.entryRequirements && blockZone.entryRequirements.pickaxe) {
-        const requiredTool = blockZone.entryRequirements.pickaxe; // water_pickaxe
-        if (equippedTool !== requiredTool) {
-          // Tool mismatch — still targetable but will show feedback on swing
-          nearest = block;
-          nearestDist = playerPos.distanceTo(block.position);
-          this._pendingToolCheck = { block, required: requiredTool };
-          continue;
+      // Floating blocks: check pickaxe tier requirement
+      if (blockIsFloating && block.zoneId) {
+        const blockDef = BLOCK_TYPES[block.typeKey];
+        if (blockDef && blockDef.tier) {
+          const zonePickaxeTier = this.shop.getPickaxeTier(block.zoneId);
+          if (zonePickaxeTier < blockDef.tier) {
+            // Pickaxe tier too low — skip this block for targeting
+            // (but we could still show it as "too hard" with visual feedback)
+            continue;
+          }
         }
       }
 
@@ -849,14 +887,13 @@ export class Game {
       }
     }
 
-    // Check tool requirement for nearest block
-    // Fire zone requires water_pickaxe to mine
-    if (nearest && nearest.zoneId) {
-      const zone = getZoneById(nearest.zoneId);
-      if (zone && zone.entryRequirements && zone.entryRequirements.pickaxe) {
-        const requiredTool = zone.entryRequirements.pickaxe; // water_pickaxe
-        if (equippedTool !== requiredTool) {
-          this.ui.showFloatingText(`Need Water Pickaxe!`, 0xff4444);
+    // Check pickaxe tier requirement for nearest floating block
+    if (nearest && nearest.isFloating && nearest.zoneId) {
+      const blockDef = BLOCK_TYPES[nearest.typeKey];
+      if (blockDef && blockDef.tier) {
+        const zonePickaxeTier = this.shop.getPickaxeTier(nearest.zoneId);
+        if (zonePickaxeTier < blockDef.tier) {
+          this.ui.showFloatingText(`Need ${nearest.zoneId} Pickaxe Tier ${blockDef.tier}!`, 0xff4444);
           return null;
         }
       }
@@ -1293,16 +1330,25 @@ export class Game {
       if (success) {
         const letter = this.spellingChallenge.word[0].toUpperCase();
         this.letterPool.markSpelled(letter);
-        // Pet capture
-        const result = this.petManager.recordCapture(letter);
-        if (result.unlocked) {
-          this.ui.showFloatingText(`Pet ${letter} unlocked!`, 0xfacc15);
-        }
-        if (result.levelUp && this.pet && this.pet.letter === letter) {
-          this.pet.setLevel(result.newLevel);
-          this.pet.playLevelUp();
-          this.ui.showFloatingText(`Pet ${letter} ➜ Lv${result.newLevel}!`, 0x4ade80);
-          // Level 7 triggers rainbow effect automatically via PetLetter.update()
+        // Pet spelling progress
+        const result = this.petManager.recordSpelling(letter, true);
+        if (result.unlocked && !result.wasUnlocked) {
+          // First time unlock — big celebration!
+          this.ui.showFloatingText(`Pet ${letter} Joined You!`, 0xfacc15);
+          this.particles.spark(this.player.position.clone().add(new THREE.Vector3(0, 1, 0)), 20);
+          SFXMapper.upgradeBuy();
+        } else if (!result.unlocked) {
+          // Show progress
+          const progress = result.spellingsCorrect;
+          const needed = result.spellingsNeeded;
+          this.ui.showFloatingText(`Pet ${letter}: ${progress}/${needed}`, 0x88ccff);
+        } else {
+          // Already unlocked — level up check
+          if (result.levelUp && this.pet && this.pet.letter === letter) {
+            this.pet.setLevel(result.newLevel);
+            this.pet.playLevelUp();
+            this.ui.showFloatingText(`Pet ${letter} ➜ Lv${result.newLevel}!`, 0x4ade80);
+          }
         }
         // Bonus rewards
         this.player.coins += 10;

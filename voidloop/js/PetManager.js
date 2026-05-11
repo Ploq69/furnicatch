@@ -1,6 +1,7 @@
 import { PET_LEVELS } from './constants.js';
 
-const STORAGE_KEY = 'voidloopPetManagerV1';
+const STORAGE_KEY = 'voidloopPetManagerV2';
+const SPELLINGS_TO_UNLOCK = 10;
 
 function createDefaultPet(letter) {
   return {
@@ -8,6 +9,8 @@ function createDefaultPet(letter) {
     unlocked: false,
     level: 1,
     captures: 0,
+    spellingsCorrect: 0,
+    spellingsAttempted: 0,
   };
 }
 
@@ -47,13 +50,32 @@ export class PetManager {
     this._save();
   }
 
-  recordCapture(letter) {
+  /**
+   * Record a spelling attempt for a letter.
+   * @param {string} letter
+   * @param {boolean} correct - whether the spelling was correct
+   * @returns {object} { unlocked, wasUnlocked, spellingsCorrect, spellingsNeeded, levelUp, oldLevel, newLevel }
+   */
+  recordSpelling(letter, correct) {
     const pet = this.getPet(letter);
-    if (!pet) return { levelUp: false, oldLevel: 1, newLevel: 1 };
+    if (!pet) return { unlocked: false, wasUnlocked: false, spellingsCorrect: 0, spellingsNeeded: SPELLINGS_TO_UNLOCK, levelUp: false, oldLevel: 1, newLevel: 1 };
 
     const wasUnlocked = pet.unlocked;
-    pet.unlocked = true;
-    pet.captures++;
+    pet.spellingsAttempted++;
+
+    if (correct) {
+      pet.spellingsCorrect++;
+
+      // Check unlock at 10 correct spellings
+      if (!pet.unlocked && pet.spellingsCorrect >= SPELLINGS_TO_UNLOCK) {
+        pet.unlocked = true;
+      }
+
+      // Captures for leveling = spellings after unlock
+      if (pet.unlocked) {
+        pet.captures++;
+      }
+    }
 
     const oldLevel = pet.level;
     const newLevel = this._computeLevel(pet.captures);
@@ -63,11 +85,30 @@ export class PetManager {
     this._save();
 
     return {
+      unlocked: pet.unlocked,
+      wasUnlocked,
+      spellingsCorrect: pet.spellingsCorrect,
+      spellingsNeeded: SPELLINGS_TO_UNLOCK,
       levelUp,
       oldLevel,
       newLevel,
-      unlocked: !wasUnlocked,
       letter: pet.letter,
+    };
+  }
+
+  /**
+   * Get unlock progress for a letter.
+   * @param {string} letter
+   * @returns {object} { current, required, unlocked, pct }
+   */
+  getUnlockProgress(letter) {
+    const pet = this.getPet(letter);
+    if (!pet) return { current: 0, required: SPELLINGS_TO_UNLOCK, unlocked: false, pct: 0 };
+    return {
+      current: pet.spellingsCorrect,
+      required: SPELLINGS_TO_UNLOCK,
+      unlocked: pet.unlocked,
+      pct: Math.min(1, pet.spellingsCorrect / SPELLINGS_TO_UNLOCK),
     };
   }
 
@@ -106,7 +147,11 @@ export class PetManager {
   _load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) {
+        // Try migrating from old v1 format
+        this._migrateFromV1();
+        return;
+      }
       const data = JSON.parse(raw);
       if (data.equippedLetter) this.equippedLetter = data.equippedLetter;
       if (Array.isArray(data.pets)) {
@@ -116,11 +161,37 @@ export class PetManager {
             pet.unlocked = petData.unlocked ?? false;
             pet.level = petData.level ?? 1;
             pet.captures = petData.captures ?? 0;
+            pet.spellingsCorrect = petData.spellingsCorrect ?? (petData.captures ?? 0);
+            pet.spellingsAttempted = petData.spellingsAttempted ?? (petData.captures ?? 0);
           }
         }
       }
     } catch (e) {
       console.warn('[PetManager] Failed to load:', e);
+    }
+  }
+
+  _migrateFromV1() {
+    try {
+      const oldRaw = localStorage.getItem('voidloopPetManagerV1');
+      if (!oldRaw) return;
+      const oldData = JSON.parse(oldRaw);
+      if (oldData.equippedLetter) this.equippedLetter = oldData.equippedLetter;
+      if (Array.isArray(oldData.pets)) {
+        for (const [letter, petData] of oldData.pets) {
+          const pet = this.pets.get(letter);
+          if (pet) {
+            pet.unlocked = petData.unlocked ?? false;
+            pet.level = petData.level ?? 1;
+            pet.captures = Math.max(0, (petData.captures ?? 0) - SPELLINGS_TO_UNLOCK);
+            pet.spellingsCorrect = petData.captures ?? 0;
+            pet.spellingsAttempted = petData.captures ?? 0;
+          }
+        }
+      }
+      this._save();
+    } catch (e) {
+      console.warn('[PetManager] V1 migration failed:', e);
     }
   }
 }

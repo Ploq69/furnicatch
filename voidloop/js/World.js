@@ -188,34 +188,48 @@ export class World {
 
   async _spawnFloatingBlocksZone(zone, rng) {
     const types = zone.floatingBlockTypes || ['crystal'];
-    const clusterCount = Math.min(5 + zone.order * 2, 12);
+    // Many clusters: 20+ per zone, scaling with zone order
+    const clusterCount = Math.min(20 + zone.order * 8, 40);
     const b = zone.bounds;
 
-    const emptyColumns = [];
+    // Use all columns (both empty and occupied by ground blocks)
+    // Floating blocks can float above ground too
+    const allColumns = [];
     for (let x = b.minX; x < b.maxX; x++) {
       for (let z = b.minZ; z < b.maxZ; z++) {
-        if (!this.getBlock(x, 0, z)) {
-          emptyColumns.push({ x, z });
-        }
+        // Skip spawn area
+        const sp = zone.spawnPoint;
+        const distFromSpawn = Math.sqrt((x - sp.x) ** 2 + (z - sp.z) ** 2);
+        if (distFromSpawn < 4) continue;
+        allColumns.push({ x, z });
       }
     }
 
-    rng.shuffle(emptyColumns);
-    const selected = emptyColumns.slice(0, clusterCount);
+    rng.shuffle(allColumns);
+    const selected = allColumns.slice(0, clusterCount);
 
     for (const col of selected) {
-      const y = 2 + Math.floor(rng.random() * 3);
-      if (this.getBlock(col.x, y, col.z)) continue;
+      // Each cluster has 3-5 floating blocks
+      const blocksPerCluster = 3 + Math.floor(rng.random() * 3);
+      for (let i = 0; i < blocksPerCluster; i++) {
+        const y = 2 + i + Math.floor(rng.random() * 2);
+        const bx = col.x + Math.round(rng.random() * 2 - 1);
+        const bz = col.z + Math.round(rng.random() * 2 - 1);
 
-      const type = rng.choice(types);
-      await this._placeFloatingBlock({
-        x: col.x + (rng.random() - 0.5) * 0.3,
-        y,
-        z: col.z + (rng.random() - 0.5) * 0.3,
-        type,
-        rotation: rng.random() * 360,
-        scale: 0.8 + rng.random() * 0.4,
-      }, rng);
+        // Bounds check
+        if (bx < b.minX || bx >= b.maxX || bz < b.minZ || bz >= b.maxZ) continue;
+        if (this.getBlock(bx, y, bz)) continue;
+
+        const type = rng.choice(types);
+        await this._placeFloatingBlock({
+          x: bx + (rng.random() - 0.5) * 0.3,
+          y,
+          z: bz + (rng.random() - 0.5) * 0.3,
+          type,
+          rotation: rng.random() * 360,
+          scale: 0.8 + rng.random() * 0.4,
+        }, rng);
+      }
     }
   }
 
