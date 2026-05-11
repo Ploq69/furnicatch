@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GAME, BIOMES, BLOCK_TYPES, ENEMY_TYPES, ZONE_LOOT_TABLES } from './constants.js';
+import { GAME, BIOMES, BLOCK_TYPES, ENEMY_TYPES } from './constants.js';
 import { ZONES, getZoneById } from './ZoneData.js';
 import { Block } from './Block.js';
 import { Enemy } from './Enemy.js';
