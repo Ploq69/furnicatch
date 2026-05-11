@@ -588,7 +588,6 @@ export class Game {
           }
         }
         this.player.playAttackAnim();
-        const equippedWeapon = this.inventory.getEquippedWeapon();
         nearestEnemy.takeDamage(weapon.data.damage, equippedWeapon);
         // Attack VFX
         const hitPos = nearestEnemy.position.clone().add(new THREE.Vector3(0, 0.5, 0));
