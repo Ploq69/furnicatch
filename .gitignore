@@ -64,3 +64,6 @@ brackeys_vfx_bundle/
 
 # Copied audio sfx (generated from Helton Yan pack)
 voidloop/audio/sfx/
+
+# Local/runtime config with Firebase web app keys
+voidloop/js/firebase-config.local.js

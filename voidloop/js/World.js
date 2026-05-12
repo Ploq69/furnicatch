@@ -8,7 +8,8 @@ import { assetLoader } from './AssetLoader.js';
 import { getBlockTypeForTile, PROP_CATALOG } from './levelbuilder/LevelCatalog.js';
 import { SeededRNG } from './SeededRNG.js';
 import { BlockInstancer } from './BlockInstancer.js';
-import { GroundRenderer } from './GroundRenderer.js';
+import { OccupancyGrid } from './OccupancyGrid.js';
+import { TerrainMesh } from './TerrainMesh.js';
 
 // Biome-specific floating block types for procedural generation
 const FLOAT_BLOCK_TYPES = {
@@ -35,9 +36,9 @@ export class World {
     this.rng = null;
     this._nextEnemyId = 1;
     this.instancer = new BlockInstancer(scene);
-    this.groundRenderer = new GroundRenderer(scene);
+    this.occupancyGrid = new OccupancyGrid();
+    this.terrainMesh = new TerrainMesh(scene);
     this.floatingBlocks = new Set();
-    this.groundGrid = new Set(); // "x,z" keys for occupancy checks
   }
 
   setFloor(floorNum) {
@@ -61,108 +62,133 @@ export class World {
     const b = zone.bounds;
     const types = zone.blockTypes;
     const size = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2;
+    const sp = zone.spawnPoint;
 
-    // Preload block geometries for instancer
-    await this.instancer.preloadTypes([...new Set([...types, 'stone_dark'])]);
-    await this.groundRenderer.preloadTypes(types);
+    // Preload geometries
+    const allTypes = [...new Set([...types, 'stone', 'stone_dark'])];
+    await this.instancer.preloadTypes([...new Set([...allTypes, 'stone_dark'])]);
+    await this.terrainMesh.preloadTypes(allTypes);
 
-    // --- denseCave generation within zone bounds ---
+    // Clear previous occupancy
+    this.occupancyGrid.clear();
+
     const gridW = b.maxX - b.minX;
     const gridD = b.maxZ - b.minZ;
-    const grid = new Array(gridW * gridD).fill(0);
 
-    // Initialize with random noise (65% chance of block)
-    for (let gx = 0; gx < gridW; gx++) {
-      for (let gz = 0; gz < gridD; gz++) {
-        const worldX = b.minX + gx;
-        const worldZ = b.minZ + gz;
-        const dx = worldX - (b.minX + b.maxX) / 2;
-        const dz = worldZ - (b.minZ + b.maxZ) / 2;
-        const dist = Math.max(Math.abs(dx), Math.abs(dz));
-
-        if (dist >= size) {
-          grid[gz * gridW + gx] = 1;
-        } else if (dist >= size - 1) {
-          grid[gz * gridW + gx] = rng.random() < 0.9 ? 1 : 0;
-        } else {
-          grid[gz * gridW + gx] = rng.random() < 0.65 ? 1 : 0;
-        }
-      }
-    }
-
-    // Smooth with cellular automata (3 iterations)
-    for (let iter = 0; iter < 3; iter++) {
-      const newGrid = new Array(gridW * gridD).fill(0);
+    // Helper: cellular automata on a 2D grid
+    const runCA = (fillRate) => {
+      const g = new Array(gridW * gridD).fill(0);
       for (let gx = 0; gx < gridW; gx++) {
         for (let gz = 0; gz < gridD; gz++) {
           const worldX = b.minX + gx;
           const worldZ = b.minZ + gz;
           const dx = worldX - (b.minX + b.maxX) / 2;
           const dz = worldZ - (b.minZ + b.maxZ) / 2;
-          if (Math.max(Math.abs(dx), Math.abs(dz)) >= size) {
-            newGrid[gz * gridW + gx] = 1;
-            continue;
+          const dist = Math.max(Math.abs(dx), Math.abs(dz));
+          if (dist >= size) {
+            g[gz * gridW + gx] = 1;
+          } else if (dist >= size - 1) {
+            g[gz * gridW + gx] = rng.random() < 0.9 ? 1 : 0;
+          } else {
+            g[gz * gridW + gx] = rng.random() < fillRate ? 1 : 0;
           }
-
-          let neighbors = 0;
-          for (let nx = -1; nx <= 1; nx++) {
-            for (let nz = -1; nz <= 1; nz++) {
-              if (nx === 0 && nz === 0) continue;
-              const ax = gx + nx;
-              const az = gz + nz;
-              if (ax >= 0 && ax < gridW && az >= 0 && az < gridD) {
-                if (grid[az * gridW + ax]) neighbors++;
-              } else {
-                neighbors++;
+        }
+      }
+      for (let iter = 0; iter < 3; iter++) {
+        const newGrid = new Array(gridW * gridD).fill(0);
+        for (let gx = 0; gx < gridW; gx++) {
+          for (let gz = 0; gz < gridD; gz++) {
+            const worldX = b.minX + gx;
+            const worldZ = b.minZ + gz;
+            const dx = worldX - (b.minX + b.maxX) / 2;
+            const dz = worldZ - (b.minZ + b.maxZ) / 2;
+            if (Math.max(Math.abs(dx), Math.abs(dz)) >= size) {
+              newGrid[gz * gridW + gx] = 1;
+              continue;
+            }
+            let neighbors = 0;
+            for (let nx = -1; nx <= 1; nx++) {
+              for (let nz = -1; nz <= 1; nz++) {
+                if (nx === 0 && nz === 0) continue;
+                const ax = gx + nx;
+                const az = gz + nz;
+                if (ax >= 0 && ax < gridW && az >= 0 && az < gridD) {
+                  if (g[az * gridW + ax]) neighbors++;
+                } else {
+                  neighbors++;
+                }
               }
             }
-          }
-
-          if (grid[gz * gridW + gx]) {
-            newGrid[gz * gridW + gx] = neighbors >= 4 ? 1 : 0;
-          } else {
-            newGrid[gz * gridW + gx] = neighbors >= 5 ? 1 : 0;
+            if (g[gz * gridW + gx]) {
+              newGrid[gz * gridW + gx] = neighbors >= 4 ? 1 : 0;
+            } else {
+              newGrid[gz * gridW + gx] = neighbors >= 5 ? 1 : 0;
+            }
           }
         }
+        for (let i = 0; i < g.length; i++) g[i] = newGrid[i];
       }
-      for (let i = 0; i < grid.length; i++) grid[i] = newGrid[i];
-    }
+      return g;
+    };
 
-    const typeGrid = new Array(gridW * gridD).fill(null);
+    // Generate three vertical layers
+    const surfaceGrid = runCA(0.65);
+    const subsoilGrid = runCA(0.80);
+    const bedrockGrid = runCA(0.90);
 
-    // Place visual ground cells. These are collision/terrain only; mineable
-    // progression uses floating blocks exclusively.
+    // Surface layer (y = 0)
     for (let gx = 0; gx < gridW; gx++) {
       for (let gz = 0; gz < gridD; gz++) {
-        if (grid[gz * gridW + gx]) {
-          const worldX = b.minX + gx;
-          const worldZ = b.minZ + gz;
-          // Skip spawn area — spawn platform placed separately as mineable blocks
-          const sp = zone.spawnPoint;
-          if (Math.abs(worldX - sp.x) <= 1 && Math.abs(worldZ - sp.z) <= 1) continue;
+        if (surfaceGrid[gz * gridW + gx]) {
+          const wx = b.minX + gx;
+          const wz = b.minZ + gz;
+          if (Math.abs(wx - sp.x) <= 1 && Math.abs(wz - sp.z) <= 1) continue;
           const type = rng.choice(types);
-          typeGrid[gz * gridW + gx] = type;
-          this._recordGroundCell(worldX, worldZ, type);
+          this.occupancyGrid.set(wx, 0, wz, { type, zoneId: zone.id });
         }
       }
     }
 
-    // Ensure spawn platform
-    const sp = zone.spawnPoint;
+    // Subsoil layer (y = -1)
+    for (let gx = 0; gx < gridW; gx++) {
+      for (let gz = 0; gz < gridD; gz++) {
+        if (subsoilGrid[gz * gridW + gx]) {
+          const wx = b.minX + gx;
+          const wz = b.minZ + gz;
+          this.occupancyGrid.set(wx, -1, wz, { type: 'stone', zoneId: zone.id });
+        }
+      }
+    }
+
+    // Bedrock layer (y = -2)
+    for (let gx = 0; gx < gridW; gx++) {
+      for (let gz = 0; gz < gridD; gz++) {
+        if (bedrockGrid[gz * gridW + gx]) {
+          const wx = b.minX + gx;
+          const wz = b.minZ + gz;
+          this.occupancyGrid.set(wx, -2, wz, { type: 'stone_dark', zoneId: zone.id });
+        }
+      }
+    }
+
+    // Indestructible spawn platform
     for (let sx = -1; sx <= 1; sx++) {
       for (let sz = -1; sz <= 1; sz++) {
-        const gx = sp.x + sx - b.minX;
-        const gz = sp.z + sz - b.minZ;
-        if (gx >= 0 && gx < gridW && gz >= 0 && gz < gridD) {
-          typeGrid[gz * gridW + gx] = 'stone';
-        }
-        this._recordGroundCell(sp.x + sx, sp.z + sz, 'stone');
+        const wx = sp.x + sx;
+        const wz = sp.z + sz;
+        this.occupancyGrid.remove(wx, 0, wz);
+        this.occupancyGrid.remove(wx, -1, wz);
+        this.occupancyGrid.remove(wx, -2, wz);
+        this.occupancyGrid.set(wx, 0, wz, { type: 'stone', indestructible: true, zoneId: zone.id });
       }
     }
 
-    this.groundRenderer.buildFromGrid(typeGrid, gridW, gridD, b.minX, b.minZ, { append: true });
+    // Build unified terrain mesh
+    this.terrainMesh.generateFromOccupancyGrid(this.occupancyGrid);
+    const stats = this.terrainMesh.getStats();
+    console.log(`[World] Terrain mesh built: ${stats.blocks.toLocaleString()} blocks, ${stats.triangles.toLocaleString()} triangles`);
 
-    // Place gateway if this zone has one
+    // Place gateway
     if (zone.exitGateway) {
       this._placeGateway(zone.exitGateway, zone.id);
     }
@@ -180,7 +206,7 @@ export class World {
           ex = sp.x + Math.cos(angle) * dist;
           ez = sp.z + Math.sin(angle) * dist;
           attempts++;
-        } while ((this.getBlock(ex, 0, ez) || this._hasGround(ex, ez)) && attempts < 20);
+        } while ((this.getBlock(ex, 0, ez) || this.occupancyGrid.hasGround(ex, ez)) && attempts < 20);
         const enemy = new Enemy(et, ex, ez);
         enemy.world = this;
         enemy.zoneId = zone.id;
@@ -508,28 +534,23 @@ export class World {
     }
   }
 
-  _recordGroundCell(x, z, typeKey = 'stone') {
-    const colKey = `${Math.round(x)},${Math.round(z)}`;
-    this.groundGrid.add(colKey);
-    this.columnHeights.set(colKey, 1);
-  }
-
   getBlock(x, y, z) {
     const key = `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
     return this.blocks.get(key);
   }
 
   _hasGround(x, z) {
-    return this.groundGrid.has(`${Math.round(x)},${Math.round(z)}`);
+    const colKey = `${Math.round(x)},${Math.round(z)}`;
+    return this.occupancyGrid.hasGround(x, z) || this.columnHeights.has(colKey);
   }
 
   getColumnTop(x, z) {
+    // Check terrain occupancy grid first
+    const terrainTop = this.occupancyGrid.getColumnTop(x, z);
+    if (terrainTop > -999) return terrainTop;
+    // Fall back to placed blocks (gateways, authored levels)
     const colKey = `${Math.round(x)},${Math.round(z)}`;
-    const top = this.columnHeights.get(colKey);
-    if (top !== undefined) return top;
-    // Ground blocks sit at y=0, so top is y=1
-    if (this.groundGrid.has(colKey)) return 1;
-    return -999;
+    return this.columnHeights.get(colKey) ?? -999;
   }
 
   mineBlock(block, particles, audio) {
@@ -558,7 +579,6 @@ export class World {
   update(dt, playerPos, particles, audio, player) {
     // Update chunk visibility based on player position
     this.instancer.updateVisibility(playerPos, 45);
-    this.groundRenderer.updateVisibility(playerPos, 50);
 
     // Update all blocks (handles shake/scale for ground blocks, hp bars, etc.)
     for (const block of this.blocks.values()) {
@@ -606,8 +626,8 @@ export class World {
 
   clear() {
     this.instancer.clear();
-    this.groundRenderer.clear();
-    this.groundGrid.clear();
+    this.terrainMesh.clear();
+    this.occupancyGrid.clear();
     for (const block of this.blocks.values()) {
       if (block.mesh) this.scene.remove(block.mesh);
     }
