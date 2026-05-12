@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BLOCK_TYPES, GAME } from './constants.js';
+import { assetLoader } from './AssetLoader.js';
 
 const CHUNK_SIZE = 16;
 const BLOCK_SIZE = GAME.BLOCK_SIZE;
@@ -32,7 +33,13 @@ export class GroundRenderer {
   constructor(scene) {
     this.scene = scene;
     this.chunks = new Map(); // key: "cx,cz" -> { group, meshes: [] }
+    this._chunkCells = new Map();
     this._materialCache = new Map();
+    this._modelCache = new Map();
+  }
+
+  async preloadTypes(typeKeys) {
+    await Promise.all([...new Set(typeKeys)].map(typeKey => this._getModelGeoMat(typeKey)));
   }
 
   /**
@@ -43,8 +50,11 @@ export class GroundRenderer {
    * @param {number} minX — world X offset for grid[0]
    * @param {number} minZ — world Z offset for grid[0]
    */
-  buildFromGrid(typeGrid, gridW, gridD, minX, minZ) {
-    this.clear();
+  buildFromGrid(typeGrid, gridW, gridD, minX, minZ, options = {}) {
+    if (!options.append) {
+      this.clear();
+      this._chunkCells.clear();
+    }
 
     // Organize cells into chunk buckets
     const chunkCells = new Map(); // key: "cx,cz" -> Array<{x, z, typeKey}>
@@ -67,11 +77,27 @@ export class GroundRenderer {
 
     // Build merged geometry for each chunk
     for (const [chunkKey, cells] of chunkCells) {
-      this._buildChunk(chunkKey, cells);
+      const mergedCells = this._chunkCells.get(chunkKey) || [];
+      const seen = new Map(mergedCells.map(c => [`${c.x},${c.z}`, c]));
+      for (const cell of cells) {
+        seen.set(`${cell.x},${cell.z}`, cell);
+      }
+      const allCells = Array.from(seen.values());
+      this._chunkCells.set(chunkKey, allCells);
+      this._buildChunk(chunkKey, allCells);
     }
   }
 
   _buildChunk(chunkKey, cells) {
+    const existing = this.chunks.get(chunkKey);
+    if (existing) {
+      for (const mesh of existing.meshes) {
+        mesh.geometry.dispose();
+      }
+      this.scene.remove(existing.group);
+      this.chunks.delete(chunkKey);
+    }
+
     // Group faces by typeKey
     const facesByType = new Map(); // typeKey -> Array<BufferGeometry>
 
@@ -82,9 +108,14 @@ export class GroundRenderer {
     }
 
     for (const { x, z, typeKey } of cells) {
-      const faces = this._generateFacesForCell(x, z, typeKey, cellSet);
       if (!facesByType.has(typeKey)) facesByType.set(typeKey, []);
-      facesByType.get(typeKey).push(...faces);
+      const model = this._modelCache.get(typeKey);
+      if (model?.geometry) {
+        facesByType.get(typeKey).push(this._makeModelCell(x, z, model.geometry));
+      } else {
+        const faces = this._generateFacesForCell(x, z, typeKey, cellSet);
+        facesByType.get(typeKey).push(...faces);
+      }
     }
 
     // Create chunk group
@@ -151,18 +182,74 @@ export class GroundRenderer {
     return geo;
   }
 
+  _makeModelCell(x, z, sourceGeometry) {
+    const geo = sourceGeometry.clone();
+    _dummy.position.set(x + HALF, HALF, z + HALF);
+    _dummy.rotation.set(0, 0, 0);
+    _dummy.scale.setScalar(1);
+    _dummy.updateMatrix();
+    geo.applyMatrix4(_dummy.matrix);
+    return geo;
+  }
+
+  async _getModelGeoMat(typeKey) {
+    if (this._modelCache.has(typeKey)) return this._modelCache.get(typeKey);
+
+    const def = BLOCK_TYPES[typeKey] || BLOCK_TYPES.stone;
+    let geometry = null;
+    let material = null;
+
+    if (def.model) {
+      try {
+        const gltf = await assetLoader.loadGLTF(def.model);
+        const geometries = [];
+        gltf.scene.updateMatrixWorld(true);
+        gltf.scene.traverse((child) => {
+          if (!child.isMesh || !child.geometry) return;
+          const clone = child.geometry.clone();
+          clone.applyMatrix4(child.matrixWorld);
+          geometries.push(clone);
+          if (!material && child.material) {
+            material = Array.isArray(child.material) ? child.material[0] : child.material;
+          }
+        });
+
+        if (geometries.length === 1) {
+          geometry = geometries[0];
+        } else if (geometries.length > 1) {
+          geometry = mergeGeometries(geometries);
+          for (const g of geometries) g.dispose();
+        }
+
+        if (geometry) {
+          geometry.scale(0.5, 0.5, 0.5);
+        }
+      } catch (error) {
+        console.warn('[GroundRenderer] Failed to load ground model for', typeKey, error);
+      }
+    }
+
+    const result = { geometry, material };
+    this._modelCache.set(typeKey, result);
+    return result;
+  }
+
   _getMaterial(typeKey) {
     if (this._materialCache.has(typeKey)) {
       return this._materialCache.get(typeKey);
     }
 
+    const model = this._modelCache.get(typeKey);
     const def = BLOCK_TYPES[typeKey] || BLOCK_TYPES.stone;
-    const mat = new THREE.MeshStandardMaterial({
-      color: def.color || 0x888888,
-      roughness: 0.85,
-      metalness: 0.05,
-      side: THREE.DoubleSide,
-    });
+    const mat = model?.material
+      ? model.material.clone()
+      : new THREE.MeshStandardMaterial({
+          color: def.color || 0x888888,
+          roughness: 0.85,
+          metalness: 0.05,
+          side: THREE.DoubleSide,
+        });
+    mat.side = THREE.FrontSide;
     this._materialCache.set(typeKey, mat);
     return mat;
   }
@@ -190,6 +277,7 @@ export class GroundRenderer {
       this.scene.remove(chunk.group);
     }
     this.chunks.clear();
+    this._chunkCells.clear();
   }
 
   getStats() {

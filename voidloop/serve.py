@@ -9,8 +9,9 @@ Then open http://localhost:8000 in your browser.
 import http.server
 import socketserver
 import os
+import sys
 
-PORT = 8000
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('PORT', '8000'))
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):

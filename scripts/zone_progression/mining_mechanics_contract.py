@@ -23,20 +23,22 @@ from zone_contract_common import (
 def main() -> int:
     game = read_js("Game.js")
     world = read_js("World.js")
-    find_mineable = function_body(game, "_findMineableBlock")
+    find_mineable = function_body(game, "_findMiningTarget")
+    mining_status = function_body(game, "_getMiningStatusForBlock")
+    mining_logic = find_mineable + mining_status
     place_floating = function_body(world, "_placeFloatingBlock")
     spawn_zone = function_body(world, "_spawnFloatingBlocksZone")
 
     checks: list[CheckResult] = [
         fail_if("block.zoneId" not in place_floating, "World._placeFloatingBlock must assign block.zoneId from floating block data."),
         fail_if("zoneId" not in spawn_zone, "World._spawnFloatingBlocksZone must pass the source zone id into each floating block."),
-        fail_if("blockIsFloating && !isPickaxe" not in find_mineable and "isPickaxe === false" not in find_mineable,
+        fail_if("!isPickaxe" not in mining_logic,
                 "Game._findMineableBlock must reject floating blocks when the active tool is not the pickaxe."),
-        fail_if("getEquippedTool" not in find_mineable,
+        fail_if("getEquippedTool" not in mining_logic,
                 "Mining must check Inventory/Player equipped tool, not only the hotbar weapon id."),
-        fail_if("pickaxeId" not in find_mineable,
+        fail_if("pickaxeId" not in mining_logic,
                 "Mining must compare the equipped tool to the current zone's pickaxeId."),
-        fail_if("getPickaxeTier" not in find_mineable or "blockDef.tier" not in find_mineable,
+        fail_if("getPickaxeTier" not in mining_logic or ("blockDef.tier" not in mining_logic and "blockTier" not in mining_logic),
                 "Mining must compare zone pickaxe tier against the floating block tier."),
         fail_if("showMiningBlocked" not in game and "showBlockLocked" not in game and "blockedMine" not in game,
                 "Too-hard or wrong-tool blocks need a dedicated blocked feedback path, not silent target skipping."),

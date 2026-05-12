@@ -115,6 +115,9 @@ export class Player {
     this.mineDamage = 1;
     this.mineSpeed = 1.0;
     this.stamina = GAME.MAX_STAMINA;
+    this.maxStamina = GAME.MAX_STAMINA;
+    this.hazardSpeedMultiplier = 1.0;
+    this.stunTimer = 0;
 
     this.mesh = null;
     this.mixer = null;
@@ -168,14 +171,12 @@ export class Player {
   /**
    * Apply shop upgrade levels to player stats.
    * Called after buying upgrades or loading saved data.
-   * @param {object} upgradeLevels - { pick_tier: N, mine_speed: N, ... }
+   * @param {object} upgradeLevels - { mine_speed: N, ... }
    */
   applyUpgrades(upgradeLevels) {
-    const pickTier = upgradeLevels?.pick_tier || 0;
     const mineSpeedLevel = upgradeLevels?.mine_speed || 0;
 
-    // pick_tier: +1 mine damage per level
-    this.mineDamage = 1 + pickTier;
+    this.mineDamage = 1;
 
     // mine_speed: +10% per level (max 50%)
     this.mineSpeed = 1.0 + (mineSpeedLevel * 0.1);
@@ -378,7 +379,7 @@ export class Player {
     }
     this.currentSlot = slot;
     const weapon = this.weapons[slot];
-    this.equippedWeapon = weapon?.data?.id || null;
+    this.activeHotbarWeapon = weapon?.data?.id || null;
     const hotbarLoadout = HOTBAR_LOADOUTS[weapon?.data?.id];
     if (hotbarLoadout) {
       await this.applyLoadout({ ...this.loadout, ...hotbarLoadout }, { includeCharacter: false });
@@ -479,9 +480,16 @@ export class Player {
       this.animLockTimer -= dt;
     }
 
+    if (this.stunTimer > 0) {
+      this.stunTimer -= dt;
+      this.playAnim('Hit', { lock: Math.min(this.stunTimer, 0.25) });
+      this._updateMesh();
+      return;
+    }
+
     // Stamina regen
-    if (this.stamina < GAME.MAX_STAMINA) {
-      this.stamina = Math.min(GAME.MAX_STAMINA, this.stamina + GAME.STAMINA_REGEN * dt);
+    if (this.stamina < this.maxStamina) {
+      this.stamina = Math.min(this.maxStamina, this.stamina + GAME.STAMINA_REGEN * dt);
     }
 
     // Ground height snapping (3D terrain support) — 2×2 area check
@@ -557,9 +565,10 @@ export class Player {
       this.dodge(dx, dz);
     }
 
-    const speed = input.isDown('ShiftLeft') && this.stamina > 0
+    const baseSpeed = input.isDown('ShiftLeft') && this.stamina > 0
       ? GAME.PLAYER_SPRINT_SPEED
       : GAME.PLAYER_SPEED;
+    const speed = baseSpeed * this.hazardSpeedMultiplier;
 
     if (input.isDown('ShiftLeft')) {
       this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
@@ -658,12 +667,24 @@ export class Player {
     return this.inventory[itemId] > 0;
   }
 
+  setHazardSpeedMultiplier(multiplier) {
+    this.hazardSpeedMultiplier = Math.max(0.2, Math.min(1, multiplier || 1));
+  }
+
+  drainStamina(amount) {
+    this.stamina = Math.max(0, this.stamina - Math.max(0, amount || 0));
+  }
+
+  stun(duration = 0.5) {
+    this.stunTimer = Math.max(this.stunTimer, duration);
+  }
+
   attack(origin, direction, scene, audio, particles, enemies) {
-    return this.weapons[this.currentSlot].attack(origin, direction, scene, audio, particles, enemies);
+    return this.weapons[this.currentSlot].attack(origin, direction, scene, audio, particles, enemies, this.getEquippedWeapon());
   }
 
   updateProjectiles(dt, scene, particles, enemies) {
-    this.weapons[this.currentSlot].updateProjectiles(dt, scene, particles, enemies);
+    this.weapons[this.currentSlot].updateProjectiles(dt, scene, particles, enemies, this.getEquippedWeapon());
   }
 
   getHandPosition() {

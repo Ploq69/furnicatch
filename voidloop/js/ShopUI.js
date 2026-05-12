@@ -2,10 +2,11 @@
 // Voidloop — Shop UI Overlay
 // ==========================================
 
-import { SHOP_ITEMS, SHOP_UPGRADES } from './ShopManager.js';
+import { SHOP_ITEMS, SHOP_UPGRADES, PICKAXE_TIER_UPGRADES } from './ShopManager.js';
 import { SFXMapper } from './SFXMapper.js';
 import { LoadoutPreview } from './LoadoutPreview.js';
 import { cloneLoadout } from './KayKitLoadout.js';
+import { getZoneById } from './ZoneData.js';
 
 // Map shop item IDs to visual loadout item IDs for preview
 const SHOP_ITEM_PREVIEW_MAP = {
@@ -24,7 +25,7 @@ const SHOP_ITEM_PREVIEW_MAP = {
 };
 
 export class ShopUI {
-  constructor(shopManager, onBuyItem, onBuyUpgrade, onClose, getResources, onSellResource, getLoadout, onOpenLoadout) {
+  constructor(shopManager, onBuyItem, onBuyUpgrade, onClose, getResources, onSellResource, getLoadout, onOpenLoadout, onBuyPickaxeTier) {
     this.shop = shopManager;
     this.onBuyItem = onBuyItem;
     this.onBuyUpgrade = onBuyUpgrade;
@@ -33,6 +34,7 @@ export class ShopUI {
     this.onSellResource = onSellResource;
     this.getLoadout = getLoadout;
     this.onOpenLoadout = onOpenLoadout;
+    this.onBuyPickaxeTier = onBuyPickaxeTier;
     this.activeTab = 'tools';
     this.preview = null;
     this.previewBaseLoadout = null;
@@ -154,7 +156,7 @@ export class ShopUI {
         <div class="shop-card-name">${item.name}</div>
         <div class="shop-card-desc">${item.description}</div>
         <div class="shop-card-cost">${item.owned ? (item.equipped ? '✅ Equipped' : '✓ Owned') : `💰 ${item.cost}`}</div>
-        <button class="shop-buy-btn" data-id="${item.id}" ${item.owned || !item.canAfford ? 'disabled' : ''}>
+        <button class="shop-buy-btn" data-id="${item.id}" ${(item.owned && item.equipped) || (!item.owned && !item.canAfford) ? 'disabled' : ''}>
           ${item.owned ? (item.equipped ? 'Equipped' : 'Equip') : 'Buy'}
         </button>
       `;
@@ -222,9 +224,11 @@ export class ShopUI {
   }
 
   _renderUpgrades() {
-    const upgrades = this.shop.getAllUpgrades();
     const grid = document.createElement('div');
     grid.className = 'shop-grid';
+    this._renderPickaxeTierUpgrades(grid);
+
+    const upgrades = this.shop.getAllUpgrades();
 
     for (const upg of upgrades) {
       const card = document.createElement('div');
@@ -258,6 +262,45 @@ export class ShopUI {
     }
 
     this.elContent.appendChild(grid);
+  }
+
+  _renderPickaxeTierUpgrades(grid) {
+    for (const zoneUpgrades of PICKAXE_TIER_UPGRADES) {
+      const zone = getZoneById(zoneUpgrades.zoneId);
+      const status = this.shop.getPickaxeTierStatus(zoneUpgrades.zoneId);
+      const nextUpgrade = zoneUpgrades.tiers.find(t => t.tier === status.currentTier + 1);
+      const ownedBase = status.currentTier > 0;
+      const recommended = ownedBase && !status.maxed && status.canAfford;
+      const card = document.createElement('div');
+      card.className = 'shop-card pickaxe-tier-card' + (status.maxed ? ' maxed' : '') + (recommended ? ' recommended' : '');
+      const pips = Array.from({ length: 4 }, (_, i) => i < status.currentTier ? '●' : '○').join(' ');
+      card.innerHTML = `
+        <div class="shop-card-icon">⛏️</div>
+        <div class="shop-card-name">${zone?.name || zoneUpgrades.zoneId}</div>
+        <div class="shop-card-desc pickaxePip">Tier ${status.currentTier}/4 ${pips}</div>
+        <div class="shop-card-cost">${status.maxed ? 'MAXED' : (ownedBase ? `💰 ${nextUpgrade?.cost ?? status.nextCost}` : '🔒')}</div>
+        <button class="shop-buy-btn" data-zone-id="${zoneUpgrades.zoneId}" ${!ownedBase || status.maxed || !status.canAfford ? 'disabled' : ''}>
+          ${status.maxed ? 'Maxed' : 'Upgrade'}
+        </button>
+      `;
+
+      const btn = card.querySelector('.shop-buy-btn');
+      btn.addEventListener('click', () => {
+        const result = this.onBuyPickaxeTier ? this.onBuyPickaxeTier(zoneUpgrades.zoneId) : { success: false };
+        if (result.success) {
+          SFXMapper.upgradeBuy();
+          this.setCoins(this.shop.coins);
+          this._renderContent();
+        } else {
+          btn.style.animation = 'none';
+          btn.offsetHeight;
+          btn.style.animation = 'shake 0.3s';
+          SFXMapper.uiDenied();
+        }
+      });
+
+      grid.appendChild(card);
+    }
   }
 
   _renderResources() {

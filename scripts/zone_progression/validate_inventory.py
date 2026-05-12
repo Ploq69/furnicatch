@@ -53,12 +53,11 @@ def check_inventory():
     else:
         checks &= ok("'equipped' property present")
     
-    # Check for the 3 required items
-    for item in ['water_pickaxe', 'water_suit', 'water_staff']:
-        if item not in content:
-            checks &= fail(f"'{item}' not tracked in inventory")
+    for method in ['addItem', 'equip', 'isEquipped', 'getEquippedTool', 'getEquippedArmor', 'getEquippedWeapon']:
+        if method not in content:
+            checks &= fail(f"'{method}' missing from inventory")
         else:
-            checks &= ok(f"'{item}' tracked")
+            checks &= ok(f"'{method}' present")
     
     return checks
 
@@ -101,12 +100,12 @@ def check_constants_items():
     
     checks = True
     
-    # Check for item definitions
-    for item in ['water_pickaxe', 'water_suit', 'water_staff']:
-        if item not in content:
-            checks &= fail(f"'{item}' not defined in constants")
+    shop = read_file('ShopManager.js') or ''
+    for item in ['forest_pickaxe', 'fire_pickaxe', 'fire_suit', 'fire_staff']:
+        if item not in shop:
+            checks &= fail(f"'{item}' not defined in ShopManager")
         else:
-            checks &= ok(f"'{item}' defined in constants")
+            checks &= ok(f"'{item}' defined in ShopManager")
     
     # Check for zone-specific loot tables
     if 'forest' not in content or 'fire' not in content:

@@ -20,6 +20,7 @@ export class PetLetter {
     this.glowLight = null;
     this.evolvedPrototype = null;
     this.onBlockDestroyed = options.onBlockDestroyed || null;
+    this.canMineBlock = options.canMineBlock || null;
     this.initialPosition = options.initialPosition || null;
 
     this.state = PET_STATES.FOLLOW;
@@ -231,6 +232,7 @@ export class PetLetter {
     for (const block of world.blocks.values()) {
       if (block.destroyed) continue;
       if (!block.isFloating) continue; // Pet only mines floating blocks
+      if (this.canMineBlock && !this.canMineBlock(block)) continue;
       const dist = this.container.position.distanceTo(block.position);
       if (dist < nearestBlockDist) {
         nearestBlockDist = dist;
@@ -271,7 +273,7 @@ export class PetLetter {
         const baseDmg = weapon ? weapon.data.damage : 10;
         const dmgMult = 1 + (this.level - 1) * 0.05;
         const damage = Math.max(1, Math.floor(baseDmg * 0.5 * dmgMult));
-        enemy.takeDamage(damage);
+        enemy.takeDamage(damage, player.getEquippedWeapon?.());
       }
     } else if (this.attackTarget && this.attackTargetType === 'block') {
       const block = this.attackTarget;

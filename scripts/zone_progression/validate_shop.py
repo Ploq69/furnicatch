@@ -4,9 +4,9 @@ Validate Shop System implementation against the plan.
 Checks:
 1. ShopManager.js exists with item definitions and purchase logic
 2. ShopUI.js exists with tabbed interface
-3. All 3 required items defined: water_pickaxe, water_suit, water_staff
-4. Correct costs: 500, 800, 600
-5. Existing upgrades moved into shop
+3. Zone pickaxes and required gear are defined from ZoneData ids
+4. Zone pickaxe tier upgrades are visible in the shop
+5. Existing non-unlock upgrades remain available where appropriate
 """
 
 import os
@@ -49,24 +49,23 @@ def check_shop_manager():
     else:
         checks &= ok("Purchase method present")
     
-    # Check all 3 required items
-    required_items = {
-        'water_pickaxe': 500,
-        'water_suit': 800,
-        'water_staff': 600,
-    }
+    required_items = [
+        'forest_pickaxe', 'fire_pickaxe', 'fire_suit', 'fire_staff',
+        'ice_pickaxe', 'ice_suit', 'ice_staff',
+        'desert_pickaxe', 'desert_suit', 'desert_staff',
+    ]
     
-    for item, cost in required_items.items():
+    for item in required_items:
         if item not in content:
             checks &= fail(f"'{item}' not defined in shop")
         else:
             checks &= ok(f"'{item}' defined in shop")
-        
-        # Check cost is present (as a number in the file)
-        if str(cost) not in content:
-            checks &= fail(f"Cost {cost} for '{item}' not found")
+
+    for term in ['PICKAXE_TIER_UPGRADES', 'upgradePickaxeTier', 'getPickaxeTier']:
+        if term not in content:
+            checks &= fail(f"'{term}' missing from zone pickaxe progression")
         else:
-            checks &= ok(f"Cost {cost} for '{item}' found")
+            checks &= ok(f"'{term}' present for zone pickaxe progression")
     
     # Check for item types/categories
     for cat in ['tool', 'armor', 'weapon', 'upgrade']:

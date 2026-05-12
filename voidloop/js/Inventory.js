@@ -4,7 +4,6 @@
 
 const SAVE_KEY = 'voidloop_progress_v1';
 
-// Items: water_pickaxe, water_suit, water_staff
 export class Inventory {
   constructor() {
     this.items = {};

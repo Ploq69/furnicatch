@@ -15,14 +15,15 @@ from zone_contract_common import CheckResult, fail_if, function_body, print_repo
 def main() -> int:
     game = read_js("Game.js")
     loop = function_body(game, "_loop")
-    mining_section = function_body(game, "_findMineableBlock")
+    sync_zone = function_body(game, "_syncCurrentZoneFromPosition")
+    mining_section = function_body(game, "_findMiningTarget")
 
     checks: list[CheckResult] = [
-        fail_if("getZoneAtPosition" not in loop,
+        fail_if("getZoneAtPosition" not in loop and "getZoneAtPosition" not in sync_zone,
                 "Game loop must determine the player's actual current zone from position."),
-        fail_if("setCurrentZone" not in loop,
+        fail_if("setCurrentZone" not in loop and "setCurrentZone" not in sync_zone,
                 "Game loop must update ZoneManager when the player enters a new zone."),
-        fail_if("letterPool.setLetters" not in loop,
+        fail_if("letterPool.setLetters" not in loop and "letterPool.setLetters" not in sync_zone,
                 "LetterPool must update when current zone changes."),
         fail_if("nearestBlock.zoneId" not in game and "block.zoneId" not in game,
                 "Letter drops from mined floating blocks must be associated with the mined block's zone."),

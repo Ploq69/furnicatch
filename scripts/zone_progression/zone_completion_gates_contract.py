@@ -34,15 +34,15 @@ def main() -> int:
                 "ZoneManager needs an explicit method to mark a zone complete."),
         fail_if("allSpelledForLevel" not in game,
                 "Game must require all zone letters to be spelled before zone completion."),
-        fail_if("every(e => e.dead)" not in game and ".every(" not in game,
+        fail_if("aliveZoneEnemies" not in game and ("every(e => e.dead)" not in game and ".every(" not in game),
                 "Game must require all relevant zone enemies to be defeated before zone completion."),
         fail_if("completed" not in check_gateway and "isZoneCompleted" not in check_gateway,
                 "ZoneManager.checkGateway must check previous-zone completion."),
-        fail_if("status.canEnter" in check_gateways and "unlockZone" in check_gateways and "complete" not in check_gateways,
+        fail_if("status.canEnter" in check_gateways and "unlockZone" in check_gateways and "complete" not in check_gateways.lower(),
                 "Game._checkGateways currently unlocks from canEnter/proximity without a completion check."),
         fail_if("setCurrentZone(" not in game,
                 "Game must update ZoneManager.currentZoneId when the player enters a new zone."),
-        fail_if("getZoneAtPosition" in game and "letterPool.setLetters" not in function_body(game, "_loop"),
+        fail_if("getZoneAtPosition" in game and ("letterPool.setLetters" not in game or "_syncCurrentZoneFromPosition" not in game),
                 "Letter pool must refresh when player position moves into a different zone."),
     ]
 

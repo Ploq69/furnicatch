@@ -265,8 +265,7 @@ export class Game {
           const item = SHOP_ITEMS.find(i => i.id === itemId);
           if (item) {
             this.inventory.equip(itemId, item.type);
-            this.player.equipTool(this.inventory.getEquippedTool());
-            this.player.equipArmor(this.inventory.getEquippedArmor());
+            this._syncFunctionalEquipment();
           }
           return { success: true };
         } else {
@@ -275,8 +274,7 @@ export class Game {
             const item = SHOP_ITEMS.find(i => i.id === itemId);
             if (item) {
               this.inventory.equip(itemId, item.type);
-              this.player.equipTool(this.inventory.getEquippedTool());
-              this.player.equipArmor(this.inventory.getEquippedArmor());
+              this._syncFunctionalEquipment();
             }
           }
           return result;
@@ -312,11 +310,14 @@ export class Game {
       () => {
         this.ui.hideShop();
         this.ui.showLoadout();
-      }
+      },
+      // onBuyPickaxeTier callback
+      (zoneId) => this.shop.upgradePickaxeTier(zoneId)
     );
 
     // Apply saved upgrades to player on game start
     this.player.applyUpgrades(this.shop.upgradeLevels);
+    this._syncFunctionalEquipment();
 
     this.ui.hideLoading();
     this.state = STATES.PLAYING;
@@ -331,6 +332,12 @@ export class Game {
       await new Promise(r => setTimeout(r, 500));
     }
     throw new Error('Timed out waiting for world seed from host');
+  }
+
+  _syncFunctionalEquipment() {
+    this.player.equipTool(this.inventory.getEquippedTool());
+    this.player.equipArmor(this.inventory.getEquippedArmor());
+    this.player.equipFunctionalWeapon(this.inventory.getEquippedWeapon());
   }
 
   async _generateZones(seed) {
@@ -362,11 +369,12 @@ export class Game {
 
     // Set up letter pool for current zone
     if (currentZone) {
-      this.letterPool.setLetters(currentZone.letters);
+      this.letterPool.setLetters(currentZone.letters, currentZone.id);
     }
 
     const letters = this.letterPool.getCurrentLetters().join(' ');
     this.ui.setFloorText(`ZONE: ${currentZone?.name?.toUpperCase() || 'UNKNOWN'} — Letters: ${letters}`);
+    this.ui.updateObjectiveHud?.(this._getObjectiveState(currentZone?.id));
     this.ui.showExitOpen(false);
     this._spawnPet();
     this._updateTorches();
@@ -614,13 +622,13 @@ export class Game {
       // Check for nearby enemy first (combat priority)
       const nearestEnemy = this._findNearestEnemy(2.5);
       if (nearestEnemy) {
-        // Check weapon requirements for fire enemies
+        // Check zone staff requirements for enemies beyond Forest
         const enemyZone = nearestEnemy.zoneId ? getZoneById(nearestEnemy.zoneId) : null;
         const equippedWeapon = this.player.getEquippedWeapon();
-        if (enemyZone && enemyZone.entryRequirements && enemyZone.entryRequirements.weapon) {
-          const requiredWeapon = enemyZone.entryRequirements.weapon;
+        if (enemyZone && enemyZone.staffId) {
+          const requiredWeapon = enemyZone.staffId;
           if (equippedWeapon !== requiredWeapon) {
-            this.ui.showFloatingText(`Need Water Staff!`, 0xff4444);
+            this.ui.showFloatingText(`🔱 ${enemyZone.name}`, 0xff4444);
             this.player.playAttackAnim();
             SFXMapper.swingMiss();
             weapon.cooldown = GAME.ATTACK_COOLDOWN;
@@ -644,7 +652,15 @@ export class Game {
         weapon.cooldown = GAME.ATTACK_COOLDOWN;
       } else {
         // Mine nearest block
-        const nearestBlock = this._findMineableBlock(GAME.MINE_RANGE);
+        const miningTarget = this._findMiningTarget(GAME.MINE_RANGE);
+        const nearestBlock = miningTarget?.block;
+        if (miningTarget && !miningTarget.allowed) {
+          this.ui.showMiningBlocked(miningTarget, nearestBlock ? BLOCK_TYPES[nearestBlock.typeKey] : null);
+          this.player.playAttackAnim();
+          SFXMapper.swingMiss();
+          weapon.cooldown = this.player.getSwingCooldown();
+          return;
+        }
         if (nearestBlock && !nearestBlock.destroyed) {
           // Use the same weapon attack animation for mining
           this.player.playAttackAnim();
@@ -659,7 +675,7 @@ export class Game {
           // Weapon elemental burst on mine swing
           const mineItemId = this.player.loadout?.rightHand;
           if (mineItemId) playWeaponBurst(this.scene, this.camera, blockPos, mineItemId);
-          const destroyed = nearestBlock.takeDamage(this.player.mineDamage);
+          const destroyed = nearestBlock.takeDamage(this._getMiningDamage(nearestBlock));
           if (destroyed) {
             // Sync block destruction in multiplayer
             if (this.isMultiplayer && this.net) {
@@ -696,7 +712,7 @@ export class Game {
             if (isFloat) {
               // Letter drop (25%)
               if (Math.random() < 0.25) {
-                const letter = this.letterPool.pickRandomLetter();
+                const letter = this._pickLetterForZone(nearestBlock.zoneId || this.zoneManager.currentZoneId);
                 if (letter) {
                   this.letterDrops.spawn(blockPos, letter);
                   this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
@@ -708,15 +724,6 @@ export class Game {
                 this.resources.add(blockDef.resource, 1);
                 const resName = blockDef.resource.replace(/_/g, ' ');
                 this.ui.showFloatingText(`+1 ${resName}`, 0x88ccff);
-              }
-            } else {
-              // Ground blocks: 5% letter drop
-              if (Math.random() < 0.05) {
-                const letter = this.letterPool.pickRandomLetter();
-                if (letter) {
-                  this.letterDrops.spawn(blockPos, letter);
-                  this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
-                }
               }
             }
 
@@ -766,6 +773,9 @@ export class Game {
       this._onLootCollect(type, value, color);
     });
 
+    this._syncCurrentZoneFromPosition();
+    this._checkZoneCompletion();
+
     // Letter drops update
     const collectedLetter = this.letterDrops.update(dt, this.player.position);
     if (collectedLetter) {
@@ -794,18 +804,6 @@ export class Game {
         if (table) {
           this.loot.spawnFromTable(enemy.position, table);
         }
-      }
-    }
-
-    // Check if all enemies dead AND all letters spelled → open exit
-    if (!this.exitOpen && this.world.enemies.length > 0) {
-      const allDead = this.world.enemies.every(e => e.dead);
-      const allLettersSpelled = this.letterPool.allSpelledForLevel();
-      if (allDead && allLettersSpelled) {
-        this.exitOpen = true;
-        this.ui.showExitOpen(true);
-        SFXMapper.floorComplete();
-        this._spawnExitPortal();
       }
     }
 
@@ -874,7 +872,7 @@ export class Game {
     return nearest;
   }
 
-  _findMineableBlock(range) {
+  _findMiningTarget(range) {
     let nearest = null;
     let nearestDist = range;
     const playerPos = this.player.position;
@@ -886,24 +884,8 @@ export class Game {
     for (const block of this.world.blocks.values()) {
       if (block.destroyed) continue;
 
-      // Ground blocks are only mineable with the pickaxe
       const blockIsFloating = block.isFloating === true;
-      if (!blockIsFloating && !isPickaxe) {
-        continue;
-      }
-
-      // Floating blocks: check pickaxe tier requirement
-      if (blockIsFloating && block.zoneId) {
-        const blockDef = BLOCK_TYPES[block.typeKey];
-        if (blockDef && blockDef.tier) {
-          const zonePickaxeTier = this.shop.getPickaxeTier(block.zoneId);
-          if (zonePickaxeTier < blockDef.tier) {
-            // Pickaxe tier too low — skip this block for targeting
-            // (but we could still show it as "too hard" with visual feedback)
-            continue;
-          }
-        }
-      }
+      if (!blockIsFloating) continue;
 
       // Forward cone check — only blocks in front of the player
       const toBlock = block.position.clone().sub(playerPos);
@@ -925,24 +907,93 @@ export class Game {
       }
     }
 
-    // Check pickaxe tier requirement for nearest floating block
-    if (nearest && nearest.isFloating && nearest.zoneId) {
-      const blockDef = BLOCK_TYPES[nearest.typeKey];
-      if (blockDef && blockDef.tier) {
-        const zonePickaxeTier = this.shop.getPickaxeTier(nearest.zoneId);
-        if (zonePickaxeTier < blockDef.tier) {
-          this.ui.showFloatingText(`Need ${nearest.zoneId} Pickaxe Tier ${blockDef.tier}!`, 0xff4444);
-          return null;
-        }
-      }
+    if (!nearest) return null;
+
+    return this._getMiningStatusForBlock(nearest, { isPickaxe });
+  }
+
+  _getMiningStatusForBlock(block, options = {}) {
+    const blockDef = BLOCK_TYPES[block.typeKey] || {};
+    const blockZoneId = block.zoneId || blockDef.zone;
+    const blockZone = getZoneById(blockZoneId);
+    const equippedTool = this.player.getEquippedTool() || this.inventory.getEquippedTool();
+    const requiredPickaxe = blockZone?.pickaxeId;
+    const blockTier = blockDef.tier || block.tier || 1;
+    const zonePickaxeTier = this.shop.getPickaxeTier(blockZoneId);
+    const isPickaxe = options.isPickaxe ?? (this.player.weapons[this.player.currentSlot]?.data?.id === 'pickaxe');
+
+    if (block.isFloating && !isPickaxe) {
+      return { allowed: false, block, reason: 'wrong_weapon', icon: '⛏️', requiredTier: blockTier, currentTier: zonePickaxeTier };
+    }
+    if (requiredPickaxe && equippedTool !== requiredPickaxe) {
+      return { allowed: false, block, reason: 'wrong_pickaxe', icon: '⛏️', requiredItem: requiredPickaxe, requiredTier: blockTier, currentTier: zonePickaxeTier };
+    }
+    if (zonePickaxeTier < blockTier) {
+      return { allowed: false, block, reason: 'low_tier', icon: '🔒', requiredTier: blockTier, currentTier: zonePickaxeTier };
     }
 
-    return nearest;
+    return { allowed: true, block, reason: 'ok', requiredTier: blockTier, currentTier: zonePickaxeTier };
+  }
+
+  _getMiningDamage(block) {
+    const blockDef = BLOCK_TYPES[block.typeKey] || {};
+    const zonePickaxeTier = this.shop.getPickaxeTier(block.zoneId || blockDef.zone);
+    const tierDamage = { 1: 1, 2: 2, 3: 3, 4: 5 };
+    return tierDamage[zonePickaxeTier] || 1;
+  }
+
+  _findMineableBlock(range) {
+    // Deprecated: kept for compatibility, delegates to two-stage mining target.
+    const result = this._findMiningTarget(range);
+    return result?.allowed ? result.block : null;
   }
 
   _findNearestBlock(range) {
-    // Deprecated: kept for compatibility, delegates to _findMineableBlock
     return this._findMineableBlock(range);
+  }
+
+  _syncCurrentZoneFromPosition() {
+    const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
+    if (!currentZone) return;
+    if (!this.zoneManager.isZoneUnlocked(currentZone.id)) return;
+    if (this.zoneManager.currentZoneId === currentZone.id) return;
+
+    this.zoneManager.setCurrentZone(currentZone.id);
+    this.letterPool.setLetters(currentZone.letters, currentZone.id);
+    const letters = this.letterPool.getCurrentLetters().join(' ');
+    this.ui.setFloorText(`ZONE: ${currentZone.name.toUpperCase()} — Letters: ${letters}`);
+    this.ui.updateObjectiveHud?.(this._getObjectiveState(currentZone.id));
+  }
+
+  _checkZoneCompletion() {
+    const zone = this.zoneManager.getCurrentZone();
+    if (!zone || this.zoneManager.isZoneCompleted(zone.id)) return;
+    const aliveZoneEnemies = this.world.enemies.filter(e => e.zoneId === zone.id && !e.dead);
+    const allDead = aliveZoneEnemies.length === 0;
+    const allLettersSpelled = this.letterPool.allSpelledForLevel();
+    if (allDead && allLettersSpelled) {
+      this.zoneManager.markZoneCompleted(zone.id);
+      this.exitOpen = true;
+      this.ui.showExitOpen(true);
+      this.ui.showFloatingText('✅ ⛏️ 🔓', 0x4ade80);
+      SFXMapper.floorComplete();
+      this._createGateways();
+      this.ui.updateObjectiveHud?.(this._getObjectiveState(zone.id));
+    }
+  }
+
+  _getObjectiveState(zoneId = this.zoneManager.currentZoneId) {
+    const zone = getZoneById(zoneId);
+    if (!zone) return null;
+    const tier = this.shop.getPickaxeTier(zone.id);
+    const aliveEnemies = this.world.enemies.filter(e => e.zoneId === zone.id && !e.dead).length;
+    return {
+      zoneId: zone.id,
+      letters: { done: this.letterPool.getSpelledCount(), total: zone.letters.length },
+      enemies: { done: aliveEnemies === 0, remaining: aliveEnemies },
+      pickaxeTier: tier,
+      completed: this.zoneManager.isZoneCompleted(zone.id),
+    };
   }
 
   _clearExitPortal() {
@@ -1057,14 +1108,17 @@ export class Game {
         const status = this.zoneManager.getGatewayStatus(targetZone.id, this.inventory);
         if (status && !status.unlocked) {
           if (status.canEnter) {
+            const previousComplete = this.zoneManager.isZoneCompleted(this.zoneManager.getPreviousZoneId(targetZone.id));
             this.zoneManager.unlockZone(targetZone.id);
             this.ui.showFloatingText(`🔓 ${targetZone.name} unlocked!`, 0x4ade80);
+            this.ui.showGatewayIndicator(targetZone.name, false, ['✅', '⛏️', '🛡️', '🔱']);
             this._createGateways();
             // Spawn enemies in newly unlocked zone
             this._respawnZoneEnemies(targetZone.id);
           } else {
-            const reqList = status.missing.map(m => m.label).join(', ');
-            this.ui.showFloatingText(`🔒 Requires: ${reqList}`, 0xff4444);
+            const reqList = status.missing.map(m => m.label);
+            this.ui.showGatewayIndicator(targetZone.name, true, reqList);
+            this.ui.showFloatingText(`🔒 ${reqList.join(' ')}`, 0xff4444);
           }
         }
       }
@@ -1244,6 +1298,17 @@ export class Game {
     SFXMapper.collectOre();
   }
 
+  _pickLetterForZone(zoneId) {
+    const zone = getZoneById(zoneId);
+    if (!zone || !zone.letters || zone.letters.length === 0) {
+      return this.letterPool.pickRandomLetter();
+    }
+    if (this.zoneManager.currentZoneId !== zone.id) {
+      return zone.letters[Math.floor(Math.random() * zone.letters.length)];
+    }
+    return this.letterPool.pickRandomLetter();
+  }
+
   // ==========================================
   // Spelling Challenge Methods
   // ==========================================
@@ -1414,6 +1479,8 @@ export class Game {
     if (this.letterPool.allSpelledForLevel()) {
       this.ui.showFloatingText('All letters found!', 0x4ade80);
     }
+    this.ui.updateObjectiveHud?.(this._getObjectiveState());
+    this._checkZoneCompletion();
   }
 
   _applyGraphicsSettings() {
@@ -1451,6 +1518,7 @@ export class Game {
 
     const pet = new PetLetter(this.scene, equipped.letter, equipped.level, {
       onBlockDestroyed: (block) => this._onPetBlockDestroyed(block),
+      canMineBlock: (block) => this._getMiningStatusForBlock(block).allowed,
       initialPosition: this.player.position.clone().add(new THREE.Vector3(-1.2, 0.5, -1.2)),
     });
 

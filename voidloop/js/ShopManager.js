@@ -10,38 +10,53 @@ const SAVE_KEY = 'voidloop_progress_v1';
  * Each zone (except Forest) requires buying its pickaxe to mine floating blocks there.
  */
 export const SHOP_ITEMS = [
-  // === Zone 1: Forest (starting gear, not in shop) ===
+  // === Zone 1: Forest (starting gear) ===
+  { id: 'forest_pickaxe', name: 'Forest Pickaxe', type: 'tool', cost: 0, description: 'Starter pickaxe for Whispering Forest.', icon: '🌲⛏️', starter: true },
 
   // === Zone 2: Fire ===
-  { id: 'fire_pickaxe', name: 'Fire Pickaxe', type: 'tool', cost: 5, description: 'Mines fire-zone floating blocks. Required for Ember Wastes.', icon: '🔥⛏️' },
+  { id: 'fire_pickaxe', name: 'Fire Pickaxe', type: 'tool', cost: 300, description: 'Mines fire-zone floating blocks. Required for Ember Wastes.', icon: '🔥⛏️' },
   { id: 'fire_suit', name: 'Fire Suit', type: 'armor', cost: 800, description: 'Prevents burn damage in the Ember Wastes.', icon: '🔥🛡️' },
   { id: 'fire_staff', name: 'Fire Staff', type: 'weapon', cost: 600, description: 'Required to damage fire enemies.', icon: '🔥🔱' },
 
   // === Zone 3: Ice ===
-  { id: 'ice_pickaxe', name: 'Ice Pickaxe', type: 'tool', cost: 5, description: 'Mines ice-zone floating blocks. Required for Frostpeak.', icon: '❄️⛏️' },
+  { id: 'ice_pickaxe', name: 'Ice Pickaxe', type: 'tool', cost: 600, description: 'Mines ice-zone floating blocks. Required for Frostpeak.', icon: '❄️⛏️' },
   { id: 'ice_suit', name: 'Ice Suit', type: 'armor', cost: 1200, description: 'Prevents freeze slowdown in Frostpeak.', icon: '❄️🛡️' },
   { id: 'ice_staff', name: 'Ice Staff', type: 'weapon', cost: 900, description: 'Required to damage ice enemies.', icon: '❄️🔱' },
 
   // === Zone 4: Desert ===
-  { id: 'desert_pickaxe', name: 'Desert Pickaxe', type: 'tool', cost: 5, description: 'Mines desert-zone floating blocks. Required for Sandscape.', icon: '🏜️⛏️' },
+  { id: 'desert_pickaxe', name: 'Desert Pickaxe', type: 'tool', cost: 1000, description: 'Mines desert-zone floating blocks. Required for Sandscape.', icon: '🏜️⛏️' },
   { id: 'desert_suit', name: 'Desert Suit', type: 'armor', cost: 2000, description: 'Prevents heat stamina drain in Sandscape.', icon: '🏜️🛡️' },
   { id: 'desert_staff', name: 'Desert Staff', type: 'weapon', cost: 1500, description: 'Required to damage desert enemies.', icon: '🏜️🔱' },
 
   // === Zone 5: Steelworks ===
-  { id: 'steel_pickaxe', name: 'Steel Pickaxe', type: 'tool', cost: 5, description: 'Mines steelworks floating blocks. Required for Steelworks.', icon: '⚙️⛏️' },
+  { id: 'steel_pickaxe', name: 'Steel Pickaxe', type: 'tool', cost: 2000, description: 'Mines steelworks floating blocks. Required for Steelworks.', icon: '⚙️⛏️' },
   { id: 'ventilator_suit', name: 'Ventilator Suit', type: 'armor', cost: 3000, description: 'Prevents toxic fume damage in Steelworks.', icon: '⚙️🛡️' },
   { id: 'tesla_staff', name: 'Tesla Staff', type: 'weapon', cost: 2500, description: 'Required to damage steelworks enemies.', icon: '⚙️🔱' },
 
   // === Zone 6: Mire ===
-  { id: 'mire_pickaxe', name: 'Mire Pickaxe', type: 'tool', cost: 5, description: 'Mines mire floating blocks. Required for Mire.', icon: '🌿⛏️' },
+  { id: 'mire_pickaxe', name: 'Mire Pickaxe', type: 'tool', cost: 3500, description: 'Mines mire floating blocks. Required for Mire.', icon: '🌿⛏️' },
   { id: 'wading_boots', name: 'Wading Boots', type: 'armor', cost: 5000, description: 'Prevents quicksand slowdown in Mire.', icon: '🌿🛡️' },
   { id: 'vine_staff', name: 'Vine Staff', type: 'weapon', cost: 4000, description: 'Required to damage mire enemies.', icon: '🌿🔱' },
 
   // === Zone 7: Citadel ===
-  { id: 'royal_pickaxe', name: 'Royal Pickaxe', type: 'tool', cost: 5, description: 'Mines citadel floating blocks. Required for Citadel.', icon: '👑⛏️' },
+  { id: 'royal_pickaxe', name: 'Royal Pickaxe', type: 'tool', cost: 5000, description: 'Mines citadel floating blocks. Required for Citadel.', icon: '👑⛏️' },
   { id: 'royal_shield', name: 'Royal Shield', type: 'armor', cost: 8000, description: 'Prevents curse stuns in Citadel.', icon: '👑🛡️' },
   { id: 'scepter', name: 'Scepter', type: 'weapon', cost: 6000, description: 'Required to damage citadel enemies.', icon: '👑🔱' },
 ];
+
+export const ZONE_PICKAXE_ITEMS = {
+  forest: 'forest_pickaxe',
+  fire: 'fire_pickaxe',
+  ice: 'ice_pickaxe',
+  desert: 'desert_pickaxe',
+  steelworks: 'steel_pickaxe',
+  mire: 'mire_pickaxe',
+  citadel: 'royal_pickaxe',
+};
+
+export const PICKAXE_ITEM_ZONES = Object.fromEntries(
+  Object.entries(ZONE_PICKAXE_ITEMS).map(([zoneId, itemId]) => [itemId, zoneId])
+);
 
 /**
  * Pickaxe tier upgrades — bought per-zone after owning the base pickaxe.
@@ -86,7 +101,6 @@ export const PICKAXE_TIER_UPGRADES = [
 ];
 
 export const SHOP_UPGRADES = [
-  { id: 'pick_tier', name: 'Upgrade Pickaxe', max: 4, cost: (lvl) => 50 * Math.pow(2, lvl), desc: '+1 mine damage per level. Mine blocks in fewer hits.', category: 'tool' },
   { id: 'mine_speed', name: 'Mining Speed', max: 5, cost: (lvl) => 30 * (lvl + 1), desc: '+10% swing speed per level. Stackable up to +50%.', category: 'tool' },
   { id: 'mine_luck', name: "Miner's Luck", max: 5, cost: (lvl) => 40 * (lvl + 1), desc: '+5% rare drop chance', category: 'tool' },
   { id: 'atk_dmg', name: 'Attack Damage', max: 10, cost: (lvl) => 25 * (lvl + 1), desc: '+2 damage per hit', category: 'combat' },
@@ -108,6 +122,7 @@ export class ShopManager {
     // Zone pickaxe tiers: which tier (1-4) each zone's pickaxe is at
     this.pickaxeTiers = {};
     this._load();
+    this._ensureStarterGear();
   }
 
   setCoins(coins) {
@@ -129,6 +144,11 @@ export class ShopManager {
 
     this.coins -= item.cost;
     this.inventory.addItem(itemId);
+    const zoneId = PICKAXE_ITEM_ZONES[itemId];
+    if (zoneId) {
+      if (!this.pickaxeTiers[zoneId]) this.pickaxeTiers[zoneId] = 1;
+      this.pickaxeTiers[zoneId] = Math.max(this.getPickaxeTier(zoneId), 1);
+    }
     // Auto-equip pickaxes
     if (item.type === 'tool') this.inventory.equip(itemId, 'tool');
     if (item.type === 'armor') this.inventory.equip(itemId, 'armor');
@@ -249,6 +269,26 @@ export class ShopManager {
     return SHOP_UPGRADES.map(u => this.getUpgradeStatus(u.id));
   }
 
+  getAllPickaxeTierStatuses() {
+    return Object.keys(ZONE_PICKAXE_ITEMS).map(zoneId => this.getPickaxeTierStatus(zoneId));
+  }
+
+  _ensureStarterGear() {
+    if (!this.inventory.hasItem('forest_pickaxe')) {
+      this.inventory.addItem('forest_pickaxe');
+    }
+    if (!this.inventory.getEquippedTool()) {
+      this.inventory.equip('forest_pickaxe', 'tool');
+    }
+    for (const [zoneId, itemId] of Object.entries(ZONE_PICKAXE_ITEMS)) {
+      if (this.inventory.hasItem(itemId)) {
+        this.pickaxeTiers[zoneId] = Math.max(this.pickaxeTiers[zoneId] || 0, 1);
+      }
+    }
+    this.pickaxeTiers.forest = Math.max(this.pickaxeTiers.forest || 0, 1);
+    this._save();
+  }
+
   _save() {
     try {
       const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
@@ -282,6 +322,7 @@ export class ShopManager {
       this.upgradeLevels[u.id] = 0;
     }
     this.pickaxeTiers = {};
+    this._ensureStarterGear();
     this._save();
   }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Validation: Each zone's pickaxe tier correctly gates block mineability.
-Checks that Game.js _findMineableBlock checks pickaxe tier against block tier.
+Checks that Game.js mining targeting checks pickaxe tier against block tier.
 """
 import sys, pathlib
 
@@ -18,7 +18,7 @@ def main():
     checks = [
         ("getPickaxeTier" in game_content, "Game.js calls getPickaxeTier"),
         ("blockDef.tier" in game_content, "Game.js checks blockDef.tier"),
-        ("zonePickaxeTier < blockDef.tier" in game_content, "Game.js compares pickaxe tier to block tier"),
+        ("zonePickaxeTier < blockTier" in game_content or "zonePickaxeTier < blockDef.tier" in game_content, "Game.js compares pickaxe tier to block tier"),
     ]
 
     for check, desc in checks:

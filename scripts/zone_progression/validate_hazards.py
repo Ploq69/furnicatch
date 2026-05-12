@@ -3,10 +3,10 @@
 Validate Hazard System and Gameplay Gating implementation.
 Checks:
 1. HazardSystem.js exists with burn damage logic
-2. Enemy.js checks weapon requirements (water_staff)
-3. Game.js / Player.js checks tool requirements (water_pickaxe)
-4. Fire enemies take 0 damage without water_staff
-5. Burn damage applies without water_suit
+2. Enemy.js checks zone staff requirements
+3. Game.js / Player.js checks zone pickaxe requirements
+4. Enemies take no damage without the required zone staff
+5. Hazards apply effects without mitigation gear
 """
 
 import os
@@ -55,11 +55,11 @@ def check_hazard_system():
     else:
         checks &= ok("Damage logic present")
     
-    # Check for water_suit mitigation
-    if 'water_suit' not in content:
-        checks &= fail("'water_suit' mitigation not checked")
-    else:
-        checks &= ok("'water_suit' mitigation present")
+    for term in ['mitigationItem', 'damagePerSecond', 'slowdownPercent', 'staminaDrainPerSecond', 'stunChancePerSecond']:
+        if term not in content:
+            checks &= fail(f"'{term}' hazard handling missing")
+        else:
+            checks &= ok(f"'{term}' hazard handling present")
     
     return checks
 
@@ -71,8 +71,7 @@ def check_enemy_gating():
     
     checks = True
     
-    # Check for requiredWeapon or similar
-    if 'requiredWeapon' not in content and 'water_staff' not in content:
+    if 'staffId' not in content and 'getZoneById' not in content:
         checks &= fail("Enemy does not check for required weapon")
     else:
         checks &= ok("Enemy weapon requirement check present")
@@ -108,11 +107,10 @@ def check_mining_gating():
     else:
         checks &= ok("'_findMineableBlock()' present")
     
-    # Check for water_pickaxe requirement
-    if 'water_pickaxe' not in game:
-        checks &= fail("'water_pickaxe' not checked in mining logic")
+    if 'pickaxeId' not in game or 'getPickaxeTier' not in game:
+        checks &= fail("Zone pickaxe requirements not checked in mining logic")
     else:
-        checks &= ok("'water_pickaxe' checked in mining")
+        checks &= ok("Zone pickaxe requirements checked in mining")
     
     # Check for "Need Water Pickaxe" feedback
     if 'Need' not in game and 'need' not in game.lower():

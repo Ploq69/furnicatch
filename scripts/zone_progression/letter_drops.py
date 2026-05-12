@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Validation: Floating blocks have 25% letter drop chance, only drop zone's letters.
-Ground blocks have 5% letter drop chance.
+Ground blocks are visual terrain and must not drop letters.
 """
 import sys, pathlib
 
@@ -16,13 +16,14 @@ def main():
     if "Math.random() < 0.25" not in content:
         errors.append("Missing 25% letter drop chance for floating blocks")
 
-    # Check 5% letter drop for ground blocks
+    # Check no old 5% ground block drop remains.
     if "Math.random() < 0.05" not in content:
-        errors.append("Missing 5% letter drop chance for ground blocks")
+        pass
+    else:
+        errors.append("Ground blocks must not drop letters; progression mining is floating-block only")
 
-    # Check that letter drops use letterPool.pickRandomLetter (zone-locked)
-    if "this.letterPool.pickRandomLetter()" not in content:
-        errors.append("Letter drops don't use zone-locked letter pool")
+    if "_pickLetterForZone" not in content:
+        errors.append("Letter drops must select from the mined block/current zone")
 
     # Check floating block vs ground block distinction
     if "if (isFloat) {" not in content:
@@ -33,7 +34,7 @@ def main():
         for e in errors:
             print(f"  - {e}")
         return 1
-    print("PASS: letter_drops — 25% floating, 5% ground, zone-locked letters")
+    print("PASS: letter_drops — 25% floating-only, zone-locked letters")
     return 0
 
 if __name__ == '__main__':

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ENEMY_TYPES, GAME } from './constants.js';
 import { assetLoader } from './AssetLoader.js';
 import { SFXMapper } from './SFXMapper.js';
+import { getZoneById } from './ZoneData.js';
 
 const STATES = { IDLE: 0, CHASE: 1, ATTACK: 2, DEAD: 3 };
 
@@ -166,9 +167,9 @@ export class Enemy {
 
   takeDamage(dmg, attackerWeapon) {
     if (this.dead) return;
-    // Fire zone enemies require water_staff to damage
-    if (this.zoneId === 'fire' && attackerWeapon !== 'water_staff') {
-      return; // Immune without Water Staff
+    const zone = this.zoneId ? getZoneById(this.zoneId) : null;
+    if (zone?.staffId && attackerWeapon !== zone.staffId) {
+      return;
     }
     this.hp -= dmg;
 

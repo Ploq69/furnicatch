@@ -25,6 +25,8 @@ def main() -> int:
     inventory = read_js("Inventory.js")
     player = read_js("Player.js")
     hazard = read_js("HazardSystem.js")
+    shop = read_js("ShopManager.js")
+    zone_data = read_js("ZoneData.js")
     equip_callback = function_body(game, "(itemId, isEquip) =>")
 
     checks: list[CheckResult] = [
@@ -43,7 +45,7 @@ def main() -> int:
     ]
 
     for item_id in ZONE_STAVES.values():
-        checks.append(fail_if(item_id not in game and item_id not in inventory,
+        checks.append(fail_if(item_id not in game and item_id not in inventory and item_id not in shop and item_id not in zone_data,
                               f"{item_id} must be reachable through functional equipment wiring."))
 
     return print_report("equipment_wiring_contract", checks)

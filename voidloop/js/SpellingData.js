@@ -402,6 +402,8 @@ export class LetterPool {
     this.cycleComplete = false;
     this.spelledThisCycle = new Set();
     this.spelledThisLevel = new Set();
+    this.currentKey = 'cycle';
+    this.spelledByKey = new Map();
     this._generateCycle();
   }
 
@@ -430,15 +432,18 @@ export class LetterPool {
     return this.cycleGroups[this.cycleIndex] || [];
   }
 
-  setLetters(letters) {
+  setLetters(letters, key = 'default') {
+    this.spelledByKey.set(this.currentKey, new Set(this.spelledThisLevel));
+    this.currentKey = key;
     this.cycleGroups[this.cycleIndex] = letters.map(l => l.toUpperCase());
-    this.spelledThisLevel.clear();
+    this.spelledThisLevel = new Set(this.spelledByKey.get(this.currentKey) || []);
   }
 
   markSpelled(letter) {
     const upper = letter.toUpperCase();
     this.spelledThisCycle.add(upper);
     this.spelledThisLevel.add(upper);
+    this.spelledByKey.set(this.currentKey, new Set(this.spelledThisLevel));
   }
 
   isSpelled(letter) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Validation: pick_tier and mine_speed upgrades actually modify Player stats.
+Validation: mine_speed upgrades modify Player stats; block unlocks come from zone pickaxe tiers.
 """
 import sys, pathlib
 
@@ -17,9 +17,11 @@ def main():
     if "applyUpgrades(upgradeLevels)" not in player_content:
         errors.append("Player.js missing applyUpgrades method")
 
-    # Check mineDamage is set from pick_tier
-    if "mineDamage = 1 + pickTier" not in player_content:
-        errors.append("mineDamage not set from pick_tier")
+    if "pick_tier" in player_content:
+        errors.append("Player should not use global pick_tier for block unlocking")
+
+    if "_getMiningDamage" not in game_content:
+        errors.append("Game.js should compute mining damage from zone pickaxe tier")
 
     # Check mineSpeed is set from mine_speed
     if "mineSpeed = 1.0 + (mineSpeedLevel * 0.1)" not in player_content:
@@ -42,7 +44,7 @@ def main():
         for e in errors:
             print(f"  - {e}")
         return 1
-    print("PASS: shop_upgrades — pick_tier and mine_speed modify Player stats")
+    print("PASS: shop_upgrades — mine_speed modifies Player stats; zone pickaxe tiers drive mining")
     return 0
 
 if __name__ == '__main__':

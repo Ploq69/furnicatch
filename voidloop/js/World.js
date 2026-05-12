@@ -63,7 +63,8 @@ export class World {
     const size = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2;
 
     // Preload block geometries for instancer
-    await this.instancer.preloadTypes(types);
+    await this.instancer.preloadTypes([...new Set([...types, 'stone_dark'])]);
+    await this.groundRenderer.preloadTypes(types);
 
     // --- denseCave generation within zone bounds ---
     const gridW = b.maxX - b.minX;
@@ -127,7 +128,10 @@ export class World {
       for (let i = 0; i < grid.length; i++) grid[i] = newGrid[i];
     }
 
-    // Place ground blocks
+    const typeGrid = new Array(gridW * gridD).fill(null);
+
+    // Place visual ground cells. These are collision/terrain only; mineable
+    // progression uses floating blocks exclusively.
     for (let gx = 0; gx < gridW; gx++) {
       for (let gz = 0; gz < gridD; gz++) {
         if (grid[gz * gridW + gx]) {
@@ -137,7 +141,8 @@ export class World {
           const sp = zone.spawnPoint;
           if (Math.abs(worldX - sp.x) <= 1 && Math.abs(worldZ - sp.z) <= 1) continue;
           const type = rng.choice(types);
-          this._placeBlock(type, worldX, 0, worldZ, { useInstancer: true, zoneId });
+          typeGrid[gz * gridW + gx] = type;
+          this._recordGroundCell(worldX, worldZ, type);
         }
       }
     }
@@ -146,9 +151,16 @@ export class World {
     const sp = zone.spawnPoint;
     for (let sx = -1; sx <= 1; sx++) {
       for (let sz = -1; sz <= 1; sz++) {
-        this._placeBlock('stone', sp.x + sx, 0, sp.z + sz, { useInstancer: true, zoneId });
+        const gx = sp.x + sx - b.minX;
+        const gz = sp.z + sz - b.minZ;
+        if (gx >= 0 && gx < gridW && gz >= 0 && gz < gridD) {
+          typeGrid[gz * gridW + gx] = 'stone';
+        }
+        this._recordGroundCell(sp.x + sx, sp.z + sz, 'stone');
       }
     }
+
+    this.groundRenderer.buildFromGrid(typeGrid, gridW, gridD, b.minX, b.minZ, { append: true });
 
     // Place gateway if this zone has one
     if (zone.exitGateway) {
@@ -195,6 +207,7 @@ export class World {
     const targetClusters = Math.min(15 + zone.order * 5, 30);
     const b = zone.bounds;
     const sp = zone.spawnPoint;
+    const progressionRange = Math.max(b.maxX - b.minX, b.maxZ - b.minZ);
     const placed = []; // {x, y, z} of all floating blocks for min-distance checks
 
     // 1. Pick cluster centers with minimum 4-unit separation
@@ -259,12 +272,18 @@ export class World {
         // Ground block collision check
         if (this.getBlock(bx, by, bz)) continue;
 
-        const type = rng.choice(types);
+        const distanceBand = Math.min(0.999, Math.sqrt((center.x - sp.x) ** 2 + (center.z - sp.z) ** 2) / Math.max(1, progressionRange));
+        const tierBand = Math.min(3, Math.floor(distanceBand * 4));
+        const type = types[tierBand] || types[0];
         await this._placeFloatingBlock({
           x: bx + (rng.random() - 0.5) * 0.2,
           y: by,
           z: bz + (rng.random() - 0.5) * 0.2,
           type,
+          zoneId: zone.id,
+          tier: tierBand + 1,
+          locked: tierBand > 0,
+          visible: true,
           rotation: rng.random() * 360,
           scale: 0.9 + rng.random() * 0.2,
         }, rng);
@@ -408,6 +427,9 @@ export class World {
     if (this.blocks.has(key)) return;
     const block = new Block(fb.type, fb.x, fb.y, fb.z);
     block.isFloating = true;
+    block.zoneId = fb.zoneId || BLOCK_TYPES[fb.type]?.zone || null;
+    block.tier = fb.tier || BLOCK_TYPES[fb.type]?.tier || 1;
+    block.locked = !!fb.locked;
     block.bobPhase = fb.bobPhase ?? (rng ? rng.random() * Math.PI * 2 : Math.random() * Math.PI * 2);
     await block.createMesh(this.scene, { noCloneMaterials: true });
     if (block.mesh) {
@@ -484,6 +506,12 @@ export class World {
     if (blockTop > currentTop) {
       this.columnHeights.set(colKey, blockTop);
     }
+  }
+
+  _recordGroundCell(x, z, typeKey = 'stone') {
+    const colKey = `${Math.round(x)},${Math.round(z)}`;
+    this.groundGrid.add(colKey);
+    this.columnHeights.set(colKey, 1);
   }
 
   getBlock(x, y, z) {

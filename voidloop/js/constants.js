@@ -315,7 +315,6 @@ export const PET_ATTACK_INTERVAL = 1.2;
 
 export const UPGRADES = {
   pickaxe: [
-    { id: 'pick_tier', name: 'Upgrade Pickaxe', max: 4, cost: (lvl) => 50 * Math.pow(2, lvl), desc: 'Mine faster and harder blocks' },
     { id: 'mine_speed', name: 'Mining Speed', max: 5, cost: (lvl) => 30 * (lvl + 1), desc: '+10% mining speed' },
     { id: 'mine_luck', name: 'Miner\'s Luck', max: 5, cost: (lvl) => 40 * (lvl + 1), desc: '+5% rare drop chance' },
   ],
@@ -345,13 +344,6 @@ export const ZONE_BLOCK_LOOT_TABLES = {
     coal:        { always: [{type:'coin', count:2}], common:[{type:'ore_coal',count:1}], uncommon:[{type:'ore_coal',count:2}], rare:[{type:'gem_blue',count:1}], veryRare:[{type:'crystal',count:1}] },
     brick:       { always: [{type:'coin', count:1}], common:[{type:'ore_stone',count:1}], uncommon:[{type:'gem_green',count:1}], rare:[{type:'gold_bag',count:1}], veryRare:[{type:'key',count:1}] },
   },
-};
-
-// Shop item definitions for zone progression
-export const SHOP_ITEM_DEFS = {
-  water_pickaxe: { id: 'water_pickaxe', name: 'Water Pickaxe', type: 'tool', cost: 500 },
-  water_suit:    { id: 'water_suit',    name: 'Water Suit',    type: 'armor', cost: 800 },
-  water_staff:   { id: 'water_staff',   name: 'Water Staff',   type: 'weapon', cost: 600 },
 };
 
 export const ZONE_ENEMY_LOOT_TABLES = {

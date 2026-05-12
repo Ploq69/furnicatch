@@ -4,7 +4,7 @@ Validate Zone System implementation against the plan.
 Checks:
 1. ZoneData.js exists with ZONES array containing 'forest' and 'fire'
 2. ZoneManager.js exists with zone state, unlocks, gateway logic
-3. Zone bounds, entryRequirements, hazards, letterSets are defined
+3. Zone bounds, gear requirements, hazards, and letter sets are defined
 """
 
 import os
@@ -47,16 +47,17 @@ def check_zone_data():
         else:
             checks &= ok(f"'{zone_id}' zone defined")
     
-    for field in ['blockTypes', 'enemyTypes', 'letterSet']:
+    for field in ['blockTypes', 'floatingBlockTypes', 'enemyTypes', 'letters']:
         if field not in content:
             checks &= fail(f"'{field}' field missing in zone data")
         else:
             checks &= ok(f"'{field}' field present")
     
-    if 'entryRequirements' not in content:
-        checks &= fail("'entryRequirements' not found (needed for fire zone gating)")
-    else:
-        checks &= ok("'entryRequirements' present for zone gating")
+    for field in ['pickaxeId', 'suitId', 'staffId']:
+        if field not in content:
+            checks &= fail(f"'{field}' not found (needed for zone gating)")
+        else:
+            checks &= ok(f"'{field}' present for zone gating")
     
     if 'hazard' not in content:
         checks &= fail("'hazard' not found (needed for fire zone burn damage)")
@@ -89,11 +90,11 @@ def check_zone_manager():
         else:
             checks &= ok(f"'{method}()' method present")
     
-    for item in ['water_pickaxe', 'water_suit', 'water_staff']:
-        if item not in content:
-            checks &= fail(f"'{item}' not referenced in ZoneManager")
+    for term in ['completedZones', 'isEquipped', 'pickaxeId', 'suitId', 'staffId']:
+        if term not in content:
+            checks &= fail(f"'{term}' not referenced in ZoneManager")
         else:
-            checks &= ok(f"'{item}' referenced")
+            checks &= ok(f"'{term}' referenced")
     
     return checks
 

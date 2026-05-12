@@ -48,12 +48,12 @@ export class Weapon {
     }
   }
 
-  attack(origin, direction, scene, audio, particles, enemies) {
+  attack(origin, direction, scene, audio, particles, enemies, attackerWeaponId = null) {
     if (this.cooldown > 0) return false;
     this.cooldown = GAME.ATTACK_COOLDOWN;
 
     if (this.data.type === 'melee') {
-      return this._meleeAttack(origin, direction, scene, audio, particles, enemies);
+      return this._meleeAttack(origin, direction, scene, audio, particles, enemies, attackerWeaponId);
     } else if (this.data.type === 'ranged') {
       return this._rangedAttack(origin, direction, scene, audio, particles, enemies);
     } else if (this.data.type === 'thrown') {
@@ -62,7 +62,7 @@ export class Weapon {
     return false;
   }
 
-  _meleeAttack(origin, direction, scene, audio, particles, enemies) {
+  _meleeAttack(origin, direction, scene, audio, particles, enemies, attackerWeaponId = null) {
     // Arc hitbox: sphere sweep in front of player
     const arcCenter = origin.clone().add(direction.clone().multiplyScalar(1.5));
     arcCenter.y += 0.5;
@@ -74,7 +74,7 @@ export class Weapon {
       if (enemy.dead) continue;
       const dist = enemy.position.distanceTo(arcCenter);
       if (dist < arcRadius) {
-        enemy.takeDamage(this.data.damage);
+        enemy.takeDamage(this.data.damage, attackerWeaponId || this.data.id);
         hit = true;
         // VFX at hit point
         const hitPos = enemy.position.clone();
@@ -139,7 +139,7 @@ export class Weapon {
     return true;
   }
 
-  updateProjectiles(dt, scene, particles, enemies) {
+  updateProjectiles(dt, scene, particles, enemies, attackerWeaponId = null) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.life -= dt;
@@ -164,7 +164,7 @@ export class Weapon {
           for (const enemy of enemies) {
             if (enemy.dead) continue;
             if (enemy.position.distanceTo(p.mesh.position) < p.radius) {
-              enemy.takeDamage(p.damage);
+              enemy.takeDamage(p.damage, attackerWeaponId || this.data.id);
             }
           }
         }
@@ -178,7 +178,7 @@ export class Weapon {
         for (const enemy of enemies) {
           if (enemy.dead) continue;
           if (p.mesh.position.distanceTo(enemy.position) < 0.6) {
-            enemy.takeDamage(p.damage);
+            enemy.takeDamage(p.damage, attackerWeaponId || this.data.id);
             particles.burst(p.mesh.position, 0xffaa00, 4);
             scene.remove(p.mesh);
             this.projectiles.splice(i, 1);

@@ -1162,7 +1162,7 @@ export class UIManager {
     const p = this.game.player;
     if (this.elHp) this.elHp.style.width = (p.hp / p.maxHp * 100) + '%';
     if (this.elHpText) this.elHpText.textContent = `${Math.ceil(p.hp)}/${p.maxHp}`;
-    if (this.elStamina) this.elStamina.style.width = (p.stamina / GAME.MAX_STAMINA * 100) + '%';
+    if (this.elStamina) this.elStamina.style.width = (p.stamina / (p.maxStamina || GAME.MAX_STAMINA) * 100) + '%';
     if (this.elFloor) this.elFloor.textContent = this.game.world.floor;
     if (this.elCoin) this.elCoin.textContent = p.coins;
     if (this.elLevel) this.elLevel.textContent = p.level;
@@ -1328,7 +1328,7 @@ export class UIManager {
       document.body.appendChild(this._gatewayIndicator);
     }
     const icon = locked ? '🔒' : '✅';
-    const text = locked ? `Requires: ${requirements.join(', ')}` : 'Press E to enter';
+    const text = locked ? requirements.join(' ') : '✅';
     this._gatewayIndicator.innerHTML = `<div>${icon} ${zoneName}</div><div class="gateway-req">${text}</div>`;
     this._gatewayIndicator.style.display = 'block';
   }
@@ -1341,13 +1341,49 @@ export class UIManager {
 
   // Burn warning indicator
   showBurnWarning(show) {
-    if (!this._burnWarning) {
-      this._burnWarning = document.createElement('div');
-      this._burnWarning.className = 'burn-warning';
-      this._burnWarning.textContent = '🔥 BURNING! Equip Water Suit!';
-      document.body.appendChild(this._burnWarning);
+    this.showHazardWarning('burn', show);
+  }
+
+  showHazardWarning(type = 'hazard', show = true) {
+    if (!this._hazardWarning) {
+      this._hazardWarning = document.createElement('div');
+      this._hazardWarning.className = 'hazard-warning hazardIcon';
+      document.body.appendChild(this._hazardWarning);
     }
-    this._burnWarning.style.display = show ? 'block' : 'none';
+    const icons = { burn: '🔥', toxic: '☠️', freeze: '❄️', heat: '☀️', quicksand: '🌀', curse: '🔮', hazard: '⚠️' };
+    this._hazardWarning.textContent = show ? (icons[type] || icons.hazard) : '';
+    this._hazardWarning.style.display = show ? 'block' : 'none';
+  }
+
+  showMiningBlocked(status, blockDef) {
+    this.showBlockLocked(status, blockDef);
+  }
+
+  showBlockLocked(status, blockDef) {
+    const current = Math.max(0, status?.currentTier || 0);
+    const required = Math.max(1, status?.requiredTier || blockDef?.tier || 1);
+    const pickaxePip = Array.from({ length: 4 }, (_, i) => i < current ? '●' : (i < required ? '○' : '·')).join('');
+    const icon = status?.reason === 'wrong_weapon' ? '⛏️' : '🔒';
+    this.showFloatingText(`${icon} ${pickaxePip}`, 0xff4444);
+  }
+
+  updateObjectiveHud(state) {
+    if (!state) return;
+    if (!this._objectiveHud) {
+      this._objectiveHud = document.createElement('div');
+      this._objectiveHud.className = 'objective-hud';
+      document.body.appendChild(this._objectiveHud);
+    }
+    const lettersDone = state.letters?.done || 0;
+    const lettersTotal = state.letters?.total || 0;
+    const enemiesDone = state.enemies?.done ? '✓' : state.enemies?.remaining ?? 0;
+    const pips = Array.from({ length: 4 }, (_, i) => i < (state.pickaxeTier || 0) ? '●' : '○').join('');
+    this._objectiveHud.innerHTML = `
+      <span title="Letters">🔤 ${lettersDone}/${lettersTotal}</span>
+      <span title="Enemies">⚔ ${enemiesDone}</span>
+      <span class="pickaxe-tier" title="Pickaxe">⛏ ${pips}</span>
+      <span title="Gate">${state.completed ? '🔓' : '🔒'}</span>
+    `;
   }
 
   setFPS(fps) {
