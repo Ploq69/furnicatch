@@ -2,15 +2,14 @@
  * TerrainMesh — Unified deformable terrain mesh for digable worlds.
  *
  * Instead of thousands of individual block meshes, the entire zone terrain
- * is merged into a single BufferGeometry. Mining "destroys" blocks by
- * collapsing their vertices to degenerate positions, revealing interior
+ * is merged into a single BufferGeometry with vertex colors. Mining "destroys"
+ * blocks by collapsing their vertices to degenerate positions, revealing interior
  * faces of neighboring blocks for natural tunnel walls.
  */
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BLOCK_TYPES, GAME } from './constants.js';
-import { assetLoader } from './AssetLoader.js';
 
 const BLOCK_SIZE = GAME.BLOCK_SIZE; // 1
 const HALF = BLOCK_SIZE * 0.5;
@@ -20,10 +19,8 @@ export class TerrainMesh {
     this.scene = scene;
     this.mesh = null;
     this.geometry = null;
-    this.materials = [];
-    this.materialIndexMap = new Map(); // typeKey -> materialIndex
+    this.material = null;
     this.blockVertexMap = new Map(); // "x,y,z" -> { startVertex, vertexCount, center }
-    this._modelCache = new Map(); // typeKey -> BufferGeometry (cached prototype, not owned)
     this._originalPositions = null; // Float32Array for restore/displace
   }
 
@@ -32,66 +29,13 @@ export class TerrainMesh {
   /* ================================================================ */
 
   async preloadTypes(typeKeys) {
-    const unique = [...new Set(typeKeys)];
-    await Promise.all(unique.map(t => this._preloadType(t)));
-    this._buildMaterials(unique);
-  }
-
-  async _preloadType(typeKey) {
-    if (this._modelCache.has(typeKey)) return;
-
-    const def = BLOCK_TYPES[typeKey] || BLOCK_TYPES.stone;
-    let geometry = null;
-
-    if (def.model) {
-      try {
-        const gltf = await assetLoader.loadGLTF(def.model);
-        if (gltf && gltf.scene) {
-          const geometries = [];
-          gltf.scene.updateMatrixWorld(true);
-          gltf.scene.traverse((child) => {
-            if (!child.isMesh || !child.geometry) return;
-            const clone = child.geometry.clone();
-            clone.applyMatrix4(child.matrixWorld);
-            geometries.push(clone);
-          });
-          if (geometries.length === 1) {
-            geometry = geometries[0];
-          } else if (geometries.length > 1) {
-            geometry = mergeGeometries(geometries);
-            for (const g of geometries) g.dispose();
-          }
-          if (geometry) {
-            // KayKit BlockBits are 2×2×2 units; scale to 1×1×1
-            geometry.scale(0.5, 0.5, 0.5);
-          }
-        }
-      } catch (e) {
-        console.warn('[TerrainMesh] Failed to load model for', typeKey, e);
-      }
-    }
-
-    if (!geometry) {
-      geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-    }
-
-    this._modelCache.set(typeKey, geometry);
-  }
-
-  _buildMaterials(typeKeys) {
-    for (const mat of this.materials) mat.dispose();
-    this.materials = [];
-    this.materialIndexMap.clear();
-
-    for (const typeKey of typeKeys) {
-      const def = BLOCK_TYPES[typeKey] || BLOCK_TYPES.stone;
-      const mat = new THREE.MeshStandardMaterial({
-        color: def.color || 0x888888,
+    // No-op: we create BoxGeometry on the fly. Just ensure material exists.
+    if (!this.material) {
+      this.material = new THREE.MeshStandardMaterial({
+        vertexColors: true,
         roughness: 0.85,
         metalness: 0.05,
       });
-      this.materialIndexMap.set(typeKey, this.materials.length);
-      this.materials.push(mat);
     }
   }
 
@@ -110,33 +54,32 @@ export class TerrainMesh {
       if (cell.destroyed) continue;
 
       const [x, y, z] = key.split(',').map(Number);
-      const matIndex = this.materialIndexMap.get(cell.type);
-      if (matIndex === undefined) {
-        console.warn('[TerrainMesh] Unknown block type, skipping:', cell.type);
-        continue;
-      }
+      const def = BLOCK_TYPES[cell.type] || BLOCK_TYPES.stone;
 
-      const baseGeo = this._modelCache.get(cell.type);
-      if (!baseGeo) continue;
-
-      const geo = baseGeo.clone();
+      const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
 
       // Position at grid cell — offset by HALF so block sits on integer coords
       _matrix.makeTranslation(x + HALF, y + HALF, z + HALF);
       geo.applyMatrix4(_matrix);
 
-      // Tag with material index for mergeGeometries
-      const indexCount = geo.index ? geo.index.count : geo.attributes.position.count;
-      geo.groups = [{ start: 0, count: indexCount, materialIndex: matIndex }];
+      // Bake block color into vertex colors
+      const color = new THREE.Color(def.color || 0x888888);
+      const colors = new Float32Array(24 * 3);
+      for (let i = 0; i < 24; i++) {
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
       geos.push({ geometry: geo, key, x, y, z });
     }
 
     if (geos.length === 0) return;
 
-    // Merge into unified geometry
+    // Merge into unified geometry (no groups needed — vertex colors handle materials)
     const allGeometries = geos.map(g => g.geometry);
-    this.geometry = mergeGeometries(allGeometries, true);
+    this.geometry = mergeGeometries(allGeometries);
 
     for (const g of allGeometries) g.dispose();
 
@@ -147,8 +90,7 @@ export class TerrainMesh {
     // Build block→vertex mapping
     let vertexOffset = 0;
     for (const { key, x, y, z } of geos) {
-      const baseGeo = this._modelCache.get(occupancyGrid.get(x, y, z).type);
-      const vertexCount = baseGeo.attributes.position.count;
+      const vertexCount = 24; // BoxGeometry always has 24 vertices
 
       this.blockVertexMap.set(key, {
         startVertex: vertexOffset,
@@ -159,10 +101,19 @@ export class TerrainMesh {
       vertexOffset += vertexCount;
     }
 
-    // Create mesh
-    this.mesh = new THREE.Mesh(this.geometry, this.materials);
+    // Create mesh with single vertex-colored material
+    if (!this.material) {
+      this.material = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.85,
+        metalness: 0.05,
+      });
+    }
+
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
+    this.mesh.frustumCulled = false;
     this.mesh.name = 'terrain';
     this.scene.add(this.mesh);
   }
@@ -297,8 +248,6 @@ export class TerrainMesh {
       this.geometry.dispose();
       this.geometry = null;
     }
-    for (const mat of this.materials) mat.dispose();
-    this.materials = [];
     this.blockVertexMap.clear();
     this._originalPositions = null;
   }

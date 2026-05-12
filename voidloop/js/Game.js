@@ -321,6 +321,7 @@ export class Game {
 
     this.ui.hideLoading();
     this.state = STATES.PLAYING;
+    window._game = this;
     this.renderer.setAnimationLoop(() => this._loop());
   }
 
@@ -350,6 +351,9 @@ export class Game {
       const spawnEnemies = this.zoneManager.isZoneUnlocked(zone.id);
       await this.world.generateZone(zone.id, zoneSeed, spawnEnemies);
     }
+
+    // Build unified terrain mesh once after all zones are generated
+    await this.world.buildTerrainMesh();
 
     // Spawn player at current zone's spawn point
     const currentZone = this.zoneManager.getCurrentZone();

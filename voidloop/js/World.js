@@ -69,9 +69,6 @@ export class World {
     await this.instancer.preloadTypes([...new Set([...allTypes, 'stone_dark'])]);
     await this.terrainMesh.preloadTypes(allTypes);
 
-    // Clear previous occupancy
-    this.occupancyGrid.clear();
-
     const gridW = b.maxX - b.minX;
     const gridD = b.maxZ - b.minZ;
 
@@ -183,11 +180,6 @@ export class World {
       }
     }
 
-    // Build unified terrain mesh
-    this.terrainMesh.generateFromOccupancyGrid(this.occupancyGrid);
-    const stats = this.terrainMesh.getStats();
-    console.log(`[World] Terrain mesh built: ${stats.blocks.toLocaleString()} blocks, ${stats.triangles.toLocaleString()} triangles`);
-
     // Place gateway
     if (zone.exitGateway) {
       this._placeGateway(zone.exitGateway, zone.id);
@@ -225,7 +217,23 @@ export class World {
 
   async generateFloor(seed) {
     // Backward compatibility: delegate to zone generation for forest
-    return this.generateZone('forest', seed);
+    await this.generateZone('forest', seed);
+    await this.buildTerrainMesh();
+  }
+
+  async buildTerrainMesh() {
+    // Collect all unique block types across the entire occupancy grid
+    const allTypes = new Set();
+    for (const cell of this.occupancyGrid.values()) {
+      if (cell.type) allTypes.add(cell.type);
+    }
+    // Ensure materials are built for every type before mesh generation
+    if (allTypes.size > 0) {
+      await this.terrainMesh.preloadTypes([...allTypes]);
+    }
+    this.terrainMesh.generateFromOccupancyGrid(this.occupancyGrid);
+    const stats = this.terrainMesh.getStats();
+    console.log(`[World] Terrain mesh built: ${stats.blocks.toLocaleString()} blocks, ${stats.triangles.toLocaleString()} triangles`);
   }
 
   async _spawnFloatingBlocksZone(zone, rng) {
