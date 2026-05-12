@@ -2,12 +2,14 @@ import { GAME, UPGRADES, PET_LEVELS } from './constants.js';
 import { SFXMapper } from './SFXMapper.js';
 import { settings } from './SettingsManager.js';
 import { LoadoutPreview } from './LoadoutPreview.js';
+import { ELEMENTS, DEFAULT_ELEMENT, ALL_TEXTURE_KEYS, VFX_PRESETS, PRESET_KEYS, getElementConfig, saveCustomConfig, resetCustomConfig, getWeaponVFX, saveWeaponVFX, getWeaponVFXConfig, saveRecipeOverride, getRecipeWithOverride, resetRecipeOverride } from './ElementalVFX.js';
 import {
   DEFAULT_LOADOUT,
   KAYKIT_CHARACTERS,
   SLOT_LABELS,
   clearKayKitItemGripPreset,
   cloneLoadout,
+  getKayKitItem,
   getKayKitItemsForSlot,
 } from './KayKitLoadout.js';
 
@@ -21,6 +23,8 @@ export class UIManager {
     this.preview = null;
     this.calibrationEnabled = false;
     this.calibrationSlot = 'rightHand';
+    this.vfxPreviewEnabled = false;
+    this.selectedElement = DEFAULT_ELEMENT;
     for (const cat of Object.keys(UPGRADES)) {
       for (const u of UPGRADES[cat]) {
         this.upgradeLevels[u.id] = 0;
@@ -131,6 +135,25 @@ export class UIManager {
     if (this.elCalibrationToggle) {
       this.elCalibrationToggle.addEventListener('click', () => this._toggleCalibration());
     }
+    this.elVfxPreviewToggle = document.getElementById('vfx-preview-toggle');
+    if (this.elVfxPreviewToggle) {
+      this.elVfxPreviewToggle.addEventListener('click', () => this._toggleVfxPreview());
+    }
+    this.elElementSelector = document.getElementById('element-selector');
+    if (this.elElementSelector) {
+      this.elElementSelector.value = this.selectedElement;
+      this.elElementSelector.addEventListener('change', (e) => {
+        this.selectedElement = e.target.value;
+        this._syncVFXPanel();
+        this._setLoadoutStatus();
+        SFXMapper.uiClick();
+      });
+    }
+    this.elElementTryBtn = document.getElementById('element-try-btn');
+    if (this.elElementTryBtn) {
+      this.elElementTryBtn.addEventListener('click', () => this._tryElementVFX());
+    }
+    this._bindVFXPanel();
     if (this.elCalibrationSlot) {
       this.elCalibrationSlot.addEventListener('change', () => this._setCalibrationSlot(this.elCalibrationSlot.value));
     }
@@ -433,6 +456,7 @@ export class UIManager {
     this._renderCharacterGrid();
     this._renderEquipmentGrid();
     this._setLoadoutStatus();
+    this._syncWeaponVFXSection();
   }
 
   _renderCharacterGrid() {
@@ -474,10 +498,14 @@ export class UIManager {
         this._renderLoadout();
         await this.preview?.setLoadout(this.loadoutState);
         this._refreshCalibrationAfterLoadout(slot);
+        this._syncWeaponVFXSection();
       });
       grid.appendChild(empty);
 
       for (const item of getKayKitItemsForSlot(slot)) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'loadout-item-wrapper';
+
         const btn = this._createItemButton(item.name, this.loadoutState[slot] === item.id, async () => {
           this.loadoutState[slot] = item.id;
           this._renderLoadout();
@@ -487,8 +515,24 @@ export class UIManager {
           }
           await this.preview?.setLoadout(this.loadoutState);
           this._refreshCalibrationAfterLoadout(slot);
+          this._syncWeaponVFXSection();
         });
-        grid.appendChild(btn);
+        wrapper.appendChild(btn);
+
+        // Try button for rightHand/leftHand items (weapons/tools)
+        if ((slot === 'rightHand' || slot === 'leftHand') && this.vfxPreviewEnabled) {
+          const tryBtn = document.createElement('button');
+          tryBtn.className = 'loadout-try-btn';
+          tryBtn.textContent = '✨ Try';
+          tryBtn.title = `Preview ${ELEMENTS[this.selectedElement]?.name || ''} VFX`;
+          tryBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.preview?.playElementVFX(this.selectedElement);
+          });
+          wrapper.appendChild(tryBtn);
+        }
+
+        grid.appendChild(wrapper);
       }
 
       section.appendChild(grid);
@@ -512,7 +556,14 @@ export class UIManager {
       .map(slot => this.loadoutState[slot] ? SLOT_LABELS[slot] : null)
       .filter(Boolean)
       .join(' / ');
-    this.elLoadoutStatus.textContent = `${character?.name || 'Character'} · ${slots || 'No items'}`;
+    let text = `${character?.name || 'Character'} · ${slots || 'No items'}`;
+    if (this.vfxPreviewEnabled) {
+      const el = ELEMENTS[this.selectedElement];
+      const layers = this._buildVFXConfig().particleLayers;
+      const layerNames = layers.map(l => l.texture || '?').join(', ');
+      text = `${el?.name || ''} · ${layerNames || 'no layers'}`;
+    }
+    this.elLoadoutStatus.textContent = text;
   }
 
   _toggleCalibration() {
@@ -524,9 +575,467 @@ export class UIManager {
     this._renderCalibrationReadout(snapshot);
   }
 
+  _toggleVfxPreview() {
+    this.vfxPreviewEnabled = !this.vfxPreviewEnabled;
+    this._syncCalibrationPanel();
+    this._renderLoadout();
+    SFXMapper.uiClick();
+  }
+
+  _tryElementVFX(playSound = true) {
+    if (!this.preview) return;
+    const config = this._buildVFXConfig();
+    this.preview.playElementVFX(config);
+    if (playSound) SFXMapper.uiClick();
+  }
+
+  _bindVFXPanel() {
+    this.elVFXParams = document.getElementById('vfx-params');
+    this.elVFXLightIntensity = document.getElementById('vfx-light-intensity');
+    this.elVFXLightVal = document.getElementById('vfx-light-val');
+    this.elVFXPlayBtn = document.getElementById('vfx-play-btn');
+    this.elVFXSaveBtn = document.getElementById('vfx-save-btn');
+    this.elVFXResetBtn = document.getElementById('vfx-reset-btn');
+
+    // Build texture dropdowns for each layer (alpha textures + flipbook spritesheets)
+    document.querySelectorAll('.vfx-texture').forEach(sel => {
+      sel.innerHTML = '<option value="">(none)</option>' +
+        ALL_TEXTURE_KEYS.map(k => {
+          const label = k.startsWith('fb_') ? '📖 ' + k.slice(3) : k;
+          return `<option value="${k}">${label}</option>`;
+        }).join('');
+    });
+
+    // Build recipe dropdown
+    this.elVFXRecipe = document.getElementById('vfx-recipe');
+    this.elVFXRecipeStatus = document.getElementById('vfx-recipe-status');
+    if (this.elVFXRecipe) {
+      this.elVFXRecipe.innerHTML = '<option value="">(custom)</option>' +
+        PRESET_KEYS.map(k => `<option value="${k}">${VFX_PRESETS[k].name}</option>`).join('');
+      this.elVFXRecipe.addEventListener('change', (e) => {
+        const preset = getRecipeWithOverride(e.target.value);
+        if (preset) {
+          this._applyPresetToLayers(preset);
+          this._syncRecipeStatus(e.target.value);
+          this._debouncedVFXPlay();
+        }
+      });
+    }
+
+    // Recipe save/reset buttons
+    const elRecipeSave = document.getElementById('vfx-recipe-save-btn');
+    const elRecipeReset = document.getElementById('vfx-recipe-reset-btn');
+    if (elRecipeSave) {
+      elRecipeSave.addEventListener('click', () => {
+        const key = this.elVFXRecipe?.value;
+        if (!key) {
+          this._showToast('Select a recipe first!');
+          return;
+        }
+        const config = this._buildVFXConfig();
+        saveRecipeOverride(key, config);
+        this._syncRecipeStatus(key);
+        this._showToast(`${VFX_PRESETS[key]?.name || key} override saved!`);
+        SFXMapper.uiClick();
+      });
+    }
+    if (elRecipeReset) {
+      elRecipeReset.addEventListener('click', () => {
+        const key = this.elVFXRecipe?.value;
+        if (!key) {
+          this._showToast('Select a recipe first!');
+          return;
+        }
+        resetRecipeOverride(key);
+        const preset = VFX_PRESETS[key];
+        if (preset) this._applyPresetToLayers(preset);
+        this._syncRecipeStatus(key);
+        this._showToast(`${VFX_PRESETS[key]?.name || key} reset to default`);
+        SFXMapper.uiClick();
+      });
+    }
+
+    // Export hardcoded recipes
+    const elExportBtn = document.getElementById('vfx-export-btn');
+    const elExportModal = document.getElementById('vfx-export-modal');
+    const elExportTextarea = document.getElementById('vfx-export-textarea');
+    const elExportClose = document.getElementById('vfx-export-close');
+    if (elExportBtn && elExportModal && elExportTextarea) {
+      elExportBtn.addEventListener('click', () => {
+        const code = this._generateHardcodedRecipes();
+        elExportTextarea.value = code;
+        elExportModal.classList.add('active');
+        SFXMapper.uiClick();
+      });
+      elExportClose?.addEventListener('click', () => {
+        elExportModal.classList.remove('active');
+      });
+      elExportModal.addEventListener('click', (e) => {
+        if (e.target === elExportModal) elExportModal.classList.remove('active');
+      });
+    }
+
+    // Weapon VFX attachment
+    this.elVFXWeaponName = document.getElementById('vfx-weapon-name');
+    this.elVFXWeaponStatus = document.getElementById('vfx-weapon-status');
+    this.elVFXWeaponAttach = document.getElementById('vfx-weapon-attach-btn');
+    if (this.elVFXWeaponAttach) {
+      this.elVFXWeaponAttach.addEventListener('click', () => {
+        const weaponId = this._getEquippedWeaponId();
+        if (!weaponId) {
+          this._showToast('Equip a weapon first!');
+          return;
+        }
+        const config = this._buildVFXConfig();
+        saveWeaponVFX(weaponId, config);
+        this._syncWeaponVFXSection();
+        this._showToast(`Config attached to ${getKayKitItem(weaponId)?.name || weaponId}!`);
+        SFXMapper.uiClick();
+      });
+    }
+
+    // Bind all range sliders to show their values + auto-play
+    document.querySelectorAll('.vfx-range').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const layer = e.target.closest('.vfx-layer');
+        if (layer) {
+          layer.querySelector(`.vfx-val[data-field="${e.target.dataset.field}"]`).textContent = e.target.value;
+        }
+        this._debouncedVFXPlay();
+      });
+    });
+
+    if (this.elVFXLightIntensity) {
+      this.elVFXLightIntensity.addEventListener('input', (e) => {
+        if (this.elVFXLightVal) this.elVFXLightVal.textContent = e.target.value;
+        this._debouncedVFXPlay();
+      });
+    }
+
+    // Auto-play on control changes
+    document.querySelectorAll('.vfx-texture').forEach(sel => {
+      sel.addEventListener('change', () => this._debouncedVFXPlay());
+    });
+    document.querySelectorAll('.vfx-color').forEach(inp => {
+      inp.addEventListener('input', () => this._debouncedVFXPlay());
+    });
+    document.querySelectorAll('.vfx-blend').forEach(sel => {
+      sel.addEventListener('change', () => this._debouncedVFXPlay());
+    });
+    document.querySelectorAll('.vfx-loop').forEach(inp => {
+      inp.addEventListener('change', () => this._debouncedVFXPlay());
+    });
+
+    // Duplicate layer buttons
+    document.querySelectorAll('.vfx-duplicate-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sourceLayer = btn.closest('.vfx-layer');
+        const sourceIndex = parseInt(sourceLayer.dataset.layer);
+        const targetIndex = sourceIndex + 1;
+        const targetLayer = document.querySelector(`.vfx-layer[data-layer="${targetIndex}"]`);
+        if (!targetLayer) return;
+        // Copy texture
+        const srcTex = sourceLayer.querySelector('.vfx-texture');
+        const tgtTex = targetLayer.querySelector('.vfx-texture');
+        if (srcTex && tgtTex) tgtTex.value = srcTex.value;
+        // Copy color
+        const srcColor = sourceLayer.querySelector('.vfx-color');
+        const tgtColor = targetLayer.querySelector('.vfx-color');
+        if (srcColor && tgtColor) tgtColor.value = srcColor.value;
+        // Copy sliders and labels
+        ['count','size','life','speed','gravity'].forEach(field => {
+          const srcRange = sourceLayer.querySelector(`.vfx-range[data-field="${field}"]`);
+          const tgtRange = targetLayer.querySelector(`.vfx-range[data-field="${field}"]`);
+          const tgtLabel = targetLayer.querySelector(`.vfx-val[data-field="${field}"]`);
+          if (srcRange && tgtRange) tgtRange.value = srcRange.value;
+          if (tgtLabel) tgtLabel.textContent = srcRange?.value || '';
+        });
+        // Copy offsets
+        ['offsetX','offsetY','offsetZ'].forEach(field => {
+          const srcLabel = sourceLayer.querySelector(`.vfx-val[data-field="${field}"]`);
+          const tgtLabel = targetLayer.querySelector(`.vfx-val[data-field="${field}"]`);
+          if (srcLabel && tgtLabel) tgtLabel.textContent = srcLabel.textContent;
+        });
+        // Copy blend and loop
+        const srcBlend = sourceLayer.querySelector('.vfx-blend');
+        const tgtBlend = targetLayer.querySelector('.vfx-blend');
+        if (srcBlend && tgtBlend) tgtBlend.value = srcBlend.value;
+        const srcLoop = sourceLayer.querySelector('.vfx-loop');
+        const tgtLoop = targetLayer.querySelector('.vfx-loop');
+        if (srcLoop && tgtLoop) tgtLoop.checked = srcLoop.checked;
+        this._debouncedVFXPlay();
+      });
+    });
+
+    // Per-layer offset nudge buttons
+    document.querySelectorAll('.vfx-layer').forEach(layer => {
+      layer.querySelectorAll('.vfx-nudge').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const field = btn.dataset.nudgeField;
+          const delta = parseFloat(btn.dataset.nudgeDelta);
+          const label = layer.querySelector(`.vfx-val[data-field="${field}"]`);
+          let val = parseFloat(label?.textContent || '0') + delta;
+          val = Math.round(val * 100) / 100;
+          if (label) label.textContent = val;
+          this._debouncedVFXPlay();
+        });
+      });
+    });
+
+    if (this.elVFXPlayBtn) {
+      this.elVFXPlayBtn.addEventListener('click', () => this._tryElementVFX());
+    }
+    if (this.elVFXSaveBtn) {
+      this.elVFXSaveBtn.addEventListener('click', () => this._saveVFXConfig());
+    }
+    if (this.elVFXResetBtn) {
+      this.elVFXResetBtn.addEventListener('click', () => this._resetVFXConfig());
+    }
+  }
+
+  _debouncedVFXPlay() {
+    if (this._vfxDebounceTimer) clearTimeout(this._vfxDebounceTimer);
+    this._vfxDebounceTimer = setTimeout(() => {
+      if (this.vfxPreviewEnabled) this._tryElementVFX(false);
+    }, 300);
+  }
+
+  _syncVFXPanel() {
+    if (!this.elVFXParams) return;
+
+    // Toggle equipment vs VFX panel in right sidebar
+    const equipHeading = document.getElementById('loadout-right-heading');
+    const equipGrid = document.getElementById('loadout-equipment');
+    if (this.vfxPreviewEnabled) {
+      this.elVFXParams.style.display = 'flex';
+      if (equipHeading) equipHeading.style.display = 'none';
+      if (equipGrid) equipGrid.style.display = 'none';
+    } else {
+      this.elVFXParams.style.display = 'none';
+      if (equipHeading) equipHeading.style.display = '';
+      if (equipGrid) equipGrid.style.display = '';
+      return;
+    }
+
+    // Load current element config (with custom overrides if any)
+    const config = getElementConfig(this.selectedElement);
+
+    // Sync light
+    if (this.elVFXLightIntensity) {
+      this.elVFXLightIntensity.value = config.intensity || 5;
+      if (this.elVFXLightVal) this.elVFXLightVal.textContent = config.intensity || 5;
+    }
+
+    // Reset recipe dropdown to custom since saved configs may not match a preset
+    if (this.elVFXRecipe) this.elVFXRecipe.value = '';
+
+    // Sync particle layers from saved config (not hardcoded defaults)
+    const savedLayers = config.particleLayers || [];
+    const defaultParticles = config.particles || [];
+    document.querySelectorAll('.vfx-layer').forEach((layer, i) => {
+      const saved = savedLayers[i] || {};
+      const tex = saved.texture || defaultParticles[i] || '';
+      const color = saved.color || config.color || '#ffffff';
+      const selTex = layer.querySelector('.vfx-texture');
+      const selColor = layer.querySelector('.vfx-color');
+      if (selTex) selTex.value = tex;
+      if (selColor) selColor.value = color;
+
+      // Restore saved slider values, or use defaults if never saved
+      const defaults = { count: 16, size: 0.35, life: 1.0, speed: 5, gravity: 6 };
+      const offsets = { offsetX: 0.6, offsetY: 0, offsetZ: 0.6 };
+      Object.entries(defaults).forEach(([field, defVal]) => {
+        const range = layer.querySelector(`.vfx-range[data-field="${field}"]`);
+        const label = layer.querySelector(`.vfx-val[data-field="${field}"]`);
+        const val = saved[field] !== undefined ? saved[field] : defVal;
+        if (range) range.value = val;
+        if (label) label.textContent = val;
+      });
+      Object.entries(offsets).forEach(([field, defVal]) => {
+        const label = layer.querySelector(`.vfx-val[data-field="${field}"]`);
+        const val = saved[field] !== undefined ? saved[field] : defVal;
+        if (label) label.textContent = val;
+      });
+
+      // Restore blend and loop
+      const blendSel = layer.querySelector('.vfx-blend');
+      const loopCheck = layer.querySelector('.vfx-loop');
+      if (blendSel) blendSel.value = saved.blend || 'normal';
+      if (loopCheck) loopCheck.checked = saved.loop || false;
+    });
+
+    // Sync weapon VFX section
+    this._syncWeaponVFXSection();
+  }
+
+  _getEquippedWeaponId() {
+    // In loadout preview, use the loadout state; in game, use player's loadout
+    const loadout = this.loadoutState || this.game?.player?.loadout;
+    return loadout?.rightHand || loadout?.leftHand || null;
+  }
+
+  _syncWeaponVFXSection() {
+    const weaponId = this._getEquippedWeaponId();
+    const item = weaponId ? getKayKitItem(weaponId) : null;
+    if (this.elVFXWeaponName) {
+      this.elVFXWeaponName.textContent = item?.name || 'No weapon equipped';
+    }
+    if (this.elVFXWeaponStatus) {
+      const cfg = getWeaponVFXConfig(weaponId);
+      this.elVFXWeaponStatus.textContent = cfg ? '✓ Config attached' : '';
+    }
+    if (this.elVFXWeaponAttach) {
+      this.elVFXWeaponAttach.textContent = `Attach Current Config${item ? ` to ${item.name}` : ''}`;
+    }
+  }
+
+  _syncRecipeStatus(recipeKey) {
+    if (!this.elVFXRecipeStatus) return;
+    const override = recipeKey ? getRecipeOverride(recipeKey) : null;
+    this.elVFXRecipeStatus.textContent = override ? '✓ Override saved' : '';
+  }
+
+  _generateHardcodedRecipes() {
+    const lines = ['export const VFX_PRESETS = {'];
+    for (const key of PRESET_KEYS) {
+      const preset = getRecipeWithOverride(key);
+      if (!preset) continue;
+      lines.push(`  ${key}: {`);
+      lines.push(`    name: '${preset.name}',`);
+      lines.push(`    particleLayers: [`);
+      for (const layer of preset.particleLayers || []) {
+        const props = [];
+        if (layer.texture) props.push(`texture: '${layer.texture}'`);
+        if (layer.color) props.push(`color: '${layer.color}'`);
+        if (layer.count !== undefined) props.push(`count: ${layer.count}`);
+        if (layer.size !== undefined) props.push(`size: ${layer.size}`);
+        if (layer.life !== undefined) props.push(`life: ${layer.life}`);
+        if (layer.speed !== undefined) props.push(`speed: ${layer.speed}`);
+        if (layer.gravity !== undefined) props.push(`gravity: ${layer.gravity}`);
+        if (layer.offsetX !== undefined) props.push(`offsetX: ${layer.offsetX}`);
+        if (layer.offsetY !== undefined) props.push(`offsetY: ${layer.offsetY}`);
+        if (layer.offsetZ !== undefined) props.push(`offsetZ: ${layer.offsetZ}`);
+        if (layer.blend) props.push(`blend: '${layer.blend}'`);
+        if (layer.loop) props.push(`loop: ${layer.loop}`);
+        lines.push(`      { ${props.join(', ')} },`);
+      }
+      lines.push(`    ],`);
+      if (preset.color) lines.push(`    color: '${preset.color}',`);
+      if (preset.intensity !== undefined) lines.push(`    intensity: ${preset.intensity},`);
+      lines.push(`  },`);
+    }
+    lines.push('};');
+    return lines.join('\n');
+  }
+
+  _buildVFXConfig() {
+    const particleLayers = [];
+    document.querySelectorAll('.vfx-layer').forEach(layer => {
+      const tex = layer.querySelector('.vfx-texture')?.value;
+      if (!tex) return;
+      particleLayers.push({
+        texture: tex,
+        color: layer.querySelector('.vfx-color')?.value || '#ffffff',
+        count: parseInt(layer.querySelector('.vfx-range[data-field="count"]')?.value || 16, 10),
+        size: parseFloat(layer.querySelector('.vfx-range[data-field="size"]')?.value || 0.35),
+        life: parseFloat(layer.querySelector('.vfx-range[data-field="life"]')?.value || 1.0),
+        speed: parseFloat(layer.querySelector('.vfx-range[data-field="speed"]')?.value || 5),
+        gravity: parseFloat(layer.querySelector('.vfx-range[data-field="gravity"]')?.value || 6),
+        offsetX: parseFloat(layer.querySelector('.vfx-val[data-field="offsetX"]')?.textContent || 0.6),
+        offsetY: parseFloat(layer.querySelector('.vfx-val[data-field="offsetY"]')?.textContent || 0),
+        offsetZ: parseFloat(layer.querySelector('.vfx-val[data-field="offsetZ"]')?.textContent || 0.6),
+        blend: layer.querySelector('.vfx-blend')?.value || 'normal',
+        loop: layer.querySelector('.vfx-loop')?.checked || false,
+      });
+    });
+
+    return {
+      name: ELEMENTS[this.selectedElement]?.name || 'Custom',
+      particleLayers,
+      color: particleLayers[0]?.color || '#ffffff',
+      intensity: parseFloat(this.elVFXLightIntensity?.value || 5),
+    };
+  }
+
+  _saveVFXConfig() {
+    const config = this._buildVFXConfig();
+    saveCustomConfig(this.selectedElement, config);
+    SFXMapper.uiClick();
+    this._showToast(`${ELEMENTS[this.selectedElement]?.name || 'Custom'} saved!`);
+    if (this.elVFXSaveBtn) {
+      const orig = this.elVFXSaveBtn.textContent;
+      this.elVFXSaveBtn.textContent = '✓ Saved';
+      setTimeout(() => this.elVFXSaveBtn.textContent = orig, 1000);
+    }
+  }
+
+  _resetVFXConfig() {
+    resetCustomConfig(this.selectedElement);
+    this._syncVFXPanel();
+    this._showToast('Reset to default');
+    SFXMapper.uiClick();
+  }
+
+  _applyPresetToLayers(preset) {
+    const layers = document.querySelectorAll('.vfx-layer');
+    const defaults = { count: 16, size: 0.35, life: 1.0, speed: 5, gravity: 6, offsetX: 0.6, offsetY: 0, offsetZ: 0.6, blend: 'normal', loop: false };
+    layers.forEach((layer, i) => {
+      const cfg = preset.particleLayers?.[i] || {};
+      // Texture
+      const texSel = layer.querySelector('.vfx-texture');
+      if (texSel) texSel.value = cfg.texture || '';
+      // Color
+      const colorInp = layer.querySelector('.vfx-color');
+      if (colorInp) colorInp.value = cfg.color || '#ffffff';
+      // Blend
+      const blendSel = layer.querySelector('.vfx-blend');
+      if (blendSel) blendSel.value = cfg.blend || defaults.blend;
+      // Loop
+      const loopCheck = layer.querySelector('.vfx-loop');
+      if (loopCheck) loopCheck.checked = cfg.loop || defaults.loop;
+      // Sliders
+      ['count','size','life','speed','gravity'].forEach(field => {
+        const range = layer.querySelector(`.vfx-range[data-field="${field}"]`);
+        const label = layer.querySelector(`.vfx-val[data-field="${field}"]`);
+        const val = cfg[field] !== undefined ? cfg[field] : defaults[field];
+        if (range) range.value = val;
+        if (label) label.textContent = val;
+      });
+      // Offsets
+      ['offsetX','offsetY','offsetZ'].forEach(field => {
+        const label = layer.querySelector(`.vfx-val[data-field="${field}"]`);
+        const val = cfg[field] !== undefined ? cfg[field] : defaults[field];
+        if (label) label.textContent = val;
+      });
+    });
+    // Light intensity
+    if (this.elVFXLightIntensity && preset.intensity !== undefined) {
+      this.elVFXLightIntensity.value = preset.intensity;
+      if (this.elVFXLightVal) this.elVFXLightVal.textContent = preset.intensity;
+    }
+  }
+
+  _showToast(msg) {
+    let toast = document.getElementById('vfx-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'vfx-toast';
+      toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:8px 16px;background:rgba(0,0,0,0.8);color:#7ed6ab;border:1px solid rgba(126,214,171,0.5);border-radius:6px;font-size:12px;font-weight:800;z-index:9999;pointer-events:none;transition:opacity 0.3s;';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 1500);
+  }
+
   _syncCalibrationPanel() {
     this.elCalibrationToggle?.classList.toggle('active', this.calibrationEnabled);
+    this.elVfxPreviewToggle?.classList.toggle('active', this.vfxPreviewEnabled);
     this.elCalibrationPanel?.classList.toggle('active', this.calibrationEnabled);
+    this._syncVFXPanel();
   }
 
   _bindNudgeButtons() {

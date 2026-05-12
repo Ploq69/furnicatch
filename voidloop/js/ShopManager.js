@@ -130,9 +130,9 @@ export class ShopManager {
     this.coins -= item.cost;
     this.inventory.addItem(itemId);
     // Auto-equip pickaxes
-    if (item.type === 'tool') this.inventory.equipTool(itemId);
-    if (item.type === 'armor') this.inventory.equipArmor(itemId);
-    if (item.type === 'weapon') this.inventory.equipWeapon(itemId);
+    if (item.type === 'tool') this.inventory.equip(itemId, 'tool');
+    if (item.type === 'armor') this.inventory.equip(itemId, 'armor');
+    if (item.type === 'weapon') this.inventory.equip(itemId, 'weapon');
     this._save();
     return { success: true, item };
   }

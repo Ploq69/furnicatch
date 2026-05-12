@@ -4,16 +4,38 @@
 
 import { SHOP_ITEMS, SHOP_UPGRADES } from './ShopManager.js';
 import { SFXMapper } from './SFXMapper.js';
+import { LoadoutPreview } from './LoadoutPreview.js';
+import { cloneLoadout } from './KayKitLoadout.js';
+
+// Map shop item IDs to visual loadout item IDs for preview
+const SHOP_ITEM_PREVIEW_MAP = {
+  fire_pickaxe:     { slot: 'rightHand', item: 'pickaxe' },
+  ice_pickaxe:      { slot: 'rightHand', item: 'pickaxe' },
+  desert_pickaxe:   { slot: 'rightHand', item: 'pickaxe' },
+  steel_pickaxe:    { slot: 'rightHand', item: 'pickaxe' },
+  mire_pickaxe:     { slot: 'rightHand', item: 'pickaxe' },
+  royal_pickaxe:    { slot: 'rightHand', item: 'pickaxe' },
+  fire_staff:       { slot: 'rightHand', item: 'staff' },
+  ice_staff:        { slot: 'rightHand', item: 'staff' },
+  desert_staff:     { slot: 'rightHand', item: 'staff' },
+  tesla_staff:      { slot: 'rightHand', item: 'staff' },
+  vine_staff:       { slot: 'rightHand', item: 'staff' },
+  scepter:          { slot: 'rightHand', item: 'staff' },
+};
 
 export class ShopUI {
-  constructor(shopManager, onBuyItem, onBuyUpgrade, onClose, getResources, onSellResource) {
+  constructor(shopManager, onBuyItem, onBuyUpgrade, onClose, getResources, onSellResource, getLoadout, onOpenLoadout) {
     this.shop = shopManager;
     this.onBuyItem = onBuyItem;
     this.onBuyUpgrade = onBuyUpgrade;
     this.onClose = onClose;
     this.getResources = getResources;
     this.onSellResource = onSellResource;
+    this.getLoadout = getLoadout;
+    this.onOpenLoadout = onOpenLoadout;
     this.activeTab = 'tools';
+    this.preview = null;
+    this.previewBaseLoadout = null;
     this._buildDOM();
     this._bindEvents();
   }
@@ -26,17 +48,29 @@ export class ShopUI {
       <div class="shop-panel">
         <div class="shop-header">
           <h2>🛒 Shop</h2>
-          <div class="shop-coins">💰 <span id="shop-coin-display">0</span></div>
+          <div class="shop-header-actions">
+            ${this.onOpenLoadout ? '<button class="shop-appearance-btn" id="shop-appearance-btn" title="Customize appearance (I)">👤 Appearance</button>' : ''}
+            <div class="shop-coins">💰 <span id="shop-coin-display">0</span></div>
+          </div>
           <button class="shop-close" id="shop-close-btn">✕</button>
         </div>
-        <div class="shop-tabs">
-          <button class="shop-tab" data-tab="tools">Tools</button>
-          <button class="shop-tab" data-tab="armor">Armor</button>
-          <button class="shop-tab" data-tab="weapons">Weapons</button>
-          <button class="shop-tab" data-tab="upgrades">Upgrades</button>
-          <button class="shop-tab" data-tab="resources">Resources</button>
+        <div class="shop-body">
+          <div class="shop-main">
+            <div class="shop-tabs">
+              <button class="shop-tab" data-tab="tools">Tools</button>
+              <button class="shop-tab" data-tab="armor">Armor</button>
+              <button class="shop-tab" data-tab="weapons">Weapons</button>
+              <button class="shop-tab" data-tab="upgrades">Upgrades</button>
+              <button class="shop-tab" data-tab="resources">Resources</button>
+            </div>
+            <div class="shop-content" id="shop-content"></div>
+          </div>
+          <div class="shop-preview-col">
+            <div class="shop-preview-label">Preview</div>
+            <div class="shop-preview-area" id="shop-preview-area"></div>
+            <div class="shop-preview-hint">Hover items to preview</div>
+          </div>
         </div>
-        <div class="shop-content" id="shop-content"></div>
       </div>
     `;
     document.body.appendChild(this.el);
@@ -44,6 +78,7 @@ export class ShopUI {
     this.elCoinDisplay = this.el.querySelector('#shop-coin-display');
     this.elContent = this.el.querySelector('#shop-content');
     this.elTabs = this.el.querySelectorAll('.shop-tab');
+    this.elPreviewArea = this.el.querySelector('#shop-preview-area');
   }
 
   _bindEvents() {
@@ -52,6 +87,14 @@ export class ShopUI {
       this.hide();
       if (this.onClose) this.onClose();
     });
+
+    const appearanceBtn = this.el.querySelector('#shop-appearance-btn');
+    if (appearanceBtn) {
+      appearanceBtn.addEventListener('click', () => {
+        SFXMapper.uiClick();
+        if (this.onOpenLoadout) this.onOpenLoadout();
+      });
+    }
 
     this.elTabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -116,6 +159,14 @@ export class ShopUI {
         </button>
       `;
 
+      // Preview on hover
+      card.addEventListener('mouseenter', () => {
+        this._previewItem(item.id);
+      });
+      card.addEventListener('mouseleave', () => {
+        this._resetPreview();
+      });
+
       const btn = card.querySelector('.shop-buy-btn');
       btn.addEventListener('click', () => {
         if (item.owned) {
@@ -137,10 +188,37 @@ export class ShopUI {
         }
       });
 
+      // Try/VFX preview button for tools and weapons
+      if ((item.type === 'tool' || item.type === 'weapon') && this.preview) {
+        const tryBtn = document.createElement('button');
+        tryBtn.className = 'shop-try-btn';
+        tryBtn.textContent = '⚔ Try';
+        tryBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._previewItem(item.id);
+          this.preview.playItemVFX(item.id);
+        });
+        card.appendChild(tryBtn);
+      }
+
       grid.appendChild(card);
     }
 
     this.elContent.appendChild(grid);
+  }
+
+  _previewItem(itemId) {
+    if (!this.preview || !this.previewBaseLoadout) return;
+    const mapping = SHOP_ITEM_PREVIEW_MAP[itemId];
+    if (!mapping) return; // Armor/suits have no visual preview
+    const previewLoadout = cloneLoadout(this.previewBaseLoadout);
+    previewLoadout[mapping.slot] = mapping.item;
+    this.preview.setLoadout(previewLoadout);
+  }
+
+  _resetPreview() {
+    if (!this.preview || !this.previewBaseLoadout) return;
+    this.preview.setLoadout(this.previewBaseLoadout);
   }
 
   _renderUpgrades() {
@@ -245,18 +323,38 @@ export class ShopUI {
     this.elContent.appendChild(grid);
   }
 
-  show() {
+  async show() {
     this.isOpen = true;
     this.el.classList.add('active');
     this._updateTabs();
     this._renderContent();
     document.addEventListener('keydown', this._escHandler);
+
+    // Initialize preview
+    if (this.getLoadout && this.elPreviewArea) {
+      const loadout = this.getLoadout();
+      this.previewBaseLoadout = cloneLoadout(loadout);
+      if (!this.preview) {
+        this.preview = new LoadoutPreview(this.elPreviewArea);
+        await this.preview.init(this.previewBaseLoadout);
+      } else {
+        this.preview.resize();
+        await this.preview.setLoadout(this.previewBaseLoadout);
+      }
+    }
   }
 
   hide() {
     this.isOpen = false;
     this.el.classList.remove('active');
     document.removeEventListener('keydown', this._escHandler);
+  }
+
+  updatePreview(dt) {
+    if (this.isOpen && this.preview) {
+      this.preview.resize();
+      this.preview.update(dt);
+    }
   }
 
   setCoins(coins) {
@@ -267,6 +365,13 @@ export class ShopUI {
 
   destroy() {
     this.hide();
+    if (this.preview) {
+      // Clean up renderer
+      if (this.preview.renderer) {
+        this.preview.renderer.dispose();
+      }
+      this.preview = null;
+    }
     if (this.el && this.el.parentNode) {
       this.el.parentNode.removeChild(this.el);
     }

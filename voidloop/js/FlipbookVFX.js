@@ -101,6 +101,15 @@ export class FlipbookVFX {
     }
   }
 
+  /** Remove all active flipbook effects immediately. */
+  clear() {
+    for (const fx of this.active) {
+      this.scene.remove(fx.mesh);
+      fx.mat.dispose();
+    }
+    this.active.length = 0;
+  }
+
   _updateUVs(fx) {
     const f = fx.frames[fx.frameIndex];
     const attr = fx.mesh.geometry.attributes.uv;
@@ -207,5 +216,76 @@ export const FLIPBOOK_EFFECTS = {
     sheetPath: "Super Pixel Effects Gigapack (Free Version)/spritesheet/Fantasy Spells/spell_attack_up_001/spell_attack_up_001_large_blue/spritesheet.png",
     fps: 20,
     scale: 2.5,
+  },
+  // Brackeys predrawn spritesheets
+  brackeys_explosion: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/explosion_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 18, scale: 3,
+  },
+  brackeys_big_hit: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/big_hit_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 24, scale: 2.5,
+  },
+  brackeys_star_explosion: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/star_explosion_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 20, scale: 3,
+  },
+  brackeys_fire_ring: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/fire_ring_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 20, scale: 2.5,
+  },
+  brackeys_electric_ring: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/electric_ring_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 20, scale: 2.5,
+  },
+  brackeys_vortex: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/vortex_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 18, scale: 3,
+  },
+  brackeys_charge: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/charge_7x6.png",
+    cols: 7, rows: 6, frames: 42,
+    fps: 24, scale: 2,
+  },
+  brackeys_dithered_fire: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/dithered_fire_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 20, scale: 2.5,
+  },
+  brackeys_fire_point: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/fire_point_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 24, scale: 1.5,
+  },
+  brackeys_lightstreaks: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/lightstreaks_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 20, scale: 3,
+  },
+  brackeys_impact_white: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/impact_white_6x4.png",
+    cols: 6, rows: 4, frames: 24,
+    fps: 24, scale: 2,
+  },
+  brackeys_wavy_blue: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/wavy_blue_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 18, scale: 2.5,
+  },
+  brackeys_wavy_purple: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/wavy_purple_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 18, scale: 2.5,
+  },
+  brackeys_blood_impact: {
+    sheetPath: "brackeys_vfx_bundle/predrawn/blood_impact_6x5.png",
+    cols: 6, rows: 5, frames: 30,
+    fps: 24, scale: 2,
   },
 };

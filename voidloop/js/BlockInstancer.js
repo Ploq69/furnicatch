@@ -103,8 +103,8 @@ export class BlockInstancer {
 
     const { geometry, material } = cached;
     const im = new THREE.InstancedMesh(geometry, material, capacity);
-    im.castShadow = true;
-    im.receiveShadow = true;
+    im.castShadow = false;
+    im.receiveShadow = false;
     im.count = 0;
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     chunk.group.add(im);

@@ -15,6 +15,7 @@ import {
   getKayKitCharacter,
   getKayKitItem,
 } from './KayKitLoadout.js';
+import { WeaponVFXEmitter, getWeaponVFXConfig } from './ElementalVFX.js';
 
 const TARGET_HEIGHT = 1.6;
 const _anchorOffsetMatrix = new THREE.Matrix4();
@@ -137,6 +138,7 @@ export class Player {
     this.currentSlot = 0;
     this.equipmentHolders = {};
     this.equipmentMeshes = {};
+    this.weaponEmitters = {};
     this.damageFlashTimer = 0;
     this.damageFlashEntries = [];
     this.loadout = cloneLoadout(DEFAULT_LOADOUT);
@@ -265,6 +267,12 @@ export class Player {
       this.equipmentMeshes[slot] = null;
     }
 
+    // Stop existing emitter for this slot
+    if (this.weaponEmitters[slot]) {
+      this.weaponEmitters[slot].destroy();
+      this.weaponEmitters[slot] = null;
+    }
+
     this.loadout[slot] = itemId || null;
     const item = getKayKitItem(itemId);
     if (!item || !item.slots.includes(slot)) return;
@@ -279,6 +287,14 @@ export class Player {
       this._placeEquipmentHolders();
     } catch (e) {
       console.warn('[Player] Failed to equip KayKit item', item.id, e);
+    }
+
+    // Start weapon VFX emitter if this item has one assigned
+    const vfxConfig = getWeaponVFXConfig(itemId);
+    if (vfxConfig && (slot === 'rightHand' || slot === 'leftHand')) {
+      const emitter = new WeaponVFXEmitter(holder, this.scene, null, vfxConfig);
+      emitter.start();
+      this.weaponEmitters[slot] = emitter;
     }
   }
 
@@ -362,6 +378,7 @@ export class Player {
     }
     this.currentSlot = slot;
     const weapon = this.weapons[slot];
+    this.equippedWeapon = weapon?.data?.id || null;
     const hotbarLoadout = HOTBAR_LOADOUTS[weapon?.data?.id];
     if (hotbarLoadout) {
       await this.applyLoadout({ ...this.loadout, ...hotbarLoadout }, { includeCharacter: false });

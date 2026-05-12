@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 const BRACKEYS_DIR = 'brackeys_vfx_bundle/particles/alpha/';
 
-const TEXTURE_MAP = {
+export const TEXTURE_MAP = {
   spark: 'spark_01_a.png',
   slash: 'slash_01_a.png',
   smoke: 'smoke_01_a.png',
@@ -12,6 +12,34 @@ const TEXTURE_MAP = {
   magic: 'magic_01_a.png',
   flare: 'flare_01_a.png',
   circle: 'circle_01_a.png',
+  // Expanded Brackeys textures
+  spark2: 'spark_02_a.png',
+  spark3: 'spark_03_a.png',
+  slash2: 'slash_02_a.png',
+  slash3: 'slash_03_a.png',
+  smoke2: 'smoke_02_a.png',
+  smoke3: 'smoke_03_a.png',
+  flame: 'flame_01_a.png',
+  flame2: 'flame_02_a.png',
+  magic2: 'magic_02_a.png',
+  magic3: 'magic_03_a.png',
+  magic4: 'magic_04_a.png',
+  magic5: 'magic_05_a.png',
+  light: 'light_01_a.png',
+  light2: 'light_02_a.png',
+  light3: 'light_03_a.png',
+  star: 'star_01_a.png',
+  star2: 'star_02_a.png',
+  star3: 'star_03_a.png',
+  trace: 'trace_01_a.png',
+  trace2: 'trace_02_a.png',
+  twirl: 'twirl_01_a.png',
+  twirl2: 'twirl_02_a.png',
+  circle2: 'circle_02_a.png',
+  circle3: 'circle_03_a.png',
+  scorch: 'scorch_01_a.png',
+  effect: 'effect_01_a.png',
+  symbol: 'symbol_01_a.png',
 };
 
 class ParticleSystem {

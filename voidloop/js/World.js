@@ -8,6 +8,7 @@ import { assetLoader } from './AssetLoader.js';
 import { getBlockTypeForTile, PROP_CATALOG } from './levelbuilder/LevelCatalog.js';
 import { SeededRNG } from './SeededRNG.js';
 import { BlockInstancer } from './BlockInstancer.js';
+import { GroundRenderer } from './GroundRenderer.js';
 
 // Biome-specific floating block types for procedural generation
 const FLOAT_BLOCK_TYPES = {
@@ -34,7 +35,9 @@ export class World {
     this.rng = null;
     this._nextEnemyId = 1;
     this.instancer = new BlockInstancer(scene);
+    this.groundRenderer = new GroundRenderer(scene);
     this.floatingBlocks = new Set();
+    this.groundGrid = new Set(); // "x,z" keys for occupancy checks
   }
 
   setFloor(floorNum) {
@@ -124,13 +127,13 @@ export class World {
       for (let i = 0; i < grid.length; i++) grid[i] = newGrid[i];
     }
 
-    // Place blocks from grid
+    // Place ground blocks
     for (let gx = 0; gx < gridW; gx++) {
       for (let gz = 0; gz < gridD; gz++) {
         if (grid[gz * gridW + gx]) {
           const worldX = b.minX + gx;
           const worldZ = b.minZ + gz;
-          // Skip spawn area
+          // Skip spawn area — spawn platform placed separately as mineable blocks
           const sp = zone.spawnPoint;
           if (Math.abs(worldX - sp.x) <= 1 && Math.abs(worldZ - sp.z) <= 1) continue;
           const type = rng.choice(types);
@@ -165,7 +168,7 @@ export class World {
           ex = sp.x + Math.cos(angle) * dist;
           ez = sp.z + Math.sin(angle) * dist;
           attempts++;
-        } while (this.getBlock(ex, 0, ez) && attempts < 20);
+        } while ((this.getBlock(ex, 0, ez) || this._hasGround(ex, ez)) && attempts < 20);
         const enemy = new Enemy(et, ex, ez);
         enemy.world = this;
         enemy.zoneId = zone.id;
@@ -297,7 +300,7 @@ export class World {
       for (let gz = 0; gz < gridSize; gz++) {
         const worldX = gx - floorSize;
         const worldZ = gz - floorSize;
-        if (!this.getBlock(worldX, 0, worldZ)) {
+        if (!this.getBlock(worldX, 0, worldZ) && !this._hasGround(worldX, worldZ)) {
           emptyColumns.push({ x: worldX, z: worldZ });
         }
       }
@@ -488,9 +491,17 @@ export class World {
     return this.blocks.get(key);
   }
 
+  _hasGround(x, z) {
+    return this.groundGrid.has(`${Math.round(x)},${Math.round(z)}`);
+  }
+
   getColumnTop(x, z) {
     const colKey = `${Math.round(x)},${Math.round(z)}`;
-    return this.columnHeights.get(colKey) || -999;
+    const top = this.columnHeights.get(colKey);
+    if (top !== undefined) return top;
+    // Ground blocks sit at y=0, so top is y=1
+    if (this.groundGrid.has(colKey)) return 1;
+    return -999;
   }
 
   mineBlock(block, particles, audio) {
@@ -519,6 +530,7 @@ export class World {
   update(dt, playerPos, particles, audio, player) {
     // Update chunk visibility based on player position
     this.instancer.updateVisibility(playerPos, 45);
+    this.groundRenderer.updateVisibility(playerPos, 50);
 
     // Update all blocks (handles shake/scale for ground blocks, hp bars, etc.)
     for (const block of this.blocks.values()) {
@@ -566,6 +578,8 @@ export class World {
 
   clear() {
     this.instancer.clear();
+    this.groundRenderer.clear();
+    this.groundGrid.clear();
     for (const block of this.blocks.values()) {
       if (block.mesh) this.scene.remove(block.mesh);
     }

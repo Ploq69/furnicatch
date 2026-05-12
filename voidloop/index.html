@@ -245,12 +245,10 @@
       left: 20px;
       font-size: 12px;
       font-family: monospace;
-      color: rgba(255,255,255,0.5);
-      background: rgba(0,0,0,0.4);
-      padding: 4px 8px;
-      border-radius: 6px;
+      color: #00ff88;
+      text-shadow: 0 0 4px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.9);
       pointer-events: none;
-      z-index: 100;
+      z-index: 10000;
     }
 
     /* Slider controls panel */
@@ -329,6 +327,29 @@
     }
     .loadout-item-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .loadout-item-wrapper {
+      display: flex;
+      gap: 4px;
+      align-items: stretch;
+    }
+    .loadout-item-wrapper .loadout-item {
+      flex: 1;
+      min-width: 0;
+    }
+    .loadout-try-btn {
+      padding: 4px 8px;
+      border: 1px solid rgba(255,200,50,0.4);
+      border-radius: 6px;
+      background: rgba(120,90,20,0.25);
+      color: #ffd700;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .loadout-try-btn:hover {
+      background: rgba(120,90,20,0.45);
     }
     .loadout-option {
       min-height: 42px;
@@ -445,6 +466,395 @@
     .calibration-panel button.active {
       border-color: rgba(126,214,171,0.7);
       background: rgba(61,104,85,0.36);
+    }
+    #vfx-preview-toggle.active {
+      border-color: rgba(255,200,50,0.7);
+      background: rgba(120,90,20,0.4);
+      color: #ffd700;
+    }
+    #element-selector {
+      min-height: 32px;
+      padding: 6px 9px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    #element-try-btn {
+      border-color: rgba(126,214,171,0.7);
+      background: rgba(61,104,85,0.36);
+      color: #7ed6ab;
+      cursor: pointer;
+    }
+    #element-try-btn:hover {
+      background: rgba(61,104,85,0.5);
+    }
+    .vfx-params {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .vfx-params h2 {
+      margin: 0 0 4px;
+      color: #ffd700;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
+    .vfx-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .vfx-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: #7ed6ab;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .vfx-section select,
+    #vfx-recipe {
+      min-height: 28px;
+      padding: 4px 8px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    #vfx-recipe {
+      width: 100%;
+      margin-bottom: 4px;
+    }
+    .vfx-recipe-actions {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .vfx-recipe-save,
+    .vfx-recipe-reset {
+      flex: 1;
+      min-height: 24px;
+      padding: 3px 8px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vfx-recipe-save {
+      border-color: rgba(126,214,171,0.4);
+      color: #7ed6ab;
+    }
+    .vfx-recipe-save:hover {
+      background: rgba(61,104,85,0.3);
+    }
+    .vfx-recipe-reset:hover {
+      background: rgba(255,255,255,0.12);
+    }
+    .vfx-recipe-status {
+      font-size: 10px;
+      font-weight: 700;
+      color: #7ed6ab;
+      min-height: 14px;
+    }
+    .vfx-export-btn {
+      width: 100%;
+      min-height: 28px;
+      padding: 4px 10px;
+      margin-top: 6px;
+      border: 1px solid rgba(126,214,171,0.4);
+      border-radius: 6px;
+      background: rgba(61,104,85,0.3);
+      color: #7ed6ab;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vfx-export-btn:hover {
+      background: rgba(61,104,85,0.5);
+    }
+    #vfx-export-modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    #vfx-export-modal.active {
+      display: flex;
+    }
+    .vfx-export-box {
+      background: #1a1a2e;
+      border: 1px solid rgba(126,214,171,0.3);
+      border-radius: 10px;
+      padding: 16px;
+      max-width: 600px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .vfx-export-box h3 {
+      margin: 0;
+      color: #7ed6ab;
+      font-size: 14px;
+    }
+    .vfx-export-box p {
+      margin: 0;
+      color: #c0b8a8;
+      font-size: 11px;
+    }
+    .vfx-export-box textarea {
+      width: 100%;
+      min-height: 200px;
+      background: #0a0a12;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      color: #f2ead6;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 8px;
+      resize: vertical;
+    }
+    .vfx-export-close {
+      align-self: flex-end;
+      padding: 6px 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vfx-particle-layers {
+      display: grid;
+      gap: 8px;
+    }
+    .vfx-layer {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 8px;
+    }
+    .vfx-layer-header {
+      font-size: 10px;
+      font-weight: 800;
+      color: #ffd700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .vfx-layer-grid {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .vfx-layer-grid select,
+    .vfx-layer-grid input[type="color"] {
+      min-height: 28px;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 11px;
+    }
+    .vfx-blend {
+      min-height: 28px;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .vfx-loop-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #c0b8a8;
+      cursor: pointer;
+    }
+    .vfx-loop-label input[type="checkbox"] {
+      accent-color: #7ed6ab;
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+    .vfx-duplicate-btn {
+      float: right;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.05);
+      color: #c0b8a8;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .vfx-duplicate-btn:hover {
+      background: rgba(255,255,255,0.12);
+      color: #ffd700;
+    }
+    .vfx-weapon-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .vfx-weapon-name {
+      font-size: 11px;
+      font-weight: 800;
+      color: #f2ead6;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .vfx-weapon-status {
+      font-size: 10px;
+      font-weight: 700;
+      color: #7ed6ab;
+    }
+    #vfx-weapon-preset {
+      min-height: 28px;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .vfx-weapon-attach {
+      width: 100%;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid rgba(255,200,50,0.4);
+      border-radius: 6px;
+      background: rgba(120,90,20,0.3);
+      color: #ffd700;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vfx-weapon-attach:hover {
+      background: rgba(120,90,20,0.5);
+    }
+    .vfx-slider-row {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .vfx-slider-row label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #c0b8a8;
+      display: flex;
+      justify-content: space-between;
+    }
+    .vfx-slider-row input[type="range"] {
+      width: 100%;
+      accent-color: #7ed6ab;
+    }
+    .vfx-val {
+      color: #7ed6ab;
+      font-weight: 800;
+    }
+    .vfx-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .vfx-actions button {
+      flex: 1;
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.07);
+      color: #f2ead6;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vfx-offset-row {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .vfx-offset-row label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #c0b8a8;
+    }
+    .vfx-nudges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+    }
+    .vfx-nudge {
+      padding: 3px 6px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.05);
+      color: #c0b8a8;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vfx-nudge:hover {
+      background: rgba(255,255,255,0.12);
+    }
+    .vfx-offset-vals {
+      display: flex;
+      gap: 10px;
+      font-size: 10px;
+      color: #888;
+    }
+    .vfx-offset-vals span span {
+      color: #7ed6ab;
+      font-weight: 800;
+      margin-left: 2px;
+    }
+    #vfx-play-btn {
+      border-color: rgba(126,214,171,0.7);
+      background: rgba(61,104,85,0.36);
+      color: #7ed6ab;
+    }
+    #vfx-play-btn:hover {
+      background: rgba(61,104,85,0.5);
+    }
+    #vfx-save-btn {
+      border-color: rgba(255,200,50,0.5);
+      background: rgba(120,90,20,0.25);
+      color: #ffd700;
+    }
+    #vfx-save-btn:hover {
+      background: rgba(120,90,20,0.45);
+    }
+    #vfx-reset-btn:hover {
+      background: rgba(255,255,255,0.12);
     }
     .calibration-panel:not(.active) #calibration-slot,
     .calibration-panel:not(.active) #calibration-mark,
@@ -685,6 +1095,76 @@
       overflow-y: auto;
       flex: 1;
     }
+    .shop-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .shop-appearance-btn {
+      padding: 6px 14px;
+      background: #2a2a3e;
+      border: 1px solid #555;
+      border-radius: 8px;
+      color: #ddd;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .shop-appearance-btn:hover {
+      background: #3a3a52;
+      border-color: #a855f7;
+      color: #fff;
+    }
+    .shop-body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .shop-main {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+    }
+    .shop-preview-col {
+      width: 220px;
+      border-left: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+      background: #141428;
+    }
+    .shop-preview-label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .shop-preview-area {
+      width: 100%;
+      flex: 1;
+      min-height: 180px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #0d0d1a;
+    }
+    .shop-preview-area canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .shop-preview-hint {
+      font-size: 11px;
+      color: #666;
+      margin-top: 8px;
+      text-align: center;
+    }
+    @media (max-width: 700px) {
+      .shop-preview-col { display: none; }
+    }
     .shop-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -719,6 +1199,24 @@
     }
     .shop-buy-btn:hover:not(:disabled) { background: #9333ea; }
     .shop-buy-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .shop-try-btn {
+      margin-top: 8px;
+      padding: 6px 16px;
+      background: #2a2a4e;
+      border: 1px solid #555;
+      border-radius: 8px;
+      color: #7dd3fc;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.15s;
+      width: 100%;
+    }
+    .shop-try-btn:hover {
+      background: #3a3a6e;
+      border-color: #7dd3fc;
+      color: #fff;
+    }
     .resource-header {
       display: flex;
       justify-content: space-between;
@@ -1738,6 +2236,20 @@
         <div class="calibration-panel" id="calibration-panel">
           <div class="calibration-controls">
             <button id="calibration-toggle">Calibrate</button>
+            <button id="vfx-preview-toggle">⚡ VFX Preview</button>
+            <select id="element-selector" aria-label="Element">
+              <option value="fire">🔥 Fire</option>
+              <option value="ice">❄️ Ice</option>
+              <option value="water">💧 Water</option>
+              <option value="poison">☠️ Poison</option>
+              <option value="electric">⚡ Electric</option>
+              <option value="arcane">🔮 Arcane</option>
+              <option value="explosion">💥 Explosion</option>
+              <option value="blood">🩸 Blood</option>
+              <option value="holy">✨ Holy</option>
+              <option value="impact">💢 Impact</option>
+            </select>
+            <button id="element-try-btn">✨ Try</button>
             <select id="calibration-slot" aria-label="Calibration slot">
               <option value="rightHand">Right Hand</option>
               <option value="leftHand">Left Hand</option>
@@ -1769,9 +2281,142 @@
         <div id="loadout-preview"></div>
       </section>
 
-      <aside class="loadout-panel">
-        <h2>Equipment</h2>
+      <aside class="loadout-panel" id="loadout-right-panel">
+        <h2 id="loadout-right-heading">Equipment</h2>
         <div id="loadout-equipment"></div>
+        <div class="vfx-params" id="vfx-params" style="display:none;">
+          <h2>🎨 VFX Editor</h2>
+          <div class="vfx-section">
+            <label class="vfx-label">Recipe</label>
+            <select id="vfx-recipe"></select>
+            <div class="vfx-recipe-actions">
+              <button id="vfx-recipe-save-btn" class="vfx-recipe-save">💾 Save Override</button>
+              <button id="vfx-recipe-reset-btn" class="vfx-recipe-reset">↺ Reset</button>
+            </div>
+            <span id="vfx-recipe-status" class="vfx-recipe-status"></span>
+            <button id="vfx-export-btn" class="vfx-export-btn">📋 Export Hardcoded Recipes</button>
+          </div>
+          <div class="vfx-particle-layers" id="vfx-particle-layers">
+            <!-- Layer 1 -->
+            <div class="vfx-layer" data-layer="0">
+              <div class="vfx-layer-header" style="color:#ff6b6b;">🔴 Particle 1 <button class="vfx-duplicate-btn" data-layer="0" title="Copy to next layer">⧉</button></div>
+              <div class="vfx-layer-grid">
+                <select class="vfx-texture" data-field="texture"></select>
+                <input type="color" class="vfx-color" data-field="color" value="#ff4400">
+                <select class="vfx-blend" data-field="blend">
+                  <option value="normal">Normal</option>
+                  <option value="additive">Additive</option>
+                  <option value="multiply">Multiply</option>
+                  <option value="premultiply">PremultAlpha</option>
+                </select>
+                <label class="vfx-loop-label"><input type="checkbox" class="vfx-loop" data-field="loop"> Loop</label>
+                <div class="vfx-slider-row"><label>Count <span class="vfx-val" data-field="count">16</span></label><input type="range" class="vfx-range" data-field="count" min="0" max="50" step="1" value="16"></div>
+                <div class="vfx-slider-row"><label>Size <span class="vfx-val" data-field="size">0.35</span></label><input type="range" class="vfx-range" data-field="size" min="0.1" max="1.0" step="0.05" value="0.35"></div>
+                <div class="vfx-slider-row"><label>Life <span class="vfx-val" data-field="life">1.0</span></label><input type="range" class="vfx-range" data-field="life" min="0.2" max="2.0" step="0.1" value="1.0"></div>
+                <div class="vfx-slider-row"><label>Speed <span class="vfx-val" data-field="speed">5</span></label><input type="range" class="vfx-range" data-field="speed" min="1" max="10" step="0.5" value="5"></div>
+                <div class="vfx-slider-row"><label>Gravity <span class="vfx-val" data-field="gravity">6</span></label><input type="range" class="vfx-range" data-field="gravity" min="0" max="15" step="0.5" value="6"></div>
+                <div class="vfx-offset-row">
+                  <label>Offset</label>
+                  <div class="vfx-nudges">
+                    <button class="vfx-nudge" data-nudge-field="offsetX" data-nudge-delta="-0.1">X-</button><button class="vfx-nudge" data-nudge-field="offsetX" data-nudge-delta="0.1">X+</button>
+                    <button class="vfx-nudge" data-nudge-field="offsetY" data-nudge-delta="-0.1">Y-</button><button class="vfx-nudge" data-nudge-field="offsetY" data-nudge-delta="0.1">Y+</button>
+                    <button class="vfx-nudge" data-nudge-field="offsetZ" data-nudge-delta="-0.1">Z-</button><button class="vfx-nudge" data-nudge-field="offsetZ" data-nudge-delta="0.1">Z+</button>
+                  </div>
+                  <div class="vfx-offset-vals">
+                    <span>X:<span class="vfx-val" data-field="offsetX">0.6</span></span>
+                    <span>Y:<span class="vfx-val" data-field="offsetY">0</span></span>
+                    <span>Z:<span class="vfx-val" data-field="offsetZ">0.6</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Layer 2 -->
+            <div class="vfx-layer" data-layer="1">
+              <div class="vfx-layer-header" style="color:#ffd93d;">🟡 Particle 2 <button class="vfx-duplicate-btn" data-layer="1" title="Copy to next layer">⧉</button></div>
+              <div class="vfx-layer-grid">
+                <select class="vfx-texture" data-field="texture"></select>
+                <input type="color" class="vfx-color" data-field="color" value="#ff8800">
+                <select class="vfx-blend" data-field="blend">
+                  <option value="normal">Normal</option>
+                  <option value="additive">Additive</option>
+                  <option value="multiply">Multiply</option>
+                  <option value="premultiply">PremultAlpha</option>
+                </select>
+                <label class="vfx-loop-label"><input type="checkbox" class="vfx-loop" data-field="loop"> Loop</label>
+                <div class="vfx-slider-row"><label>Count <span class="vfx-val" data-field="count">16</span></label><input type="range" class="vfx-range" data-field="count" min="0" max="50" step="1" value="16"></div>
+                <div class="vfx-slider-row"><label>Size <span class="vfx-val" data-field="size">0.35</span></label><input type="range" class="vfx-range" data-field="size" min="0.1" max="1.0" step="0.05" value="0.35"></div>
+                <div class="vfx-slider-row"><label>Life <span class="vfx-val" data-field="life">1.0</span></label><input type="range" class="vfx-range" data-field="life" min="0.2" max="2.0" step="0.1" value="1.0"></div>
+                <div class="vfx-slider-row"><label>Speed <span class="vfx-val" data-field="speed">5</span></label><input type="range" class="vfx-range" data-field="speed" min="1" max="10" step="0.5" value="5"></div>
+                <div class="vfx-slider-row"><label>Gravity <span class="vfx-val" data-field="gravity">6</span></label><input type="range" class="vfx-range" data-field="gravity" min="0" max="15" step="0.5" value="6"></div>
+                <div class="vfx-offset-row">
+                  <label>Offset</label>
+                  <div class="vfx-nudges">
+                    <button class="vfx-nudge" data-nudge-field="offsetX" data-nudge-delta="-0.1">X-</button><button class="vfx-nudge" data-nudge-field="offsetX" data-nudge-delta="0.1">X+</button>
+                    <button class="vfx-nudge" data-nudge-field="offsetY" data-nudge-delta="-0.1">Y-</button><button class="vfx-nudge" data-nudge-field="offsetY" data-nudge-delta="0.1">Y+</button>
+                    <button class="vfx-nudge" data-nudge-field="offsetZ" data-nudge-delta="-0.1">Z-</button><button class="vfx-nudge" data-nudge-field="offsetZ" data-nudge-delta="0.1">Z+</button>
+                  </div>
+                  <div class="vfx-offset-vals">
+                    <span>X:<span class="vfx-val" data-field="offsetX">0.6</span></span>
+                    <span>Y:<span class="vfx-val" data-field="offsetY">0</span></span>
+                    <span>Z:<span class="vfx-val" data-field="offsetZ">0.6</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Layer 3 -->
+            <div class="vfx-layer" data-layer="2">
+              <div class="vfx-layer-header" style="color:#a0a0a0;">⚪ Particle 3 <button class="vfx-duplicate-btn" data-layer="2" title="Copy to next layer">⧉</button></div>
+              <div class="vfx-layer-grid">
+                <select class="vfx-texture" data-field="texture"></select>
+                <input type="color" class="vfx-color" data-field="color" value="#ffffff">
+                <select class="vfx-blend" data-field="blend">
+                  <option value="normal">Normal</option>
+                  <option value="additive">Additive</option>
+                  <option value="multiply">Multiply</option>
+                  <option value="premultiply">PremultAlpha</option>
+                </select>
+                <label class="vfx-loop-label"><input type="checkbox" class="vfx-loop" data-field="loop"> Loop</label>
+                <div class="vfx-slider-row"><label>Count <span class="vfx-val" data-field="count">16</span></label><input type="range" class="vfx-range" data-field="count" min="0" max="50" step="1" value="16"></div>
+                <div class="vfx-slider-row"><label>Size <span class="vfx-val" data-field="size">0.35</span></label><input type="range" class="vfx-range" data-field="size" min="0.1" max="1.0" step="0.05" value="0.35"></div>
+                <div class="vfx-slider-row"><label>Life <span class="vfx-val" data-field="life">1.0</span></label><input type="range" class="vfx-range" data-field="life" min="0.2" max="2.0" step="0.1" value="1.0"></div>
+                <div class="vfx-slider-row"><label>Speed <span class="vfx-val" data-field="speed">5</span></label><input type="range" class="vfx-range" data-field="speed" min="1" max="10" step="0.5" value="5"></div>
+                <div class="vfx-slider-row"><label>Gravity <span class="vfx-val" data-field="gravity">6</span></label><input type="range" class="vfx-range" data-field="gravity" min="0" max="15" step="0.5" value="6"></div>
+                <div class="vfx-offset-row">
+                  <label>Offset</label>
+                  <div class="vfx-nudges">
+                    <button class="vfx-nudge" data-nudge-field="offsetX" data-nudge-delta="-0.1">X-</button><button class="vfx-nudge" data-nudge-field="offsetX" data-nudge-delta="0.1">X+</button>
+                    <button class="vfx-nudge" data-nudge-field="offsetY" data-nudge-delta="-0.1">Y-</button><button class="vfx-nudge" data-nudge-field="offsetY" data-nudge-delta="0.1">Y+</button>
+                    <button class="vfx-nudge" data-nudge-field="offsetZ" data-nudge-delta="-0.1">Z-</button><button class="vfx-nudge" data-nudge-field="offsetZ" data-nudge-delta="0.1">Z+</button>
+                  </div>
+                  <div class="vfx-offset-vals">
+                    <span>X:<span class="vfx-val" data-field="offsetX">0.6</span></span>
+                    <span>Y:<span class="vfx-val" data-field="offsetY">0</span></span>
+                    <span>Z:<span class="vfx-val" data-field="offsetZ">0.6</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="vfx-section" id="vfx-weapon-section">
+            <label class="vfx-label">Weapon VFX</label>
+            <div class="vfx-weapon-row">
+              <span id="vfx-weapon-name" class="vfx-weapon-name">No weapon</span>
+              <span id="vfx-weapon-status" class="vfx-weapon-status"></span>
+            </div>
+            <button id="vfx-weapon-attach-btn" class="vfx-weapon-attach">Attach Current Config</button>
+          </div>
+          <div class="vfx-section">
+            <div class="vfx-slider-row">
+              <label>Light Intensity <span class="vfx-val" id="vfx-light-val">5</span></label>
+              <input type="range" id="vfx-light-intensity" min="1" max="10" step="0.5" value="5">
+            </div>
+          </div>
+          <div class="vfx-actions">
+            <button id="vfx-play-btn">▶ Play</button>
+            <button id="vfx-save-btn">💾 Save</button>
+            <button id="vfx-reset-btn">↺ Reset</button>
+          </div>
+        </div>
       </aside>
     </div>
   </div>
@@ -2015,6 +2660,15 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=6"></script>
+  <div id="vfx-export-modal">
+    <div class="vfx-export-box">
+      <h3>📋 Export Hardcoded Recipes</h3>
+      <p>Copy this code and paste it into <code>js/ElementalVFX.js</code>, replacing the <code>VFX_PRESETS</code> object.</p>
+      <textarea id="vfx-export-textarea" readonly></textarea>
+      <button class="vfx-export-close" id="vfx-export-close">Close</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js?v=18"></script>
 </body>
 </html>

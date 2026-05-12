@@ -4,6 +4,7 @@ import { input } from './InputManager.js';
 import { audio } from './AudioManager.js';
 import { ParticleSystem } from './ParticleSystem.js';
 import { FlipbookVFX, FLIPBOOK_EFFECTS } from './FlipbookVFX.js';
+import { preloadAllTextures, updateWeaponEmitters, playWeaponBurst } from './ElementalVFX.js';
 import { Player } from './Player.js';
 import { World } from './World.js';
 import { UIManager } from './UIManager.js';
@@ -25,6 +26,7 @@ import { glyph3D } from '../../js/Glyph3DManager.js';
 import { PetManager } from './PetManager.js';
 import { PetLetter } from './PetLetter.js';
 import { RemotePlayer } from './RemotePlayer.js';
+import { Enemy } from './Enemy.js';
 import { settings } from './SettingsManager.js';
 import { ResourceInventory } from './ResourceInventory.js';
 
@@ -216,6 +218,7 @@ export class Game {
 
     // Preload VFX textures
     await this.particles.preloadTextures();
+    await preloadAllTextures();
     // Preload loot models
     await this.loot.preloadModels();
     // Preload alphabet glyphs for letter drops
@@ -264,7 +267,6 @@ export class Game {
             this.inventory.equip(itemId, item.type);
             this.player.equipTool(this.inventory.getEquippedTool());
             this.player.equipArmor(this.inventory.getEquippedArmor());
-            this.player.equipFunctionalWeapon(this.inventory.getEquippedWeapon());
           }
           return { success: true };
         } else {
@@ -275,7 +277,6 @@ export class Game {
               this.inventory.equip(itemId, item.type);
               this.player.equipTool(this.inventory.getEquippedTool());
               this.player.equipArmor(this.inventory.getEquippedArmor());
-              this.player.equipFunctionalWeapon(this.inventory.getEquippedWeapon());
             }
           }
           return result;
@@ -304,6 +305,13 @@ export class Game {
           return { success: true, coins };
         }
         return { success: false };
+      },
+      // getLoadout callback
+      () => this.player.loadout,
+      // onOpenLoadout callback
+      () => {
+        this.ui.hideShop();
+        this.ui.showLoadout();
       }
     );
 
@@ -530,7 +538,9 @@ export class Game {
 
     this.particles.update(dt);
     this.flipbooks.update(dt, this.camera);
+    updateWeaponEmitters(dt, this.camera);
     this.ui.update(dt);
+    this.shopUI?.updatePreview(dt);
     this.renderer.render(this.scene, this.camera);
     input.update();
   }
@@ -606,7 +616,7 @@ export class Game {
       if (nearestEnemy) {
         // Check weapon requirements for fire enemies
         const enemyZone = nearestEnemy.zoneId ? getZoneById(nearestEnemy.zoneId) : null;
-        const equippedWeapon = this.inventory.getEquippedWeapon();
+        const equippedWeapon = this.player.getEquippedWeapon();
         if (enemyZone && enemyZone.entryRequirements && enemyZone.entryRequirements.weapon) {
           const requiredWeapon = enemyZone.entryRequirements.weapon;
           if (equippedWeapon !== requiredWeapon) {
@@ -620,10 +630,15 @@ export class Game {
         this.player.playAttackAnim();
         nearestEnemy.takeDamage(weapon.data.damage, equippedWeapon);
         // Attack VFX
+        const handPos = new THREE.Vector3();
+        this.player.equipmentHolders.rightHand?.getWorldPosition(handPos);
         const hitPos = nearestEnemy.position.clone().add(new THREE.Vector3(0, 0.5, 0));
         this.particles.spawn({ pos: hitPos, count: 6, color: 0xff4444, speed: 4, life: 0.3, size: 0.2, texture: 'slash' });
         this.particles.spark(hitPos, 4);
         this.flipbooks.spawn({ pos: hitPos, ...FLIPBOOK_EFFECTS.impact });
+        // Weapon elemental burst
+        const equippedItemId = this.player.loadout?.rightHand;
+        if (equippedItemId) playWeaponBurst(this.scene, this.camera, hitPos, equippedItemId);
         SFXMapper.meleeSwing('sword');
         SFXMapper.meleeHit();
         weapon.cooldown = GAME.ATTACK_COOLDOWN;
@@ -635,10 +650,15 @@ export class Game {
           this.player.playAttackAnim();
           SFXMapper.mineSwing();
           // Mine VFX
+          const handPos2 = new THREE.Vector3();
+          this.player.equipmentHolders.rightHand?.getWorldPosition(handPos2);
           const blockPos = nearestBlock.position.clone();
           blockPos.y += 0.3;
           this.particles.dust(blockPos, 5);
           this.particles.spark(blockPos, 3);
+          // Weapon elemental burst on mine swing
+          const mineItemId = this.player.loadout?.rightHand;
+          if (mineItemId) playWeaponBurst(this.scene, this.camera, blockPos, mineItemId);
           const destroyed = nearestBlock.takeDamage(this.player.mineDamage);
           if (destroyed) {
             // Sync block destruction in multiplayer
@@ -1073,7 +1093,7 @@ export class Game {
         ex = sp.x + Math.cos(angle) * dist;
         ez = sp.z + Math.sin(angle) * dist;
         attempts++;
-      } while (this.world.getBlock(ex, 0, ez) && attempts < 20);
+      } while ((this.world.getBlock(ex, 0, ez) || this.world._hasGround(ex, ez)) && attempts < 20);
       const enemy = new Enemy(et, ex, ez);
       enemy.world = this.world;
       enemy._netId = this.world._nextEnemyId++;

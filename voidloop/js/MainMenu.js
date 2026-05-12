@@ -238,6 +238,8 @@ export class MainMenu {
   _transitionToGame(isMultiplayer = false, net = null, isHost = false) {
     this._destroyBackground();
     this.elMenu.classList.add('hidden');
+    const vignette = document.querySelector('.menu-vignette');
+    if (vignette) vignette.style.display = 'none';
 
     const loading = document.getElementById('loading');
     if (loading) loading.style.display = 'flex';

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Player } from './Player.js';
 import { cloneLoadout } from './KayKitLoadout.js';
+import { FlipbookVFX } from './FlipbookVFX.js';
+import { playElementalVFX, updateVFX } from './ElementalVFX.js';
 
 export class LoadoutPreview {
   constructor(container) {
@@ -26,10 +28,25 @@ export class LoadoutPreview {
     this.stageY = -0.18;
     this.zoom = 1.0;
 
+    // VFX systems
+    this.flipbooks = new FlipbookVFX(this.scene);
+    this._vfxParticles = [];
+    this._textureLoader = new THREE.TextureLoader();
+    this._textureCache = new Map();
+
     this._addLights();
     this._addStage();
     this._bindDrag();
     this._bindZoom();
+  }
+
+  async playItemVFX(itemId) {
+    // Default to fire element for now; in future this will come from equipped element
+    await playElementalVFX(this, 'fire');
+  }
+
+  async playElementVFX(elementKey) {
+    await playElementalVFX(this, elementKey);
   }
 
   async init(loadout) {
@@ -100,6 +117,7 @@ export class LoadoutPreview {
     this.player.position.x = 0;
     this.player.position.z = 0;
     this.player._updateMesh();
+    updateVFX(this, dt);
     this._autoFrame();
     this.renderer.render(this.scene, this.camera);
   }
@@ -179,8 +197,6 @@ export class LoadoutPreview {
     const bodyBox = this._getPreviewBox(false);
     if (!Number.isFinite(bodyBox.min.y) || !Number.isFinite(bodyBox.max.y)) return;
 
-    // The floor snap must use only the character body. Weapons, arrows and
-    // calibration helpers can hang below the feet and should not lift the model.
     const stageY = this.stageY;
     const lift = stageY - bodyBox.min.y;
     if (Math.abs(lift) > 0.0001) {
@@ -224,8 +240,6 @@ export class LoadoutPreview {
     const holders = new Set(Object.values(this.player.equipmentHolders || {}).filter(Boolean));
     const helperGroup = this.player.calibration?.helperGroup || null;
 
-    // Clear stale SkinnedMesh bounding-box caches so expandByObject
-    // uses accurate, freshly-computed bounds.
     this.player.mesh.traverse((obj) => {
       if (obj.isSkinnedMesh) obj.boundingBox = null;
     });

@@ -1,0 +1,816 @@
+
+Intro
+0:00
+I think few things in gamedev are as fun as making things go pow boom
+0:05
+[snorts] or well. Today we're diving head first into the
+0:11
+world of V effects in GDO. We'll learn about the tools at our disposal for creating all kinds of cool effects from
+0:18
+magic to rainfall and how you can quickly start putting together effects of your own. And at the very center of
+0:24
+the effects in GDO is the powerful particle system. something that can be a bit intimidating because of the many,
+0:30
+many, many settings, but we'll look at how you can start simple and then layer more stuff on top as you get
+0:36
+comfortable. We'll break down a bunch of V effects to learn some interesting techniques that I personally find really
+0:42
+useful, and we'll make our own in both 2D and 3D. I know that's a lot to cover
+0:47
+in just one video. So, to make sure that it doesn't get too overwhelming, let's light this ceremonial video torch. And
+0:55
+then I promise the video will be over before it burns out. Now, when working with VX, I like to have a small library
+1:01
+of assets ready to experiment with, especially textures. So, I've gone ahead
+1:06
+and bundled together a bunch of my favorites into an asset pack that you can download for free using the link
+1:11
+below. It contains all of the assets that I'll be using in this video, from sprite sheets with cool pixel artifacts
+1:18
+to textures that are perfect for particles and even some clip books. Everything is under the CC0 license, so
+1:24
+it's free to use and there's no requirement to credit. Thanks to the original creators on the screen now for
+1:30
+making these available in the first place. All right, let's start this video off with a bang and talk about
+1:36
+explosions. But first, this video is sponsored by Senma. If you want to make your own games in GDAU, make sure to
+1:42
+check out Senva Academy. They offer great beginner and intermediate courses, including a free introductory course on
+1:48
+GDAU. Zenva combines fun and practical learning through professional video tutorials, written lessons, and
+1:55
+interactive quizzes. And what's really cool is that you'll be building real projects across various genres from RPGs
+2:01
+to bullet hells. Zenba also has a wide range of courses on Python, Unity,
+2:07
+Unreal, and other essential tools. With a single subscription, which includes a
+2:12
+7-day free trial, you unlock over 300 courses. Use the coupon code below to get an extra 20% off the first year of
+2:19
+your SEMA subscription on top of any existing sitewide discounts. The offer is valid for the first 50 subscribers,
+2:25
+so make sure to use your coupon today to start your gamedev adventure. So before we open up GDAU, let's have a
+Layers
+2:32
+look at what normally goes into making a visual effect. When I make effects, I like to think of it like I'm working
+2:38
+with layers. I create one layer at a time and combine them to achieve the final effect. I like this way of working
+2:45
+because it allows me to start with just a single layer and then slowly build on top until I reach the level of detail
+2:50
+I'm going for. For a simple 2D explosion, for example, you can get away with using a single layer, an animated
+2:57
+sprite 2D node with a sprite sheet and then maybe an audio stream player to play a sound. But for a more complex
+3:04
+explosion, you can have many layers. Particle systems for fires, smoke, sparks, debris, a shock wave. You might
+3:12
+have an omni light, sounds, and an animation player to time everything.
+3:17
+But how do we make each layer? Well, for simple effects, especially in 2D, all
+3:23
+you need is a good sprite sheet that you can display with an animated sprite node, which means that you can actually
+3:28
+start making the effects by just handdrawing each frame of your effect in a software like a sprite or This
+3:34
+can be a little timeconuming, but it's also a nice and simple way of working because what you draw is what you see in
+3:41
+the end. However, this creates very static effects because we're showing the same sprites every time. And if you're
+3:48
+working in 3D, you might want something that feels a bit more well, three-dimensional, which brings us to
+3:54
+particles. Particles are awesome. Why? Well, a particle system spawns
+4:00
+particles. We can apply forces to these particles, animate them over time with
+4:05
+things like color and size, apply textures to them, and really create some
+4:11
+cool effects just by changing properties in the inspector. Because particles are simulated in real time, it's super easy
+4:17
+to add randomness and variation. And unless you completely overdo the amount of particles, they're actually really
+4:24
+fast to render. Now, I should mention that VFX artists often write their own shaders and combine them with particles
+4:31
+for more flexibility. But while custom shaders don't have to be massively complicated, they would be hard to cover
+4:37
+in this video before the torch burns out. So, we'll leave it for another one. Instead, we'll focus on the many, many
+4:43
+effects that we can create with just a few particle systems and a good amount of creativity. Which means that to make
+How to Particle System
+4:48
+cool effects, we need to learn how to particle system. I'll show a few things in 2D and then move on to 3D. But when
+4:56
+working with particles in GDAU, the core concepts between the two are very similar, so I wouldn't worry too much
+5:01
+about it. The first step is to create a particle system. So, we go add node. And
+5:07
+here we have two different nodes to choose from. CPU and GPU particles. As the name suggests, CPU particles are
+5:14
+simulated on the processor and TPU particles are simulated on the graphics card. And I would say if in doubt, use
+5:20
+TPU particles. The main reason not to use them is if you're targeting low-end hardware such as mobile devices. You can
+5:27
+always convert a GPU system to a CPU one using this option at the top. We'll
+5:32
+focus on GPU particles since they allow you to create more complex effects with greater performance. And right away we
+5:39
+can see that our particle system should be emitting, but there are no particles.
+5:44
+That's because we need to go under process material and add a new particle process material. And now we can see
+5:51
+some tiny particles. And under the process material, we get a scary amount
+5:56
+of settings that change all kinds of things about our particles. For example, we can go under spawn velocity and set
+6:04
+the initial velocity to something like 100. We can also set the spread to 180
+6:09
+to make the particles fly in all directions. The process material really is where the magic happens. And the cool
+6:16
+thing is that it's the same from 2D to 3D. But before we get lost in the power
+6:21
+of the process material, at the top here, we can adjust the basic settings of our particles. We can set the
+6:27
+texture. I'll use this one from the assets. the amount of particles to emit
+6:32
+and under time we can set the lifetime of each particle. Here we also have the option to limit
+6:38
+the particles to a fixed FPS. We can increase this to 60 to make it appear more smooth or just set it to zero to
+6:45
+remove the limit altogether. Some effects like explosions happen in bursts
+6:50
+and for this we can use the explosiveness. Right now it's set to zero. If we change it to one, all
+6:56
+particles will emit at the same time. Or we can choose a value somewhere in between. Of course, most explosions
+7:02
+don't repeat like this. So, we can set the system to one shot and it will only play once. We can then use emitting to
+7:09
+make the particles play. All right, on to the good stuff, the process material.
+The Good Stuff
+7:14
+Most of the process material can be split into three main categories. The first is spawn, how the particles start.
+7:24
+Here we control where the particles emit from, at which angle in case we're using a texture where we can see how it's
+7:30
+rotated and at what velocity. We already used this to quickly increase the
+7:35
+initial velocity to make the particles spread out further. The second category is display, what the particles look
+7:43
+like. Here we can control things such as scale and color of the particles. We can, of course, set these to a constant
+7:49
+value. We can go under scale and set the min and max values to 0.2 to make the
+7:54
+particles smaller. Or we can add variation by setting the two values to
+7:59
+something different. And now our particles will vary between them. And even cooler, we can use a curve to
+8:06
+change values over time. So under scale curve, we can set a new curve texture.
+8:12
+Go under curve and draw out how we want the scale to change over time. Here, for example, the particles start small.
+8:19
+quickly grow to their full scale and then slowly shrink away. Creating variation and changes over time this way
+8:25
+is incredibly powerful and we can do it to modify all kinds of things about our particles. For color, for example, we
+8:32
+can go under color curves and use a color ramp. Here we create a gradient
+8:38
+texture that changes the color over time, which as you can see can immediately make our particles look
+8:43
+three times cooler. And we can, of course, alter the gradient as we see fit.
+8:49
+The third and final category is animated velocity and accelerations. How the
+8:55
+particles move and rotate over time. While we can set the initial velocity of our particles in the spawn category, if
+9:02
+we want this to change over time, this is the category we need. Take this particle system. It has no initial
+9:09
+velocity and no forces acting on it. All the particles remain in place. Now we
+9:14
+can use animated velocity to directly set the velocity in all kinds of ways.
+9:19
+For example, we can go under directional velocity and set this to a value between -200 and 200. But nothing happens.
+9:28
+That's because here we need to use a curve to set the velocity of each axis.
+9:34
+So I'm going to create a curve for the x-axis and have it start really high and then decrease. And now our particles
+9:41
+will shoot out and then slow down along the x-axis. We can also use
+9:46
+accelerations to more indirectly affect velocity using physical concepts. This
+9:52
+particle system has some initial velocity. We can then apply gravity
+9:57
+and damping. So that's the three main categories. I think the rest of the settings are a bit
+10:04
+more situational, so we'll look at those as we go. And that's how a particle system, which means we're ready to go 3D
+3D Explosions
+10:10
+and try some of these things out. Let's start with this 3D explosion inspired by
+10:16
+an awesome video by Legion Games. This effect is made up of a bunch of different layers. Let's start with the
+10:22
+fire layer. So, I'll create a new GPU particles 3D node. We can't see anything
+10:27
+yet. So, just like in 2D, we should add a process material, but still nothing happens. That's because in 3D we need to
+10:35
+tell the particles what kind of mesh to render. We do this by going under draw passes pass one and choosing a mesh. For
+10:44
+standard particles like in 2D we can use a quad. But we also have options for other meshes like spheres boxes and we
+10:51
+can even drag in a custom mesh if we want to. I'll choose a sphere. And immediately we can see our particles.
+10:58
+Just like any other mesh we can add a material. And here we can actually use a regular standard material 3D. We can
+11:04
+leave all the settings as is. But one thing that we will definitely want to do is go under vertex color and enable use
+11:11
+as elbido. In fact, let me leave this off for now so you can see later why it's important. So for the base
+11:18
+settings, we'll increase the amount a bit. Make the particles explosive. And let's just set fixed FPS to zero for
+11:24
+optimal smoothness. Under spawn position, I'll set the emission shape to
+11:30
+sphere. This means the particles will emit inside the sphere.
+11:36
+Just like earlier, I'll give the particles some initial velocity and increase the spread to make them emit in
+11:42
+all directions. Then under accelerations, I'll set the gravity to a small positive number to
+11:50
+make the particles slowly drift upwards. And at this point, the particles all
+11:55
+look the same. So I'll go under display scale, make them a bit smaller, and give
+12:02
+them some variety. I'll also add a scale curve to make them
+12:07
+shrink over time. To give our particles color, we can go under color curves and set a color.
+12:14
+Except nothing happens. That's because I left use SLBO off in the standard
+12:19
+material. So if I go vertx color use as albido, the color appears. This is
+12:26
+because the particle system is modifying the mesh's vertex colors. And so we need the material of the mesh to show those
+12:32
+vertx colors. But we don't just have to choose a fixed color. We can get a
+12:38
+random color from a gradient using color initial ramp. Here I'm just creating a
+12:43
+gradient that will add a little bit of variety to the color. And we can make the particles brighter
+12:49
+using an emission curve. I'll draw a curve that starts high and then falls off. Note that you can change the
+12:56
+maximum value of the curve if needed. If you have a world environment that is set up to use glow, the particles might
+13:02
+even start glowing. If you want to learn more about setting up glow and the world environment, check out our video on
+13:08
+making 3D games in GDAU. Finally, we can mark our effect as one shot. And that's
+13:14
+the first layer. As you can see, most of the properties we've set are the same ones I showed you for the 2D particle
+13:21
+system. And we can use the same ones for creating all the other layers and most effects in general. In fact, to create
+Smoke
+13:27
+the smoke, I duplicated the fire layer and just increased the lifetime a bit, decreased the initial velocity,
+13:35
+increased the gravity, and changed the color to a dark gray, and immediately it looked like smoke. Note that whenever
+13:42
+you duplicate a particle system to create a new one, there are some pitfalls to avoid, and I find they are
+13:48
+as confusing as they are stressful. So, let me put on some calming music
+13:55
+and guide you through it. After duplicating a particle system, you have to be careful to also write click on the
+14:01
+process material and select make unique recursive. This is because the process material is a resource and so it will be
+14:08
+shared by both the original and the duplicated particle system. So any changes you make to the new one will
+14:14
+also change the original which is probably not what you want. Because we chose [music] recursive, we can see all
+14:21
+the sub resources here as well. We'll make all of them unique. So let's press okay. And now some of you might be
+14:28
+thinking, what about the mesh in the draw pass? That's also a resource. And so we should probably make that unique
+14:34
+as well. However, making the mesh unique is not great for performance. It's best
+14:39
+if we can share the same mesh between the particle systems that use it. But our mesh holds the material. So what if
+14:46
+we want to make changes to the material? Well, instead of assigning the material to the mesh, we can assign it to the
+14:52
+node down under geometry material override. This way, if we need to change
+14:58
+the material, we can make it unique while still sharing the same mesh. This is a trick that was just pointed out to
+15:04
+me, so you'll not always see me doing this in the video, but I definitely recommend to assign the material here. A
+15:10
+final thing to note is that if a material uses a texture, which we'll be doing a lot, and we select make unique
+15:17
+recursive on the material, we need to uncheck the texture. Otherwise, the
+15:22
+texture also becomes unique. And that is not great because then instead of loading the texture regularly, GDO will
+15:29
+embed it into the scene and so the scene gets bloated with a bunch of texture data. Don't worry at all if that made
+15:36
+you very confused. Just remember to avoid making textures unique if you can.
+15:41
+Now, the only thing that I did that was special for the smoke was that I made it fade in and out by adjusting the alpha
+15:47
+over time with a curve. In order for this to work though, you have to go into the material and set transparency to
+15:54
+alpha. If you want to get really fancy, you can also enable turbulence and play around
+16:01
+with the settings to make it seem like particles are getting caught in the wind. And that's it for the smoke layer.
+Particle Controls Plugin
+16:08
+Now, when I'm making particle effects, I constantly need to preview my changes. And when working on one-shot effects,
+16:14
+having to toggle emitting on all the time is a little cumbersome. Instead, we can go here to GPU particles restart
+16:21
+emission. The shortcut for this is CtrlR. But still, previewing multiple
+16:27
+particle systems at the same time gets very awkward. In this case, for example, I'd love to see the smoke and fire layer
+16:34
+play together. So, until good gets some built-in tooling for this, I've made a plugin that you can use. I call it
+16:41
+Brachis Particle Controls. You can download and add it by just dragging it into your project. Like any other
+16:48
+plug-in, just make sure to also enable it under project, project settings, plugins. As you can see, I can now play
+16:54
+and stop particle effects. I can turn on looping to have the preview loop. This
+17:00
+doesn't change anything on the particle system itself. It's still set to oneshot, so no worries there. I can also
+17:06
+pause and scrub through the effect. And using these buttons on the right, I can choose to include neighboring or child
+17:12
+particles as well, which is perfect for playing multiple layers at once. I've made the plug-in available free of
+17:18
+charge and open source under the MIT license. Hopefully, we'll see something similar be built into the GDAU engine in
+17:24
+the future. Now, to make the spark layer, I again duplicated the fire. I
+Sparks, Shockwave and Debris
+17:30
+increased the amount, reduced the lifetime, gave them a good amount of initial velocity, and a bit of gravity.
+17:38
+The main thing I did differently here was that I used a cylinder mesh for the draw pass. By changing the top and
+17:45
+bottom radius, I turned the particles into 3D spikes. But as you can see, they weren't facing the right way. To make
+17:53
+particles point in the direction of travel, we go under particle flags in the process material and set a line Y to
+17:59
+be true. I also gave them an orange color and some emission on the material itself since I didn't need to use a
+18:06
+curve to change it over time. For the shock wave, the technique is a little bit different. Again, we're changing the
+18:13
+same settings, but this time we are only emitting a single particle. This might
+18:19
+seem a little weird at first, but it's actually very common to use very few or even just a single particle to make
+18:25
+parts of an effect. In this case, I wanted to create a flat shock wave that would expand quickly and then disappear.
+18:32
+So, I set the amount to one, the lifetime to half a second, and then to make the particle appear as a wave, I
+18:39
+used a quad mesh for the draw pass. I changed the orientation to face Y to
+18:44
+make it horizontal and gave it a new standard material. And now under albido, I could supply a
+18:50
+texture. So I used this ring texture. To get rid of the background, I set the
+18:56
+transparency to alpha. And since I didn't want the shock wave to be affected by light and shadow in the
+19:02
+scene, I went into shading and set the mode to unshaded. I then got rid of the gravity,
+19:10
+scaled up the particle, and made it expand using a curve. I also made it fade out with an alpha
+19:17
+curve. For this to work, we need to remember to set vertex colors to true.
+19:24
+Finally, a neat trick when using 2D elements in a 3D effect is that you can set the call mode to disabled. This will
+19:31
+make sure that you can also see the effect when looking at the back side of the quad, which is normally called away.
+19:38
+And at this point, the effect is already looking pretty good. But for a big effect like an explosion, it can feel
+19:44
+weird if it just suddenly happens and then disappears. So we need something that will stick around a little bit
+19:50
+showing the impact of the explosion that just occurred, such as debris. And again, this layer was made by slightly
+19:57
+modifying all the same settings. The only thing of note here is that for the draw pass, I used a prism mesh to make
+20:04
+the pieces feel more well debris like and then of course they needed to collide with the ground. And this is
+20:11
+where particles actually have a pretty big limitation. Because they're simulated on the GPU, it can't interact
+20:18
+with the physics system which runs on the CPU. They simply have no way of knowing that the floor here has a
+20:25
+collider. So instead, we have to tell the particles that there is something here to collide with. We do this by
+20:31
+adding a GPU particles collision node. These are special collision nodes that
+20:36
+the GPU particles can see. There actually a few different types for different shapes, but in this case, a
+20:43
+box is all we need. I just lined it up with the floor.
+20:48
+And now in the process material, we can turn on collision and adjust friction and bounce as needed.
+20:59
+Note that there's also a setting hiding in the base particle settings for adjusting the size of the collision
+21:05
+sphere that the particles use. So, if particles appear to be floating or sinking into the floor, we can adjust
+21:11
+this. Okay, let's take a quick break to check in with this ceremonial video torch.
+21:18
+Still burning bright. That's good. But I think it's getting time to move on to something other than this explosion, say
+21:24
+magic effects. But let me just show you how to take all of these particle layers and put them together to use in game.
+AnimationPlayer
+21:32
+This can be done through script, which we'll look at later. But an easy way is using an animation player. With an
+21:38
+animation player node, we can make a play animation where we trigger all the particle systems. I just add a key frame
+21:45
+for emitting at the very start of the animation. Doing this in practice can be a little clunky because GDAU will
+21:51
+disable emitting when the particle system is done. So we might need to key frame emitting being off. Then select
+21:58
+the key frame and change the value to on. A little weird, but it works. And
+22:03
+after doing this for all the particle systems, we can play them together. And we can even use this to do cool things
+22:09
+like offset them. For example, in VFX, it's common to use some kind of windup.
+22:15
+This is a layer that builds up to the main effect, like a swirling of energy before a magical blast. Here, I have a
+22:22
+wind up effect of some energy contracting that I'd like to play before the explosion. So in this case, we can
+22:28
+simply move over the key frames for the rest of the particles and key frame the wind up to start immediately. We can
+22:34
+also use our animation player to combine our particles with other nodes. Here
+22:40
+I've added an omniite that I animate to get really bright and then slowly fade away. I think it really helps the effect
+22:46
+tie in with the rest of the world. And the explosion is looking pretty good. It
+22:52
+could definitely do with some sound, but we'll get to that. But the effect is very stylized and has a hard 3D mesh
+22:59
+look, which might be what you're going for. But what if we want to make softer looking effects like this magic puff?
+23:06
+Well, for this we need to use billboarding. Billboarding is a very common technique for displaying
+Magic Effects (Billboarding)
+23:12
+particles in 3D space. With billboarding, we use regular 2D textures, show them on a quad mesh, and
+23:19
+then have the mesh always rotate to point towards the camera. This results in flat 2D particles that we can move
+23:26
+and manipulate in 3D space. It's highly performant and very powerful. To set up
+23:32
+a particle system to use billboarding, we add a quad mesh to the draw pass and as usual add a standard material. Then
+23:39
+we go all the way down to billboard and set this to particle billboard. And
+23:44
+voila, the particles are now facing the camera. Note that if you are scaling the particles in the process material, it's
+23:51
+going to seem like it isn't working. To fix this, we enable keep scale. And now
+23:56
+your scale changes should apply. And so we can apply a texture on the albido and start configuring the particles to our
+24:03
+liking. For the first layer of the magic effect, I used this texture. Otherwise,
+24:08
+I used pretty much all the same techniques as when making the fire for the first explosion. I did create a
+24:14
+scale curve that was a little bit different. I made the particles quickly expand followed by a bit of a spring
+24:20
+effect that I really liked. And then of course I faded the particles in and out with an alpha curve. Oh, and a nice
+24:27
+setting is this lifetime random which will create variation in the lifetime of the particles.
+Blend Modes and Rotation Tip
+24:34
+But the particles are looking a little flat, which brings us to the next trick, blend modes.
+24:40
+By setting the blend mode on a particle's material, we can control how the colors of the particle are blended
+24:46
+with what's behind it. By default, GDAU uses a mix blend mode, which results in
+24:51
+the color behavior we're used to seeing. But light effects such as fire or magic will often use another blend mode, add.
+24:59
+With this blend mode, the colors are added to what's behind it, which results in bright spots getting even brighter.
+25:06
+It also means that the darker the color, the less visible it is. There are also
+25:11
+other blend modes such as subtract or multiply which are mostly used for artistic effects. Feel free to play
+25:17
+around with them. So, for a magic poof like this, I will probably use add for fire and sparks and mix for smoke and
+25:25
+debris. Now, when using billboards, a common pitfall is that the particles look too
+25:31
+static. Most of the time, we don't want it to be clear that each particle is just an image. A trick that I use to
+25:38
+combat this is adding a random start rotation to the particles. I'll just set an angle between 0 and 360°.
+25:46
+And I might also add a bit of angular rotation over time under animated velocity.
+25:53
+This can help a lot, but it might not be enough. In which case, we can use
+25:58
+animated textures, which we'll do in just a second. Next, I added a smoke layer using the
+Lighting and More Magic
+26:04
+same techniques and this texture. And sometimes you want the particles to be affected by the lighting in the scene,
+26:11
+and sometimes you do not. For unlit particles, we go to this standard material and set shading mode to
+26:18
+unshaded. This is great because it's super performant and your particles will look the same in any lighting
+26:24
+environment. However, the drawback is that your particles will look the same in any lighting environment. So you'll
+26:30
+have to adjust the effect manually if you change the lighting. If you do want your particles to be affected by
+26:36
+lighting, we leave the shading mode at per pixel. And what I will often do is actually change the diffuse mode. This
+26:43
+allows us to choose which algorithm to use for diffused light scattering. And I found that lampid wrap or especially
+26:49
+tune work really great for stylized particles. I think they tend to result in less contrast between light and
+26:56
+shadow. And since particles are rarely shiny, we can just set specular mode to disabled. And now that our particles
+27:03
+respond to lighting, we can add lights to the effect itself, which can really help bring it to life.
+27:13
+I also added some glowing balls using the same texture as the smoke, some plasma-like debris, and some tiny sparks
+27:21
+with this spark texture. Because I was using billboards though, I couldn't use
+27:26
+the align Y particle flag to make the particles face the direction of travel because then they wouldn't face the
+27:32
+camera properly. Instead, I had to go under drawing and set transform align to
+27:38
+Z billboard plus Y to velocity. And now the particles were billboarding and also
+27:43
+orienting themselves correctly. Finally, to make a shock wave, I created a particle system with a single particle
+27:51
+and used a sphere with an unshaded material for the draw pass. Then, it was as simple as having it quickly expand
+27:57
+while fading out. I combined all of this with an animation player and an omniite to really sell the
+28:05
+effect. And the cool thing is that this effect is super easy to create variations of.
+28:12
+If, for example, we wanted a fire explosion instead of this magical poof. It's a simple as tweaking a few
+28:18
+settings, mainly color, then we can very quickly get something like this.
+28:25
+But again, the sprites themselves are looking a bit static, especially the flames are pretty clearly just images
+28:32
+rotating around. Luckily, just like we use sprite sheets to animate regular 2D
+Animated Particles (Flipbooks)
+28:37
+sprites, we can also use them to animate particles. These sprite sheets are sometimes referred to as flip books. To
+28:45
+apply a flip book texture like this one here, we need to first set up the material to use it and then we can play
+28:50
+the animation. And the settings for this are a little bit hidden in the interface. In 2D, we assign the flip
+28:57
+book texture to the texture slot. We then scroll all the way past the particle stuff to material where we can
+29:03
+create a new canvas item material. Inside it, we enable particles animation, set the number of horizontal
+29:10
+and vertical frames in our flip book and choose whether we want it to loop in 3D.
+29:16
+We go to our standard material and drag the flip book into the albido texture.
+29:21
+We then make sure that the billboard mode is set to particle billboard or the animation settings won't show. Here we
+29:28
+also set the horizontal and vertical frames and looping. And now for both 2D
+29:34
+and 3D particles, we can play the animation. This is done in the process material under display animation. If we
+29:42
+set the speed to one, the animation will play through once during the particles lifetime. And immediately we can see the
+29:49
+life that this can add to our particles. And here is the same explosion, but using a sprite sheet for the smoke layer
+29:55
+as well. Now, sometimes when you're using multiple particle systems with transparent materials, like I'm doing
+Z-fighting
+30:02
+here, you can get issues with Zfighting. Zfighting is when multiple particle
+30:07
+systems are overlapping and the renderer can't reliably tell which to display in front of the other. This can show as
+30:14
+flickering, especially when the camera moves. We can avoid this pretty easily
+30:19
+by simply offsetting the particle nodes causing trouble, which is often a good idea anyway. In this case, I thought it
+30:25
+looked better to have the smoke a little higher than the fire. This means that as long as the particles are viewed from a
+30:31
+higher angle, they will draw in the correct order. But of course, if I view from underneath, the fire still pops in
+30:38
+front. Luckily, there's a setting that is meant just for this. It's hiding all
+30:44
+the way down under the visual instance sorting. Here we can change the depth offset to make the particles reliably
+30:51
+draw on top of other objects in the same spot, which is perfect for our particle layers. Of course, we are still just
+Fire and Premultiplied Alpha
+30:58
+drawing one layer on top of the other. Sometimes we want them to more organically blend together. To do this,
+31:04
+if our systems are fairly similar, we can combine them into one, which can actually look even better for stuff like
+31:11
+fire and smoke. Here's a simple fire that I made using only techniques that we've learned so far. It has three
+31:18
+layers. A fire layer using this texture, a smoke layer using the same texture,
+31:23
+and an ember layer that emits tiny particles with this texture, and then of course an omniite at the base. And
+31:30
+because I'm using the same texture for flames and smoke, it's actually pretty easy to combine these into one system.
+31:37
+Except this also means that they need to share the same material. And remember earlier when we talked about blend
+31:43
+modes, I said that I often use add for fire and mix for smoke. If we try to use
+31:49
+add now, most of the smoke disappears. And if we use mix, our fire becomes
+31:55
+really flat. The solution? Premultiplied alpha. Premultiplied alpha allows us to
+32:01
+blend between add and mix using the alpha channel. Confusing? Yes. But let
+32:07
+me show you how. First, we go to our texture and under the import settings, select premultiply alpha. Feel free to
+32:15
+duplicate the texture to also have a regular version. Then, in the material, we set the blend mode to premultiplied
+32:21
+alpha. And now, when setting the color of our particles, we can use the alpha
+32:26
+to go between mix when the alpha is high and add when the alpha is low. But how
+32:33
+do we fade out particles then? Well, when using add, darker colors are less
+32:39
+visible. So, black colors get removed entirely. So, to fade out the smoke, we
+32:44
+simply use an alpha of zero and a black color. It definitely takes a little
+32:49
+getting used to, but I think it's a super cool trick, and it can create a really nice natural blend from fire to
+32:56
+smoke just using a simple gradient with low alpha for the flames and high alpha
+33:01
+for the smoke. In other words, our effects are starting to look pretty fire, which means that they're ready to
+33:07
+be brought into a game. And that is actually pretty straightforward. To play a particle system through script, we get
+Scripting
+33:14
+a reference to it and call the restart function. As the name suggests, if the particle system is already playing, it
+33:21
+will restart. This is great for oneshot effects. However, sometimes we want to
+33:27
+start and stop a particle system from emitting. To do this, we again get a reference to the system and then set the
+33:33
+emitting property. This script, for example, starts the particle system, waits for 1 second, and then stops it
+33:40
+again. Now, often times we want to spawn in effects as needed. To do this, we
+33:45
+would create our effect in a separate scene and instantiate that scene at the point where we want, say, an explosion.
+33:52
+This script, for example, will spawn an effect wherever the player clicks the mouse in 2D space. It has an export
+33:58
+variable called VFX scene with a type of packed scene. So in the inspector, we can choose any GDO scene.
+34:06
+Then if the player presses the mouse, we instantiate the scene, set its position to the mouse position, and add the
+34:12
+effect as a child of the current node. And voila, if we play the game, we can
+34:18
+click to spawn effects all around. But most of the time, the effects that you are spawning this way will be oneshot
+34:24
+effects. And so it will actually look like nothing is happening because after being instantiated, the particles still
+34:30
+aren't playing. And so we need a way to start them. As we saw earlier, we can do this with an animation player that we
+34:37
+set to autoplay on load, or we can do it manually through code. In this case, in our effect scene, we could create a
+34:44
+separate script, which is just responsible for playing the effects when it's spawned. And because this scene
+34:49
+only has a single particle effect, that would be as simple as getting a reference to it and calling restart. And
+34:55
+now we can see the effect playing. Of course, after they finish playing, the notes are still in the scene. And so if
+35:01
+I keep on clicking, we will slowly clutter our tree with a bunch of invisible nodes.
+35:08
+So to clean up, we can add a quick weight to the effect and then have it remove itself. Say after 3 seconds, for
+35:15
+example. or we can simply listen for the signal that tells us the particles are done playing.
+Audio
+35:21
+Now, a crucial part of VFX is of course audio.
+35:27
+And the simplest way to add sounds to your effects is using the audio stream player node. If you're spawning an
+35:33
+effect as a separate scene, you can add an audio stream player to it, assign an audio clip, and enable autoplay. Now,
+35:40
+the sound will play anytime the effect scene gets spawned.
+35:46
+[music] If your effect uses an animation player, you can also use it to play sound at
+35:52
+specific moments. There's a lot you can do to get better and more varied audio, but that's beyond
+35:59
+the scope of this video. That said, I think sound is often overlooked in gamedev, and I'd love to go into it with
+36:05
+a dedicated video. Let me know if that's something you'd be interested in. But until then, let's have a look at an
+Clouds
+36:11
+example of V effects that doesn't require sound. This cloud, I made this
+36:16
+using a single particle system with billboard particles that display this texture. It only emits a few particles,
+36:23
+but they have a very long lifetime. In the process material, they spawn inside a cube with a random angle. I vary their
+36:31
+scale a bit and fade them in and out using an alpha curve. They have no accelerations, but I rotate them over
+36:38
+time with a bit of random angular velocity just to make the cloud feel a little less static. So, I'm using only
+36:44
+techniques that we've used before, except for this part pre-process.
+36:50
+You see, if I didn't use this and we loaded up the game, the particle system starts emitting and it takes a good
+36:57
+amount of time for the cloud to fill up, which is of course not ideal. We want it there from the beginning. So, we use
+37:03
+pre-process to simulate the particles for some time beforehand, which makes our clouds ready as soon as the game
+37:09
+opens. Now, if for example, I wanted the clouds to move across the sky, it would
+37:15
+currently look a bit weird. That's because the particles are in world space, meaning that if we move the
+37:22
+particle system, we're only moving the emitter. The particles already spawn stay in place. To change this, we go
+37:29
+under drawing and check local chords. Now the particles will move and rotate
+37:34
+with the node. The final effect that I want to look at
+Rain
+37:40
+in this video is rain. This effect is made up of two layers. The falling
+37:46
+raindrops and the impacts on the ground. The raindrops are made by emitting a
+37:52
+bunch of particles from a large box up in the air. A common mistake here is to
+37:57
+use gravity for the raindrops because we think, well, that's what happens in real life. The problem with this, however, is
+38:03
+that if we look towards where the raindrops are emitted, they will start out with no velocity, which looks really
+38:10
+weird. In real life, when the raindrops get low enough for us to see, they will already have reached terminal velocity.
+38:17
+So, we can actually give them a flat initial velocity, and that looks a lot more natural.
+38:23
+I'm of course using billboarded particles here, but I've set the mode to Y billboard instead of particle
+38:28
+billboard. That's because we always want the rain particles to rotate around the Y-axis or things will look weird from
+38:35
+some angles like when looking down at the rain. Another common pitfall here is
+38:41
+not adjusting the visibility AAB. See, to make things more performant, GDO
+38:46
+will stop rendering the particles when we are not looking at the particle system. and it uses a bounding box
+38:52
+called an AABB to determine where the particle system should be visible. So
+38:58
+far, all of our effects have been small enough that we didn't need to adjust this. But for a huge rain system like
+39:03
+this, we can see that if I point away from the AABB, the raindrops suddenly
+39:09
+disappear. So to fix this, we simply increase the size of the AAB and position it to cover the entire system.
+39:16
+We can also have GDO guess this based on our particles by going GPU particles
+39:21
+generate AABB.
+Sub-emitters
+39:27
+Now to create the impact layer we need to use a sub emitter. Sub emitters allow us to emit particles from other
+39:34
+particles and we can do so at different points. For example, when a particle collides with the GPU collision box on
+39:40
+the floor. So I created this simple impact effect. to use this as a sub
+39:46
+emitter. I'll make it a child of the rain node and assign it as a sub emitter. I'll then go under collision
+39:53
+and set the mode to hide on contact. Then right underneath under sub emitter, I'll set the mode to add collision and
+40:00
+the amount to something like two or three. And this is the part that confuses a lot of people. GDO is not
+40:07
+instantiating the impact particle system for every raindrop. Instead, it tells
+40:12
+the impact particle system to emit particles at this point. In this case, three particles. What this also means is
+40:19
+that the amount property in the sub emitter is now a way to limit the total amount of particles that this system
+40:26
+will emit. So, in our case, this is the total amount of impact particles at one time. If the system reaches this limit,
+40:33
+it will simply not emit new particles until existing ones expire. I'll set this to 5,000. And now when we play our
+40:40
+particles, we can see that every raindrop spawns three impact particles. And we can of course adjust this to our
+40:47
+liking. And it looks like the ceremonial video
+Outro
+40:53
+torch is getting dim. So I hope you feel ready to take these techniques and try them out yourself. I've made the project
+40:59
+files for this video available on GitHub in case you want to have a closer look. In this video, we've mostly been
+41:05
+creating 3D effects. If you want to learn some cool tricks for creating effects to use in 2D or for spicing up
+41:10
+your UI, check out this video by my friend Pixster. Some things have changed since the video was released, but
+41:16
+there's still so much useful stuff there. Also, if you want to add screen shake to your effects, the Shaky Dev has
+41:22
+a quick guide for implementing that. And if you want to learn more advanced VFX techniques, check out one of 3's many
+41:28
+videos on the subject. Also, don't forget to check out Sender Academy. Be among the first 50 people to use the
+41:34
+coupon code below to get 20% off the first year of your Simber subscription. And it looks like the ceremonial video
+41:41
+torch is running on fumes, which means that the video should wrap up right around
+41:48
+now.

@@ -15,6 +15,14 @@ SCRIPTS = [
     'progression_gates.py',
     'no_placeholders.py',
     'save_persistence.py',
+    'mining_mechanics_contract.py',
+    'zone_pickaxe_shop_contract.py',
+    'zone_completion_gates_contract.py',
+    'equipment_wiring_contract.py',
+    'hazard_effects_contract.py',
+    'floating_block_layout_contract.py',
+    'player_guidance_contract.py',
+    'letter_zone_sync_contract.py',
 ]
 
 def main():
