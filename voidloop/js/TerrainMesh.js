@@ -74,6 +74,14 @@ export class TerrainMesh {
     this.modifiedDensities = new Map();
     this.protectedPoints = [];
     this.stats = { chunks: 0, triangles: 0, samples: 0 };
+    this.cutaway = {
+      center: new THREE.Vector3(),
+      forward: new THREE.Vector2(Math.SQRT1_2, Math.SQRT1_2),
+      radius: 9,
+      reach: 0,
+      ceilingY: 2,
+      amount: 0,
+    };
   }
 
   async preloadTypes() {
@@ -172,6 +180,29 @@ export class TerrainMesh {
     }
   }
 
+  setCutaway(center, amount = 0, radius = 9, ceilingY = 2, options = {}) {
+    this.cutaway.center.copy(center);
+    this.cutaway.amount = clamp(amount, 0, 1);
+    this.cutaway.radius = Math.max(0.1, radius);
+    this.cutaway.reach = Math.max(0, options.reach || 0);
+    this.cutaway.ceilingY = ceilingY;
+    if (options.forward) {
+      this.cutaway.forward.set(options.forward.x, options.forward.z ?? options.forward.y ?? 0);
+      if (this.cutaway.forward.lengthSq() > 0.0001) {
+        this.cutaway.forward.normalize();
+      } else {
+        this.cutaway.forward.set(Math.SQRT1_2, Math.SQRT1_2);
+      }
+    }
+    if (!this.material?.uniforms) return;
+    this.material.uniforms.cutawayCenter.value.copy(this.cutaway.center);
+    this.material.uniforms.cutawayForward.value.copy(this.cutaway.forward);
+    this.material.uniforms.cutawayAmount.value = this.cutaway.amount;
+    this.material.uniforms.cutawayRadius.value = this.cutaway.radius;
+    this.material.uniforms.cutawayReach.value = this.cutaway.reach;
+    this.material.uniforms.cutawayCeilingY.value = this.cutaway.ceilingY;
+  }
+
   applyDigBrush(center, radius, strength = 1, zoneId = null, options = {}) {
     const zoneEntry = zoneId ? this.zones.get(zoneId) : this._findZoneEntry(center.x, center.z);
     if (!zoneEntry) {
@@ -263,8 +294,40 @@ export class TerrainMesh {
     return -999;
   }
 
+  findFloorBelow(x, z, footY, maxDistance = 0.25) {
+    const zoneEntry = this._findZoneEntry(x, z);
+    if (!zoneEntry) return -999;
+
+    const cellX = Math.floor(x);
+    const cellZ = Math.floor(z);
+    const minFloorY = footY - Math.max(0.01, maxDistance);
+    const maxFloorY = footY + 0.12;
+    const startY = Math.floor(clamp(maxFloorY, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
+    const endY = Math.floor(clamp(minFloorY - 1, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
+
+    for (let y = startY; y >= endY; y--) {
+      if (!this.isCellSolid(cellX, y, cellZ)) continue;
+      const floorY = y + 1;
+      if (floorY <= maxFloorY && floorY >= minFloorY) return floorY;
+    }
+    return -999;
+  }
+
   isSolidAt(x, y, z) {
     return this.isCellSolid(Math.floor(x), Math.floor(y), Math.floor(z));
+  }
+
+  isCapsuleBlockedAt(x, y, z, radius = 0.28, height = 1.45) {
+    const samples = [
+      [x, y + 0.20, z],
+      [x, y + height * 0.50, z],
+      [x, y + height, z],
+      [x + radius, y + 0.75, z],
+      [x - radius, y + 0.75, z],
+      [x, y + 0.75, z + radius],
+      [x, y + 0.75, z - radius],
+    ];
+    return samples.some(([sx, sy, sz]) => this.isSolidAt(sx, sy, sz));
   }
 
   isCellSolid(x, y, z) {
@@ -315,6 +378,7 @@ export class TerrainMesh {
     this.modifiedDensities.clear();
     this.protectedPoints = [];
     this.stats = { chunks: 0, triangles: 0, samples: 0 };
+    this.setCutaway(new THREE.Vector3(), 0, this.cutaway.radius, this.cutaway.ceilingY, { reach: this.cutaway.reach });
   }
 
   getStats() {
@@ -641,28 +705,46 @@ export class TerrainMesh {
     return new THREE.ShaderMaterial({
       vertexColors: true,
       side: THREE.FrontSide,
+      transparent: false,
+      depthWrite: true,
       uniforms: {
         lightDir: { value: new THREE.Vector3(0.35, 0.85, 0.32).normalize() },
+        cutawayCenter: { value: this.cutaway.center.clone() },
+        cutawayForward: { value: this.cutaway.forward.clone() },
+        cutawayRadius: { value: this.cutaway.radius },
+        cutawayReach: { value: this.cutaway.reach },
+        cutawayCeilingY: { value: this.cutaway.ceilingY },
+        cutawayAmount: { value: this.cutaway.amount },
       },
       vertexShader: `
         attribute float band;
         varying vec3 vNormal;
         varying vec2 vUv;
         varying float vBand;
+        varying vec3 vWorldPos;
 
         void main() {
           vBand = band;
           vNormal = normalize(normalMatrix * normal);
           vUv = uv;
-          gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPos = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
         }
       `,
       fragmentShader: `
         uniform vec3 lightDir;
+        uniform vec3 cutawayCenter;
+        uniform vec2 cutawayForward;
+        uniform float cutawayRadius;
+        uniform float cutawayReach;
+        uniform float cutawayCeilingY;
+        uniform float cutawayAmount;
 
         varying vec3 vNormal;
         varying vec2 vUv;
         varying float vBand;
+        varying vec3 vWorldPos;
 
         // KayKit BlockBits colors extracted from atlas
         vec3 grassColor = vec3(0.000, 0.600, 0.349);
@@ -743,6 +825,18 @@ export class TerrainMesh {
           float edgeDist = min(min(cell.x, 1.0 - cell.x), min(cell.y, 1.0 - cell.y));
           float bevel = smoothstep(0.0, 0.06, edgeDist);
           color *= 0.94 + 0.06 * bevel;
+
+          vec2 toPoint = vWorldPos.xz - cutawayCenter.xz;
+          float corridorT = clamp(dot(toPoint, normalize(cutawayForward)), 0.0, cutawayReach);
+          vec2 nearest = cutawayCenter.xz + normalize(cutawayForward) * corridorT;
+          float horizontalDist = distance(vWorldPos.xz, nearest);
+          float corridorBoost = smoothstep(0.0, max(0.001, cutawayReach), corridorT) * 1.5;
+          float localRadius = cutawayRadius + corridorBoost;
+          float radialMask = 1.0 - smoothstep(localRadius * 0.82, localRadius, horizontalDist);
+          float heightMask = smoothstep(cutawayCeilingY - 0.10, cutawayCeilingY + 0.30, vWorldPos.y);
+          float cutMask = clamp(radialMask * heightMask * cutawayAmount, 0.0, 1.0);
+          if (cutMask > 0.42) discard;
+          color = mix(color, color * 0.62, smoothstep(0.10, 0.42, cutMask) * 0.35);
 
           gl_FragColor = vec4(color, 1.0);
         }

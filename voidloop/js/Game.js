@@ -71,6 +71,8 @@ export class Game {
     this.scene.add(this.firstPersonCamera);
     this.camera = this.isoCamera;
     this.cameraMode = 'iso';
+    this.cameraTarget = new THREE.Vector3();
+    this._cameraTargetReady = false;
     this.fpYaw = 0;
     this.fpPitch = -0.12;
     this.fpViewmodel = null;
@@ -620,6 +622,15 @@ export class Game {
 
     // Player update
     this.player.update(dt, input);
+    if (this.player.jumpStartedThisFrame) {
+      const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.08, 0));
+      this.particles.dust(pos, 5);
+      this.particles.spark(pos, this.player.jumpsRemaining === 0 ? 4 : 2);
+    }
+    if (this.player.landedThisFrame) {
+      const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.04, 0));
+      this.particles.dust(pos, 4);
+    }
 
     // Update remote player animation
     if (this._remotePlayer) {
@@ -825,7 +836,9 @@ export class Game {
     });
 
     // World update (enemies + blocks)
-    this.world.update(dt, this.player.position, this.particles, audio, this.player);
+    this.world.update(dt, this.player.position, this.particles, audio, this.player, {
+      cameraMode: this.cameraMode,
+    });
 
     // Loot update (hoover, magnet, collect)
     this.loot.update(dt, this.player.position, (type, value, color) => {
@@ -935,12 +948,24 @@ export class Game {
 
     this.player.controlYaw = null;
     if (this.player.mesh) this.player.mesh.visible = true;
+    const desiredTarget = this.player.position.clone();
+    desiredTarget.y += 0.55;
+    if (!this._cameraTargetReady) {
+      this.cameraTarget.copy(desiredTarget);
+      this._cameraTargetReady = true;
+    } else {
+      const horizontalT = 1 - Math.exp(-10 * dt);
+      const verticalT = 1 - Math.exp(-6 * dt);
+      this.cameraTarget.x += (desiredTarget.x - this.cameraTarget.x) * horizontalT;
+      this.cameraTarget.y += (desiredTarget.y - this.cameraTarget.y) * verticalT;
+      this.cameraTarget.z += (desiredTarget.z - this.cameraTarget.z) * horizontalT;
+    }
     this.isoCamera.position.set(
-      this.player.position.x + isoOffset + shakeX,
-      this.player.position.y + isoOffset + shakeY,
-      this.player.position.z + isoOffset + shakeZ
+      this.cameraTarget.x + isoOffset + shakeX,
+      this.cameraTarget.y + isoOffset + shakeY,
+      this.cameraTarget.z + isoOffset + shakeZ
     );
-    this.isoCamera.lookAt(this.player.position.x, this.player.position.y, this.player.position.z);
+    this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
   }
 
   _updateFirstPersonAim(dt) {
@@ -1584,6 +1609,7 @@ export class Game {
       this.camera = this.isoCamera;
       if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock?.();
       this.player.controlYaw = null;
+      this._cameraTargetReady = false;
       if (this.player.mesh) this.player.mesh.visible = true;
       if (this.fpViewmodel) this.fpViewmodel.visible = false;
       if (this.aimReticle) this.aimReticle.style.display = 'none';

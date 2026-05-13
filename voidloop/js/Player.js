@@ -126,12 +126,22 @@ export class Player {
     this.currentAnim = null;
     this.animLockTimer = 0;
     this.groundOffset = 0;
+    this.meshBaseScale = 1;
 
     // Combat state
     this.isBlocking = false;
     this.isDodging = false;
     this.dodgeTimer = 0;
     this.dodgeDir = { x: 0, z: 0 };
+    this.isGrounded = false;
+    this.jumpBufferTimer = 0;
+    this.coyoteTimer = 0;
+    this.jumpsRemaining = 1;
+    this.jumpHeld = false;
+    this.wasJumpHeld = false;
+    this.jumpSquashTimer = 0;
+    this.landedThisFrame = false;
+    this.jumpStartedThisFrame = false;
 
     this.weapons = [
       new Weapon('pickaxe'),
@@ -240,6 +250,7 @@ export class Player {
       const geo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
       const mat = new THREE.MeshStandardMaterial({ color: 0x6644aa, emissive: 0x221144, emissiveIntensity: 0.5 });
       this.mesh = new THREE.Mesh(geo, mat);
+      this.meshBaseScale = 1;
       this.groundOffset = 0.5;
       this.scene.add(this.mesh);
       this._bindEquipmentHolders();
@@ -493,10 +504,44 @@ export class Player {
       this.stamina = Math.min(this.maxStamina, this.stamina + GAME.STAMINA_REGEN * dt);
     }
 
-    // SDF terrain owns vertical collision to avoid height-snap oscillation while digging.
+    this.landedThisFrame = false;
+    this.jumpStartedThisFrame = false;
+    const wasGrounded = this.isGrounded;
+    this.jumpHeld = input.isDown('Space');
+    if (input.pressed('Space')) {
+      this.jumpBufferTimer = GAME.JUMP_BUFFER;
+    } else if (this.jumpBufferTimer > 0) {
+      this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+    }
+
+    if (this.isGrounded) {
+      this.coyoteTimer = GAME.COYOTE_TIME;
+      this.jumpsRemaining = 1;
+    } else if (this.coyoteTimer > 0) {
+      this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+    }
+
+    if (this.jumpBufferTimer > 0) {
+      if (this.isGrounded || this.coyoteTimer > 0) {
+        this._startJump(GAME.JUMP_FORCE, false);
+      } else if (this.jumpsRemaining > 0) {
+        this._startJump(GAME.DOUBLE_JUMP_FORCE, true);
+      }
+    }
+
+    let gravityMultiplier = 1;
+    if (this.velocity.y < -0.01) {
+      gravityMultiplier = GAME.FALL_MULTIPLIER;
+    } else if (this.velocity.y > 0.01 && !this.jumpHeld) {
+      gravityMultiplier = GAME.JUMP_CUT_MULTIPLIER;
+    } else if (Math.abs(this.velocity.y) < 1.1 && this.jumpHeld) {
+      gravityMultiplier = GAME.JUMP_PEAK_GRAVITY_MULTIPLIER;
+    }
+
+    // SDF terrain owns vertical collision, but only against local floor under the feet.
     let terrainResolved = false;
     if (this.world?.hasSdfTerrain?.() && this.world.resolvePlayerTerrain) {
-      terrainResolved = this.world.resolvePlayerTerrain(this, dt);
+      terrainResolved = this.world.resolvePlayerTerrain(this, dt, { gravityMultiplier });
     }
 
     // Ground height snapping for authored/block terrain only.
@@ -524,15 +569,34 @@ export class Player {
 
     // Simple gravity / falling
     if (!terrainResolved && (this.position.y > groundY + 0.01 || fallingIntoVoid)) {
-      this.velocity.y += GAME.GRAVITY * dt;
+      this.velocity.y += GAME.GRAVITY * gravityMultiplier * dt;
       this.position.y += this.velocity.y * dt;
       if (!fallingIntoVoid && this.position.y <= groundY) {
         this.position.y = groundY;
         this.velocity.y = 0;
+        this.isGrounded = true;
       }
     } else if (!terrainResolved && this.position.y < groundY) {
       this.position.y = groundY;
       this.velocity.y = 0;
+      this.isGrounded = true;
+    } else if (!terrainResolved) {
+      this.isGrounded = !fallingIntoVoid;
+    }
+
+    if (this.isGrounded) {
+      this.coyoteTimer = GAME.COYOTE_TIME;
+      this.jumpsRemaining = 1;
+      if (!wasGrounded) {
+        this.landedThisFrame = true;
+        this.jumpSquashTimer = 0.14;
+      }
+    } else if (wasGrounded && !this.isGrounded) {
+      this.coyoteTimer = GAME.COYOTE_TIME;
+    }
+
+    if (this.jumpSquashTimer > 0) {
+      this.jumpSquashTimer = Math.max(0, this.jumpSquashTimer - dt);
     }
 
     // Dodge handling
@@ -580,8 +644,8 @@ export class Player {
       }
     }
 
-    // Dodge on double-tap Space + direction
-    if (input.pressed('Space') && (dx !== 0 || dz !== 0)) {
+    // Dodge moved off Space so jumping stays consistent.
+    if ((input.pressed('AltLeft') || input.pressed('AltRight')) && (dx !== 0 || dz !== 0)) {
       this.dodge(dx, dz);
     }
 
@@ -594,13 +658,21 @@ export class Player {
       this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
     }
 
-    const oldX = this.position.x;
-    const oldZ = this.position.z;
-    this.position.x += dx * speed * dt;
-    this.position.z += dz * speed * dt;
-    if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
-      this.position.x = oldX;
-      this.position.z = oldZ;
+    const moveX = dx * speed * dt;
+    const moveZ = dz * speed * dt;
+    if (moveX !== 0) {
+      const oldX = this.position.x;
+      this.position.x += moveX;
+      if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
+        this.position.x = oldX;
+      }
+    }
+    if (moveZ !== 0) {
+      const oldZ = this.position.z;
+      this.position.z += moveZ;
+      if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
+        this.position.z = oldZ;
+      }
     }
 
     if (dx !== 0 || dz !== 0) {
@@ -623,6 +695,17 @@ export class Player {
     }
 
     this._updateMesh();
+  }
+
+  _startJump(force, isDoubleJump = false) {
+    this.velocity.y = force;
+    this.isGrounded = false;
+    this.coyoteTimer = 0;
+    this.jumpBufferTimer = 0;
+    if (isDoubleJump) this.jumpsRemaining = Math.max(0, this.jumpsRemaining - 1);
+    this.jumpSquashTimer = isDoubleJump ? 0.18 : 0.12;
+    this.jumpStartedThisFrame = true;
+    this.playAnim('Jump', { lock: 0.18, loop: false, timeScale: isDoubleJump ? 1.25 : 1.05 });
   }
 
   takeDamage(amount) {
@@ -806,6 +889,7 @@ export class Player {
     const box = new THREE.Box3().setFromObject(this.mesh);
     const height = box.max.y - box.min.y;
     const scale = height > 0 ? TARGET_HEIGHT / height : 1;
+    this.meshBaseScale = scale;
     this.mesh.scale.setScalar(scale);
     this.mesh.updateMatrixWorld(true);
 
@@ -864,6 +948,11 @@ export class Player {
     if (this.mesh) {
       this.mesh.position.set(this.position.x, this.position.y + this.groundOffset, this.position.z);
       this.mesh.rotation.y = this.rotation;
+      const pulse = this.jumpSquashTimer > 0 ? Math.sin((this.jumpSquashTimer / 0.18) * Math.PI) : 0;
+      const airborneStretch = !this.isGrounded && this.velocity.y > 1 ? Math.min(0.06, this.velocity.y * 0.004) : 0;
+      const xz = this.meshBaseScale * (1 + pulse * 0.08 - airborneStretch * 0.4);
+      const y = this.meshBaseScale * (1 - pulse * 0.10 + airborneStretch);
+      this.mesh.scale.set(xz, y, xz);
       this.mesh.updateMatrixWorld(true);
       this._placeEquipmentHolders();
     }

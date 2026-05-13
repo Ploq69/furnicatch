@@ -40,6 +40,8 @@ export class World {
     this.terrainMesh = new TerrainMesh(scene);
     this.floatingBlocks = new Set();
     this.hiddenLetterNodes = [];
+    this._cutawayActive = false;
+    this._cutawayAmount = 0;
   }
 
   setFloor(floorNum) {
@@ -612,23 +614,23 @@ export class World {
 
   isPlayerSpaceClear(x, y, z) {
     if (!this.terrainMesh) return true;
-    const samples = [
-      [x, y + 0.25, z],
-      [x, y + 0.85, z],
-      [x, y + 1.35, z],
-      [x + 0.24, y + 0.75, z],
-      [x - 0.24, y + 0.75, z],
-      [x, y + 0.75, z + 0.24],
-      [x, y + 0.75, z - 0.24],
-    ];
-    return !samples.some(([sx, sy, sz]) => this.terrainMesh.isSolidAt(sx, sy, sz));
+    return !this.terrainMesh.isCapsuleBlockedAt(x, y, z, 0.28, 1.45);
   }
 
-  resolvePlayerTerrain(player, dt) {
+  findFloorBelow(x, z, footY, maxDistance = 0.25) {
+    if (!this.terrainMesh) return -999;
+    return this.terrainMesh.findFloorBelow(x, z, footY, maxDistance);
+  }
+
+  getTerrainDepthAtPlayer(position) {
+    return Math.max(0, 1 - position.y);
+  }
+
+  resolvePlayerTerrain(player, dt, options = {}) {
     if (!this.terrainMesh) return false;
 
     const radius = 0.28;
-    const maxStepDown = player.velocity.y <= 0 ? 0.18 : 0.02;
+    const gravityMultiplier = options.gravityMultiplier || 1;
     const probes = [
       [0, 0],
       [radius, 0],
@@ -637,25 +639,36 @@ export class World {
       [0, -radius],
     ];
 
-    let groundY = -999;
-    const fromY = player.position.y + 0.6;
-    for (const [dx, dz] of probes) {
-      const y = this.terrainMesh.getColumnTop(player.position.x + dx, player.position.z + dz, fromY);
-      if (y > groundY) groundY = y;
-    }
-
-    player.velocity.y += GAME.GRAVITY * dt;
+    player.velocity.y += GAME.GRAVITY * gravityMultiplier * dt;
     player.position.y += player.velocity.y * dt;
 
-    if (groundY > -999 && player.velocity.y <= 0 && player.position.y <= groundY + maxStepDown) {
-      player.position.y = groundY;
+    let floorY = -999;
+    if (player.velocity.y <= 0) {
+      const maxSnapDown = player.isGrounded
+        ? 0.26
+        : Math.min(1.1, Math.max(0.24, -player.velocity.y * dt + 0.12));
+      for (const [dx, dz] of probes) {
+        const y = this.findFloorBelow(player.position.x + dx, player.position.z + dz, player.position.y, maxSnapDown);
+        if (y > floorY) floorY = y;
+      }
+    }
+
+    if (floorY > -999 && player.velocity.y <= 0 && player.position.y <= floorY + 0.24) {
+      player.position.y = floorY;
       player.velocity.y = 0;
       player.isGrounded = true;
     } else {
       player.isGrounded = false;
     }
 
-    // Gently push out of terrain if a rebuild or falling edge leaves the body intersecting a wall.
+    if (player.velocity.y > 0 && this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45)) {
+      for (let i = 0; i < 5 && this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45); i++) {
+        player.position.y -= 0.08;
+      }
+      player.velocity.y = 0;
+    }
+
+    // Gently push out of side terrain without changing vertical position.
     const pushSamples = [
       [radius, 0],
       [-radius, 0],
@@ -767,9 +780,29 @@ export class World {
     return revealed;
   }
 
-  update(dt, playerPos, particles, audio, player) {
+  update(dt, playerPos, particles, audio, player, options = {}) {
     this.terrainMesh.update();
     this.terrainMesh.setVisibleAround(playerPos, 58);
+    const playerDepth = this.getTerrainDepthAtPlayer(playerPos);
+    const allowCutaway = options.cameraMode !== 'firstPerson';
+    if (allowCutaway) {
+      if (!this._cutawayActive && playerDepth > 1.2) this._cutawayActive = true;
+      if (this._cutawayActive && playerDepth < 0.6) this._cutawayActive = false;
+    } else {
+      this._cutawayActive = false;
+      this._cutawayAmount = 0;
+    }
+    const cutawayTarget = allowCutaway && this._cutawayActive ? 1 : 0;
+    const cutawayRate = this._cutawayActive ? 8 : 5;
+    if (allowCutaway) {
+      this._cutawayAmount += (cutawayTarget - this._cutawayAmount) * (1 - Math.exp(-cutawayRate * dt));
+    }
+    const cutawayRadius = Math.min(16, 7.5 + playerDepth * 0.28);
+    const cutawayReach = Math.min(28, 4 + playerDepth * 1.15);
+    this.terrainMesh.setCutaway(playerPos, this._cutawayAmount, cutawayRadius, playerPos.y + 2.25, {
+      forward: { x: Math.SQRT1_2, z: Math.SQRT1_2 },
+      reach: cutawayReach,
+    });
 
     // Update chunk visibility based on player position
     this.instancer.updateVisibility(playerPos, 45);
@@ -829,6 +862,8 @@ export class World {
     this.floatingBlocks.clear();
     this.columnHeights.clear();
     this.hiddenLetterNodes = [];
+    this._cutawayActive = false;
+    this._cutawayAmount = 0;
     for (const enemy of this.enemies) {
       enemy.cleanup(this.scene);
     }
