@@ -15,7 +15,16 @@ const TERRAIN_MAX_Y = 2;
 const SURFACE_Y = 1;
 const CELL_SIZE = 1;
 const MAX_REBUILDS_PER_FRAME = 2;
+const REBUILD_TIME_BUDGET_MS = 2.5;
+const STREAM_BUILD_LIMIT_PER_FRAME = 2;
+const LIVE_CHUNK_CAP = 220;
+const CHUNK_UNLOAD_IDLE_MS = 4500;
+const ISO_VISIBLE_CHUNK_BUDGET = 72;
+const FP_VISIBLE_CHUNK_BUDGET = 64;
+const VISIBILITY_SEARCH_MULTIPLIER = 2;
+const VISIBILITY_MIN_INTERVAL_MS = 180;
 const MAX_TEXTURE_TILE_SPAN = 8;
+const CHUNK_RADIUS = Math.sqrt(3) * CHUNK_SIZE * 0.5;
 const TERRAIN_COLORS = {
   surface: new THREE.Color(0x009959),
   dirt: new THREE.Color(0xaa684d),
@@ -69,11 +78,26 @@ export class TerrainMesh {
     this.material = null;
     this.zones = new Map();
     this.chunks = new Map();
+    this.emptyChunkKeys = new Set();
     this.dirtyChunks = [];
     this.dirtyChunkSet = new Set();
     this.modifiedDensities = new Map();
     this.protectedPoints = [];
     this.stats = { chunks: 0, triangles: 0, samples: 0 };
+    this.visibleChunkKeys = new Set();
+    this.hotChunkKeys = new Set();
+    this.visibilityStats = { visible: 0, hot: 0, live: 0, dirty: 0, rebuilt: 0, rebuildMs: 0, streamed: 0 };
+    this._streamBuildsThisFrame = 0;
+    this._lastVisibilityAt = 0;
+    this._lastVisibilityChunkKey = null;
+    this._lastVisibilityMode = null;
+    this._lastVisibilityForward = new THREE.Vector3(0, 0, -1);
+    this._lastPlayerPos = new THREE.Vector3();
+    this._frustum = new THREE.Frustum();
+    this._projScreenMatrix = new THREE.Matrix4();
+    this._cameraForward = new THREE.Vector3(0, 0, -1);
+    this._tmpCenter = new THREE.Vector3();
+    this._tmpSphere = new THREE.Sphere(new THREE.Vector3(), CHUNK_RADIUS);
     this.cutaway = {
       center: new THREE.Vector3(),
       forward: new THREE.Vector2(Math.SQRT1_2, Math.SQRT1_2),
@@ -129,9 +153,17 @@ export class TerrainMesh {
     this.rebuildAll();
   }
 
-  update() {
+  update(options = {}) {
+    const now = this._nowMs();
+    const start = now;
+    const playerPos = options.playerPos || this._lastPlayerPos;
     let rebuilt = 0;
+    if (this.dirtyChunks.length > 1) {
+      this._prioritizeDirtyChunks(playerPos);
+    }
+
     while (rebuilt < MAX_REBUILDS_PER_FRAME && this.dirtyChunks.length > 0) {
+      if (rebuilt > 0 && this._nowMs() - start >= REBUILD_TIME_BUDGET_MS) break;
       const key = this.dirtyChunks.shift();
       this.dirtyChunkSet.delete(key);
       const [cx, cy, cz] = key.split(',').map(Number);
@@ -139,10 +171,13 @@ export class TerrainMesh {
       rebuilt++;
     }
     if (rebuilt > 0) this._refreshStats();
+    this.visibilityStats.rebuilt = rebuilt;
+    this.visibilityStats.rebuildMs = this._nowMs() - start;
   }
 
   queueDirtyChunks(chunkKeys) {
     for (const key of chunkKeys) {
+      this.emptyChunkKeys.delete(key);
       if (this.dirtyChunkSet.has(key)) continue;
       this.dirtyChunkSet.add(key);
       this.dirtyChunks.push(key);
@@ -164,7 +199,8 @@ export class TerrainMesh {
       const dx = chunk.centerX - position.x;
       const dy = chunk.centerY - position.y;
       const dz = chunk.centerZ - position.z;
-      if (dx * dx + dy * dy + dz * dz <= r2) out.push(chunk.mesh);
+      const distSq = dx * dx + dy * dy + dz * dz;
+      if (distSq <= r2 && (chunk.mesh.visible || chunk.hot || distSq < 12 * 12)) out.push(chunk.mesh);
     }
     return out;
   }
@@ -177,6 +213,107 @@ export class TerrainMesh {
       const dy = chunk.centerY - position.y;
       const dz = chunk.centerZ - position.z;
       chunk.mesh.visible = dx * dx + dy * dy + dz * dz <= r2;
+    }
+  }
+
+  updateVisibility(position, options = {}) {
+    const now = this._nowMs();
+    const cameraMode = options.cameraMode || 'iso';
+    const camera = options.camera || null;
+    const budget = cameraMode === 'firstPerson' ? FP_VISIBLE_CHUNK_BUDGET : ISO_VISIBLE_CHUNK_BUDGET;
+    this._lastPlayerPos.copy(position);
+    this._streamBuildsThisFrame = 0;
+
+    this._prepareCameraCulling(camera);
+    const currentChunkKey = this._chunkKeyForPoint(position);
+    const forwardStable = this._cameraForward.dot(this._lastVisibilityForward) > 0.965;
+    const cacheValid = this.visibleChunkKeys.size > 0
+      && this._lastVisibilityChunkKey === currentChunkKey
+      && this._lastVisibilityMode === cameraMode
+      && forwardStable
+      && now - this._lastVisibilityAt < VISIBILITY_MIN_INTERVAL_MS;
+
+    if (!cacheValid) {
+      const result = this._computeVisibleChunkKeys(position, cameraMode, budget);
+      this.visibleChunkKeys = result.visibleKeys;
+      this.hotChunkKeys = result.hotKeys;
+      this._lastVisibilityAt = now;
+      this._lastVisibilityChunkKey = currentChunkKey;
+      this._lastVisibilityMode = cameraMode;
+      this._lastVisibilityForward.copy(this._cameraForward);
+    }
+
+    let visibleLive = 0;
+    for (const key of this.visibleChunkKeys) {
+      const chunk = this.ensureChunkMesh(key, now);
+      if (!chunk?.mesh) continue;
+      chunk.mesh.visible = true;
+      chunk.lastVisibleAt = now;
+      chunk.hot = this.hotChunkKeys.has(key);
+      visibleLive++;
+    }
+
+    for (const [key, chunk] of this.chunks) {
+      if (!chunk.mesh) continue;
+      if (this.visibleChunkKeys.has(key)) continue;
+      chunk.mesh.visible = false;
+      chunk.hot = this.hotChunkKeys.has(key);
+    }
+
+    this.unloadColdChunks(now);
+    this.visibilityStats.visible = this.visibleChunkKeys.size;
+    this.visibilityStats.hot = this.hotChunkKeys.size;
+    this.visibilityStats.live = this.chunks.size;
+    this.visibilityStats.dirty = this.dirtyChunks.length;
+    this.visibilityStats.streamed = this._streamBuildsThisFrame;
+    this.visibilityStats.visibleLive = visibleLive;
+    return this.visibilityStats;
+  }
+
+  ensureChunkMesh(key, now = this._nowMs()) {
+    const existing = this.chunks.get(key);
+    if (existing?.mesh) {
+      existing.lastTouchedAt = now;
+      return existing;
+    }
+    if (this.emptyChunkKeys.has(key)) return null;
+    if (this._streamBuildsThisFrame >= STREAM_BUILD_LIMIT_PER_FRAME && !this.hotChunkKeys.has(key)) return null;
+    const coords = this._parseChunkKey(key);
+    if (!coords || !this._chunkWithinTerrainBounds(coords.cx, coords.cy, coords.cz)) return null;
+    this._rebuildChunk(coords.cx, coords.cy, coords.cz);
+    this._streamBuildsThisFrame++;
+    const chunk = this.chunks.get(key);
+    if (chunk) {
+      chunk.lastVisibleAt = now;
+      chunk.lastTouchedAt = now;
+    }
+    return chunk || null;
+  }
+
+  hideChunkMesh(key) {
+    const chunk = this.chunks.get(key);
+    if (chunk?.mesh) chunk.mesh.visible = false;
+  }
+
+  getChunkKeyForPoint(position) {
+    return this._chunkKeyForPoint(position);
+  }
+
+  unloadColdChunks(now = this._nowMs()) {
+    const removable = [];
+    for (const [key, chunk] of this.chunks) {
+      if (!chunk?.mesh || chunk.mesh.visible || chunk.hot) continue;
+      const idleMs = now - (chunk.lastVisibleAt || 0);
+      if (idleMs >= CHUNK_UNLOAD_IDLE_MS || this.chunks.size > LIVE_CHUNK_CAP) {
+        removable.push({ key, idleMs, distSq: this._chunkDistanceSqToPoint(key, this._lastPlayerPos) });
+      }
+    }
+    removable.sort((a, b) => (b.idleMs - a.idleMs) || (b.distSq - a.distSq));
+    const targetRemovals = Math.max(0, this.chunks.size - LIVE_CHUNK_CAP);
+    const maxRemovals = targetRemovals > 0 ? removable.length : Math.min(8, removable.length);
+    for (let i = 0; i < maxRemovals; i++) {
+      if (targetRemovals <= 0 && removable[i].idleMs < CHUNK_UNLOAD_IDLE_MS) break;
+      this._disposeChunkMesh(removable[i].key);
     }
   }
 
@@ -201,6 +338,267 @@ export class TerrainMesh {
     this.material.uniforms.cutawayRadius.value = this.cutaway.radius;
     this.material.uniforms.cutawayReach.value = this.cutaway.reach;
     this.material.uniforms.cutawayCeilingY.value = this.cutaway.ceilingY;
+  }
+
+  _computeVisibleChunkKeys(position, cameraMode, budget) {
+    if (cameraMode !== 'firstPerson') {
+      return this._computeIsoVisibleChunkKeys(position, budget);
+    }
+
+    const startKey = this._chunkKeyForPoint(position);
+    const searchBudget = Math.max(budget, budget * VISIBILITY_SEARCH_MULTIPLIER);
+    const visitedAir = new Set();
+    const queue = [startKey];
+    visitedAir.add(startKey);
+
+    for (let qi = 0; qi < queue.length && visitedAir.size < searchBudget; qi++) {
+      const key = queue[qi];
+      const neighbors = this._neighborChunkKeys(key)
+        .filter(n => !visitedAir.has(n.key) && this._chunkWithinTerrainBounds(n.cx, n.cy, n.cz))
+        .filter(n => this._chunkCanMatter(n.key, position, cameraMode) || this._chunkDistanceSqToPoint(n.key, position) < CHUNK_SIZE * CHUNK_SIZE * 5)
+        .sort((a, b) => this._chunkVisibilityScore(a.key, position, cameraMode) - this._chunkVisibilityScore(b.key, position, cameraMode));
+
+      for (const next of neighbors) {
+        if (visitedAir.size >= searchBudget) break;
+        if (!this._chunkBoundaryOpen(key, next.key)) continue;
+        visitedAir.add(next.key);
+        queue.push(next.key);
+      }
+    }
+
+    const candidateKeys = new Set();
+    for (const key of visitedAir) {
+      candidateKeys.add(key);
+      for (const n of this._neighborChunkKeys(key)) {
+        if (this._chunkWithinTerrainBounds(n.cx, n.cy, n.cz)) candidateKeys.add(n.key);
+      }
+    }
+
+    const forcedKeys = new Set([startKey]);
+    for (const n of this._neighborChunkKeys(startKey)) {
+      if (this._chunkWithinTerrainBounds(n.cx, n.cy, n.cz)) forcedKeys.add(n.key);
+    }
+
+    const sorted = [...candidateKeys]
+      .filter(key => forcedKeys.has(key) || this._chunkCanMatter(key, position, cameraMode))
+      .sort((a, b) => this._chunkVisibilityScore(a, position, cameraMode) - this._chunkVisibilityScore(b, position, cameraMode));
+
+    const visibleKeys = new Set();
+    for (const key of forcedKeys) visibleKeys.add(key);
+    for (const key of sorted) {
+      if (visibleKeys.size >= budget) break;
+      visibleKeys.add(key);
+    }
+
+    return { visibleKeys, hotKeys: new Set([...visibleKeys, ...visitedAir]) };
+  }
+
+  _computeIsoVisibleChunkKeys(position, budget) {
+    const center = this._parseChunkKey(this._chunkKeyForPoint(position));
+    const visibleKeys = new Set();
+    const candidates = [];
+    const radiusChunks = 3;
+    for (let dx = -radiusChunks; dx <= radiusChunks; dx++) {
+      for (let dy = -2; dy <= 1; dy++) {
+        for (let dz = -radiusChunks; dz <= radiusChunks; dz++) {
+          const cx = center.cx + dx;
+          const cy = center.cy + dy;
+          const cz = center.cz + dz;
+          if (!this._chunkWithinTerrainBounds(cx, cy, cz)) continue;
+          const key = this._chunkKey(cx, cy, cz);
+          if (!this._chunkCanMatter(key, position, 'iso')) continue;
+          candidates.push(key);
+        }
+      }
+    }
+
+    candidates.sort((a, b) => this._chunkVisibilityScore(a, position, 'iso') - this._chunkVisibilityScore(b, position, 'iso'));
+    for (const key of candidates) {
+      if (visibleKeys.size >= budget) break;
+      visibleKeys.add(key);
+    }
+    const startKey = this._chunkKeyForPoint(position);
+    visibleKeys.add(startKey);
+    for (const n of this._neighborChunkKeys(startKey)) {
+      if (this._chunkWithinTerrainBounds(n.cx, n.cy, n.cz)) visibleKeys.add(n.key);
+    }
+    return { visibleKeys, hotKeys: new Set(visibleKeys) };
+  }
+
+  _prepareCameraCulling(camera) {
+    if (!camera) return;
+    camera.updateMatrixWorld?.();
+    camera.updateProjectionMatrix?.();
+    this._projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this._frustum.setFromProjectionMatrix(this._projScreenMatrix);
+    camera.getWorldDirection(this._cameraForward).normalize();
+  }
+
+  _chunkCanMatter(key, position, cameraMode) {
+    const distSq = this._chunkDistanceSqToPoint(key, position);
+    if (distSq < CHUNK_SIZE * CHUNK_SIZE * 4) return true;
+    if (this._chunkIntersectsFrustum(key)) return true;
+    if (cameraMode === 'firstPerson') return this._chunkInLookCorridor(key, 7.5, 90);
+    return this._chunkInCutawayCorridor(key) || distSq < 34 * 34;
+  }
+
+  _chunkVisibilityScore(key, position, cameraMode) {
+    this._getChunkCenter(key, this._tmpCenter);
+    const distSq = this._tmpCenter.distanceToSquared(position);
+    let score = distSq;
+    if (this._chunkIntersectsFrustum(key)) score -= 900;
+    if (cameraMode === 'firstPerson') {
+      const tx = this._tmpCenter.x - position.x;
+      const ty = this._tmpCenter.y - position.y;
+      const tz = this._tmpCenter.z - position.z;
+      const len = Math.sqrt(tx * tx + ty * ty + tz * tz);
+      const forward = len > 0.0001
+        ? (tx * this._cameraForward.x + ty * this._cameraForward.y + tz * this._cameraForward.z) / len
+        : 1;
+      score -= Math.max(0, forward) * 700;
+      if (this._chunkInLookCorridor(key, 7.5, 90)) score -= 1200;
+    } else if (this._chunkInCutawayCorridor(key)) {
+      score -= 900;
+    }
+    return score;
+  }
+
+  _chunkIntersectsFrustum(key) {
+    this._getChunkCenter(key, this._tmpSphere.center);
+    return this._frustum.intersectsSphere(this._tmpSphere);
+  }
+
+  _chunkInLookCorridor(key, radius, maxReach) {
+    this._getChunkCenter(key, this._tmpCenter);
+    const tx = this._tmpCenter.x - this._lastPlayerPos.x;
+    const ty = this._tmpCenter.y - this._lastPlayerPos.y;
+    const tz = this._tmpCenter.z - this._lastPlayerPos.z;
+    const t = tx * this._cameraForward.x + ty * this._cameraForward.y + tz * this._cameraForward.z;
+    if (t < -CHUNK_SIZE || t > maxReach) return false;
+    const clampedT = Math.max(0, t);
+    const cx = this._lastPlayerPos.x + this._cameraForward.x * clampedT;
+    const cy = this._lastPlayerPos.y + this._cameraForward.y * clampedT;
+    const cz = this._lastPlayerPos.z + this._cameraForward.z * clampedT;
+    return (this._tmpCenter.x - cx) ** 2 + (this._tmpCenter.y - cy) ** 2 + (this._tmpCenter.z - cz) ** 2 <= radius * radius;
+  }
+
+  _chunkInCutawayCorridor(key) {
+    if (this.cutaway.amount <= 0.01) return false;
+    this._getChunkCenter(key, this._tmpCenter);
+    const dx = this._tmpCenter.x - this.cutaway.center.x;
+    const dz = this._tmpCenter.z - this.cutaway.center.z;
+    const t = clamp(dx * this.cutaway.forward.x + dz * this.cutaway.forward.y, 0, this.cutaway.reach || 0);
+    const nx = this.cutaway.center.x + this.cutaway.forward.x * t;
+    const nz = this.cutaway.center.z + this.cutaway.forward.y * t;
+    const radius = this.cutaway.radius + 2.5;
+    return (this._tmpCenter.x - nx) ** 2 + (this._tmpCenter.z - nz) ** 2 <= radius * radius;
+  }
+
+  _chunkBoundaryOpen(aKey, bKey) {
+    const a = this._parseChunkKey(aKey);
+    const b = this._parseChunkKey(bKey);
+    if (!a || !b) return false;
+    const dx = b.cx - a.cx;
+    const dy = b.cy - a.cy;
+    const dz = b.cz - a.cz;
+    if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) !== 1) return false;
+
+    const ax0 = a.cx * CHUNK_SIZE;
+    const ay0 = a.cy * CHUNK_SIZE;
+    const az0 = a.cz * CHUNK_SIZE;
+    const bx0 = b.cx * CHUNK_SIZE;
+    const by0 = b.cy * CHUNK_SIZE;
+    const bz0 = b.cz * CHUNK_SIZE;
+    const midX = Math.floor(Math.max(ax0, bx0) + CHUNK_SIZE * 0.5);
+    const midY = Math.floor(clamp(Math.max(ay0, by0) + CHUNK_SIZE * 0.5, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
+    const midZ = Math.floor(Math.max(az0, bz0) + CHUNK_SIZE * 0.5);
+    const samples = [
+      [0, 0],
+      [-2, 0],
+      [2, 0],
+      [0, -2],
+      [0, 2],
+    ];
+
+    if (dx !== 0) {
+      const ax = dx > 0 ? ax0 + CHUNK_SIZE - 1 : ax0;
+      const bx = dx > 0 ? bx0 : bx0 + CHUNK_SIZE - 1;
+      for (const [oy, oz] of samples) {
+        const y = clamp(midY + oy, TERRAIN_MIN_Y, TERRAIN_MAX_Y);
+        const z = midZ + oz;
+        if (!this.isCellSolid(ax, y, z) && !this.isCellSolid(bx, y, z)) return true;
+      }
+      return false;
+    }
+
+    if (dy !== 0) {
+      const ay = dy > 0 ? ay0 + CHUNK_SIZE - 1 : ay0;
+      const by = dy > 0 ? by0 : by0 + CHUNK_SIZE - 1;
+      for (const [ox, oz] of samples) {
+        const x = midX + ox;
+        const z = midZ + oz;
+        if (!this.isCellSolid(x, ay, z) && !this.isCellSolid(x, by, z)) return true;
+      }
+      return false;
+    }
+
+    const az = dz > 0 ? az0 + CHUNK_SIZE - 1 : az0;
+    const bz = dz > 0 ? bz0 : bz0 + CHUNK_SIZE - 1;
+    for (const [ox, oy] of samples) {
+      const x = midX + ox;
+      const y = clamp(midY + oy, TERRAIN_MIN_Y, TERRAIN_MAX_Y);
+      if (!this.isCellSolid(x, y, az) && !this.isCellSolid(x, y, bz)) return true;
+    }
+    return false;
+  }
+
+  _neighborChunkKeys(key) {
+    const c = this._parseChunkKey(key);
+    if (!c) return [];
+    const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    return dirs.map(([dx, dy, dz]) => {
+      const cx = c.cx + dx;
+      const cy = c.cy + dy;
+      const cz = c.cz + dz;
+      return { key: this._chunkKey(cx, cy, cz), cx, cy, cz };
+    });
+  }
+
+  _chunkKeyForPoint(position) {
+    return this._chunkKey(
+      Math.floor(position.x / CHUNK_SIZE),
+      Math.floor(position.y / CHUNK_SIZE),
+      Math.floor(position.z / CHUNK_SIZE)
+    );
+  }
+
+  _parseChunkKey(key) {
+    const parts = String(key).split(',').map(Number);
+    if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null;
+    return { cx: parts[0], cy: parts[1], cz: parts[2] };
+  }
+
+  _chunkWithinTerrainBounds(cx, cy, cz) {
+    const y0 = cy * CHUNK_SIZE;
+    if (y0 > TERRAIN_MAX_Y || y0 + CHUNK_SIZE < TERRAIN_MIN_Y) return false;
+    const centerX = cx * CHUNK_SIZE + CHUNK_SIZE / 2;
+    const centerZ = cz * CHUNK_SIZE + CHUNK_SIZE / 2;
+    return !!this._findZoneEntry(centerX, centerZ);
+  }
+
+  _getChunkCenter(key, target = new THREE.Vector3()) {
+    const c = this._parseChunkKey(key);
+    if (!c) return target.set(0, 0, 0);
+    return target.set(
+      c.cx * CHUNK_SIZE + CHUNK_SIZE / 2,
+      c.cy * CHUNK_SIZE + CHUNK_SIZE / 2,
+      c.cz * CHUNK_SIZE + CHUNK_SIZE / 2
+    );
+  }
+
+  _chunkDistanceSqToPoint(key, point) {
+    this._getChunkCenter(key, this._tmpCenter);
+    return this._tmpCenter.distanceToSquared(point);
   }
 
   applyDigBrush(center, radius, strength = 1, zoneId = null, options = {}) {
@@ -375,9 +773,13 @@ export class TerrainMesh {
     this.zones.clear();
     this.dirtyChunks = [];
     this.dirtyChunkSet.clear();
+    this.emptyChunkKeys.clear();
     this.modifiedDensities.clear();
     this.protectedPoints = [];
     this.stats = { chunks: 0, triangles: 0, samples: 0 };
+    this.visibleChunkKeys.clear();
+    this.hotChunkKeys.clear();
+    this.visibilityStats = { visible: 0, hot: 0, live: 0, dirty: 0, rebuilt: 0, rebuildMs: 0, streamed: 0 };
     this.setCutaway(new THREE.Vector3(), 0, this.cutaway.radius, this.cutaway.ceilingY, { reach: this.cutaway.reach });
   }
 
@@ -388,6 +790,11 @@ export class TerrainMesh {
       triangles: this.stats.triangles,
       samples: this.modifiedDensities.size,
       dirtyChunks: this.dirtyChunks.length,
+      visibleChunks: this.visibilityStats.visible || 0,
+      hotChunks: this.visibilityStats.hot || 0,
+      liveChunks: this.visibilityStats.live || this.chunks.size,
+      rebuildMs: this.visibilityStats.rebuildMs || 0,
+      streamedChunks: this.visibilityStats.streamed || 0,
     };
   }
 
@@ -436,6 +843,19 @@ export class TerrainMesh {
     return `${cx},${cy},${cz}`;
   }
 
+  _nowMs() {
+    return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+  }
+
+  _prioritizeDirtyChunks(playerPos) {
+    this.dirtyChunks.sort((a, b) => {
+      const ah = this.hotChunkKeys.has(a) || this.visibleChunkKeys.has(a) ? 0 : 1;
+      const bh = this.hotChunkKeys.has(b) || this.visibleChunkKeys.has(b) ? 0 : 1;
+      if (ah !== bh) return ah - bh;
+      return this._chunkDistanceSqToPoint(a, playerPos) - this._chunkDistanceSqToPoint(b, playerPos);
+    });
+  }
+
   _collectTouchedChunks(x, y, z, out) {
     const cx = Math.floor(x / CHUNK_SIZE);
     const cy = Math.floor(y / CHUNK_SIZE);
@@ -478,16 +898,22 @@ export class TerrainMesh {
     }
 
     const geometry = this._buildChunkGeometry(cx, cy, cz);
-    if (!geometry) return;
+    if (!geometry) {
+      this.emptyChunkKeys.add(key);
+      return;
+    }
+    this.emptyChunkKeys.delete(key);
 
     const x0 = cx * CHUNK_SIZE;
     const y0 = cy * CHUNK_SIZE;
     const z0 = cz * CHUNK_SIZE;
+    const now = this._nowMs();
     const mesh = new THREE.Mesh(geometry, this.material);
     mesh.name = `terrain-chunk:${key}`;
     mesh.userData.terrainChunk = { cx, cy, cz };
     mesh.receiveShadow = false;
     mesh.frustumCulled = true;
+    mesh.visible = this.visibleChunkKeys.size === 0 || this.visibleChunkKeys.has(key);
     this.scene.add(mesh);
     this.chunks.set(key, {
       mesh,
@@ -498,6 +924,9 @@ export class TerrainMesh {
       centerX: x0 + CHUNK_SIZE / 2,
       centerY: y0 + CHUNK_SIZE / 2,
       centerZ: z0 + CHUNK_SIZE / 2,
+      lastVisibleAt: now,
+      lastTouchedAt: now,
+      hot: false,
     });
   }
 
@@ -870,6 +1299,15 @@ export class TerrainMesh {
       }
     }
     this.chunks.clear();
+    this.emptyChunkKeys.clear();
+  }
+
+  _disposeChunkMesh(key) {
+    const chunk = this.chunks.get(key);
+    if (!chunk?.mesh) return;
+    this.scene.remove(chunk.mesh);
+    chunk.mesh.geometry.dispose();
+    this.chunks.delete(key);
   }
 
   _refreshStats() {

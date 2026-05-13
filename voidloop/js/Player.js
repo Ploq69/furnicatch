@@ -233,6 +233,7 @@ export class Player {
       if (!cloned || !cloned.scene) throw new Error('GLTF clone returned empty');
 
       this.mesh = cloned.scene;
+      this._polishCharacterRendering(this.mesh);
       this._normalizeMesh(character.model);
       this._bindEquipmentHolders();
       this.scene.add(this.mesh);
@@ -295,6 +296,7 @@ export class Player {
       const cloned = assetLoader.cloneModel(item.model);
       if (!cloned || !cloned.scene) return;
       this.equipmentMeshes[slot] = cloned.scene;
+      this._polishEquipmentRendering(this.equipmentMeshes[slot]);
       this._applyEquippedItemTransform(slot);
       holder.add(this.equipmentMeshes[slot]);
       this._placeEquipmentHolders();
@@ -877,6 +879,39 @@ export class Player {
     }
     this.damageFlashEntries = [];
     this.damageFlashTimer = 0;
+  }
+
+  _polishCharacterRendering(root) {
+    root.traverse((c) => {
+      if (!c.isMesh) return;
+      c.castShadow = false;
+      c.receiveShadow = false;
+      this._polishMaterialForCharacter(c.material);
+    });
+  }
+
+  _polishEquipmentRendering(root) {
+    root.traverse((c) => {
+      if (!c.isMesh) return;
+      c.castShadow = false;
+      c.receiveShadow = false;
+      this._polishMaterialForCharacter(c.material);
+    });
+  }
+
+  _polishMaterialForCharacter(material) {
+    const materials = Array.isArray(material) ? material : [material];
+    for (const mat of materials) {
+      if (!mat) continue;
+      mat.side = THREE.FrontSide;
+      mat.depthWrite = true;
+      mat.depthTest = true;
+      if (mat.transparent && mat.opacity >= 0.99) {
+        mat.transparent = false;
+        mat.opacity = 1;
+      }
+      mat.needsUpdate = true;
+    }
   }
 
   _normalizeMesh(modelPath) {

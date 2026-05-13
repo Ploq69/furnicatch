@@ -838,6 +838,8 @@ export class Game {
     // World update (enemies + blocks)
     this.world.update(dt, this.player.position, this.particles, audio, this.player, {
       cameraMode: this.cameraMode,
+      camera: this.camera,
+      currentZoneId: this.zoneManager.currentZoneId,
     });
 
     // Loot update (hoover, magnet, collect)
@@ -924,10 +926,25 @@ export class Game {
     this.frameCount = (this.frameCount || 0) + 1;
     const now = performance.now();
     if (now - (this.lastFpsTime || 0) >= 1000) {
-      this.ui.setFPS(this.frameCount);
+      this.ui.setFPS(this.frameCount, this._getPerfDebugStats());
       this.frameCount = 0;
       this.lastFpsTime = now;
     }
+  }
+
+  _getPerfDebugStats() {
+    const enabled = window.location.search.includes('perf=1')
+      || window.localStorage?.getItem('voidloopPerfDebug') === '1';
+    if (!enabled) return null;
+    const terrain = this.world?.terrainMesh?.getStats?.() || {};
+    return {
+      calls: this.renderer.info.render.calls,
+      triangles: this.renderer.info.render.triangles,
+      visibleChunks: terrain.visibleChunks || 0,
+      liveChunks: terrain.liveChunks || terrain.chunks || 0,
+      dirtyChunks: terrain.dirtyChunks || 0,
+      rebuildMs: terrain.rebuildMs || 0,
+    };
   }
 
   _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0) {

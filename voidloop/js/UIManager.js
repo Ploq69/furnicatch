@@ -1386,8 +1386,13 @@ export class UIManager {
     `;
   }
 
-  setFPS(fps) {
-    if (this.elFps) this.elFps.textContent = fps + ' FPS';
+  setFPS(fps, perfStats = null) {
+    if (!this.elFps) return;
+    if (!perfStats) {
+      this.elFps.textContent = fps + ' FPS';
+      return;
+    }
+    this.elFps.textContent = `${fps} FPS | calls ${perfStats.calls} | tris ${perfStats.triangles} | terrain ${perfStats.visibleChunks}/${perfStats.liveChunks} | dirty ${perfStats.dirtyChunks} | rebuild ${perfStats.rebuildMs.toFixed(1)}ms`;
   }
 
   // ===== Pet Den UI =====

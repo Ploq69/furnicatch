@@ -781,8 +781,6 @@ export class World {
   }
 
   update(dt, playerPos, particles, audio, player, options = {}) {
-    this.terrainMesh.update();
-    this.terrainMesh.setVisibleAround(playerPos, 58);
     const playerDepth = this.getTerrainDepthAtPlayer(playerPos);
     const allowCutaway = options.cameraMode !== 'firstPerson';
     if (allowCutaway) {
@@ -803,6 +801,11 @@ export class World {
       forward: { x: Math.SQRT1_2, z: Math.SQRT1_2 },
       reach: cutawayReach,
     });
+    this.terrainMesh.updateVisibility(playerPos, {
+      camera: options.camera,
+      cameraMode: options.cameraMode,
+    });
+    this.terrainMesh.update({ playerPos });
 
     // Update chunk visibility based on player position
     this.instancer.updateVisibility(playerPos, 45);
@@ -814,16 +817,20 @@ export class World {
 
     // Animate only floating blocks — with distance culling
     const px = playerPos.x;
+    const py = playerPos.y;
     const pz = playerPos.z;
-    const CULL_DIST_SQ = 35 * 35; // 35 units
+    const CULL_DIST_SQ = 35 * 35; // 35 units, now in 3D
     for (const block of this.floatingBlocks) {
       if (!block.mesh) continue;
       const dx = block.position.x - px;
+      const dy = block.position.y - py;
       const dz = block.position.z - pz;
-      const distSq = dx * dx + dz * dz;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      const chunkKey = this.terrainMesh.getChunkKeyForPoint(block.position);
+      const chunkHot = this.terrainMesh.hotChunkKeys.has(chunkKey) || this.terrainMesh.visibleChunkKeys.has(chunkKey);
 
       // Distance-based visibility culling
-      if (distSq > CULL_DIST_SQ) {
+      if (distSq > CULL_DIST_SQ || !chunkHot) {
         if (block.mesh.visible) block.mesh.visible = false;
         continue;
       }
@@ -835,6 +842,17 @@ export class World {
       block.mesh.rotation.y += dt * 0.3;
     }
     for (const enemy of this.enemies) {
+      if (options.currentZoneId && enemy.zoneId && enemy.zoneId !== options.currentZoneId) {
+        if (enemy.mesh) enemy.mesh.visible = false;
+        continue;
+      }
+      const chunkKey = this.terrainMesh.getChunkKeyForPoint(enemy.position);
+      const chunkHot = this.terrainMesh.hotChunkKeys.has(chunkKey) || this.terrainMesh.visibleChunkKeys.has(chunkKey);
+      if (!chunkHot && enemy.position.distanceToSquared(playerPos) > 28 * 28) {
+        if (enemy.mesh) enemy.mesh.visible = false;
+        continue;
+      }
+      if (enemy.mesh && !enemy.dead) enemy.mesh.visible = true;
       enemy.update(dt, playerPos, particles, audio, player);
     }
     // Remove dead enemies

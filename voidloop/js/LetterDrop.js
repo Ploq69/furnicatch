@@ -11,7 +11,8 @@ const BOUNCE_REST = 0.4;
 const MAGNET_RANGE = 4.0;
 const MAGNET_ACCEL = 15;
 const MAGNET_MAX_SPEED = 12;
-const COLLECT_DIST = 1.0;
+const COLLECT_DIST = 1.6;
+const LETTER_SCALE = 1.5;
 const DESPAWN_TIME = 15;
 const MAX_ACTIVE = 30;
 
@@ -43,7 +44,7 @@ export class LetterDrop {
 
     mesh.position.copy(pos);
     mesh.position.y += 0.3;
-    mesh.scale.setScalar(0.6);
+    mesh.scale.setScalar(LETTER_SCALE);
     mesh.castShadow = false;
 
     this.scene.add(mesh);
