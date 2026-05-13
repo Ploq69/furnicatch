@@ -9,6 +9,9 @@ const SAVE_KEY = 'voidloop_progress_v1';
  * All resource types in the game.
  */
 export const RESOURCE_TYPES = [
+  // Dig junk
+  'loose_dirt', 'gravel_bits', 'scrap_stone', 'old_junk',
+
   // Forest
   'moss_chip', 'crystal_shard', 'amber', 'ancient_bark',
   // Fire
@@ -29,6 +32,11 @@ export const RESOURCE_TYPES = [
  * Resource display names and coin values for selling.
  */
 export const RESOURCE_META = {
+  loose_dirt:         { name: 'Loose Dirt',         value: 1 },
+  gravel_bits:        { name: 'Gravel Bits',        value: 1 },
+  scrap_stone:        { name: 'Scrap Stone',        value: 2 },
+  old_junk:           { name: 'Old Junk',           value: 3 },
+
   moss_chip:          { name: 'Moss Chip',          value: 5 },
   crystal_shard:      { name: 'Crystal Shard',      value: 10 },
   amber:              { name: 'Amber',              value: 20 },

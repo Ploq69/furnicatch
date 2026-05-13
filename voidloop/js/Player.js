@@ -109,6 +109,7 @@ export class Player {
     this.velocity = new THREE.Vector3();
     this.rotation = 0;
     this.targetRotation = 0;
+    this.controlYaw = null;
 
     this.hp = GAME.MAX_HP;
     this.maxHp = GAME.MAX_HP;
@@ -492,10 +493,16 @@ export class Player {
       this.stamina = Math.min(this.maxStamina, this.stamina + GAME.STAMINA_REGEN * dt);
     }
 
-    // Ground height snapping (3D terrain support) — 2×2 area check
+    // SDF terrain owns vertical collision to avoid height-snap oscillation while digging.
+    let terrainResolved = false;
+    if (this.world?.hasSdfTerrain?.() && this.world.resolvePlayerTerrain) {
+      terrainResolved = this.world.resolvePlayerTerrain(this, dt);
+    }
+
+    // Ground height snapping for authored/block terrain only.
     let groundY = 0;
     let fallingIntoVoid = false;
-    if (this.world) {
+    if (this.world && !terrainResolved) {
       const topY = this._getGroundHeight(this.position.x, this.position.z);
       if (topY > -999) {
         groundY = topY;
@@ -516,14 +523,14 @@ export class Player {
     }
 
     // Simple gravity / falling
-    if (this.position.y > groundY + 0.01 || fallingIntoVoid) {
+    if (!terrainResolved && (this.position.y > groundY + 0.01 || fallingIntoVoid)) {
       this.velocity.y += GAME.GRAVITY * dt;
       this.position.y += this.velocity.y * dt;
       if (!fallingIntoVoid && this.position.y <= groundY) {
         this.position.y = groundY;
         this.velocity.y = 0;
       }
-    } else if (this.position.y < groundY) {
+    } else if (!terrainResolved && this.position.y < groundY) {
       this.position.y = groundY;
       this.velocity.y = 0;
     }
@@ -549,15 +556,28 @@ export class Player {
 
     let dx = 0;
     let dz = 0;
-    if (input.isDown('ArrowUp') || input.isDown('KeyW')) dz -= 1;
-    if (input.isDown('ArrowDown') || input.isDown('KeyS')) dz += 1;
-    if (input.isDown('ArrowLeft') || input.isDown('KeyA')) dx -= 1;
-    if (input.isDown('ArrowRight') || input.isDown('KeyD')) dx += 1;
+    if (this.controlYaw != null) {
+      let forwardMove = 0;
+      let strafeMove = 0;
+      if (input.isDown('ArrowUp') || input.isDown('KeyW')) forwardMove += 1;
+      if (input.isDown('ArrowDown') || input.isDown('KeyS')) forwardMove -= 1;
+      if (input.isDown('ArrowLeft') || input.isDown('KeyA')) strafeMove -= 1;
+      if (input.isDown('ArrowRight') || input.isDown('KeyD')) strafeMove += 1;
+      dx = -Math.sin(this.controlYaw) * forwardMove + Math.cos(this.controlYaw) * strafeMove;
+      dz = -Math.cos(this.controlYaw) * forwardMove - Math.sin(this.controlYaw) * strafeMove;
+    } else {
+      if (input.isDown('ArrowUp') || input.isDown('KeyW')) dz -= 1;
+      if (input.isDown('ArrowDown') || input.isDown('KeyS')) dz += 1;
+      if (input.isDown('ArrowLeft') || input.isDown('KeyA')) dx -= 1;
+      if (input.isDown('ArrowRight') || input.isDown('KeyD')) dx += 1;
+    }
 
-    if (dx !== 0 && dz !== 0) {
+    if (dx !== 0 || dz !== 0) {
       const len = Math.sqrt(dx * dx + dz * dz);
-      dx /= len;
-      dz /= len;
+      if (len > 1) {
+        dx /= len;
+        dz /= len;
+      }
     }
 
     // Dodge on double-tap Space + direction
@@ -574,15 +594,25 @@ export class Player {
       this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
     }
 
+    const oldX = this.position.x;
+    const oldZ = this.position.z;
     this.position.x += dx * speed * dt;
     this.position.z += dz * speed * dt;
+    if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
+      this.position.x = oldX;
+      this.position.z = oldZ;
+    }
 
     if (dx !== 0 || dz !== 0) {
       this.targetRotation = Math.atan2(dx, dz);
-      let diff = this.targetRotation - this.rotation;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      this.rotation += diff * Math.min(1, 10 * dt);
+      if (this.controlYaw != null) {
+        this.rotation = this.controlYaw;
+      } else {
+        let diff = this.targetRotation - this.rotation;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        this.rotation += diff * Math.min(1, 10 * dt);
+      }
 
       if (this.animLockTimer <= 0 && !this.isBlocking) {
         const isRunning = input.isDown('ShiftLeft') && this.stamina > 0;
@@ -693,6 +723,9 @@ export class Player {
 
   _getGroundHeight(px, pz) {
     if (!this.world) return 0;
+    if (this.world.hasSdfTerrain?.()) {
+      return this.world.getGroundHeightAt(px, pz, this.position.y);
+    }
     // Check a 2×2 area around the player's position for the highest ground.
     // This prevents falling through narrow gaps between tiles.
     let maxY = -999;
@@ -700,7 +733,9 @@ export class Player {
     const z0 = Math.floor(pz);
     for (let dx = 0; dx <= 1; dx++) {
       for (let dz = 0; dz <= 1; dz++) {
-        const y = this.world.getColumnTop(x0 + dx, z0 + dz);
+        const y = this.world.getGroundHeightAt
+          ? this.world.getGroundHeightAt(x0 + dx, z0 + dz, this.position.y)
+          : this.world.getColumnTop(x0 + dx, z0 + dz);
         if (y > maxY) maxY = y;
       }
     }

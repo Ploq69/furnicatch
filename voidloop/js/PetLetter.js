@@ -40,9 +40,7 @@ export class PetLetter {
   async _loadModel() {
     await glyph3D.load();
     this.container = new THREE.Group();
-    this.glowLight = new THREE.PointLight(0xffffff, 0.5, 2.5);
-    this.glowLight.position.y = 0.8;
-    this.container.add(this.glowLight);
+    this.glowLight = null;
     this._applyVisuals();
     if (this.initialPosition) {
       this.container.position.copy(this.initialPosition);
@@ -52,10 +50,6 @@ export class PetLetter {
 
   _applyVisuals() {
     const cfg = PET_LEVELS.find(l => l.level === this.visualLevel) || PET_LEVELS[0];
-
-    if (this.glowLight) {
-      this.glowLight.color.setHex(cfg.color);
-    }
 
     if (!this.container) return;
 

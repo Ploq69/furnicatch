@@ -27,6 +27,10 @@ class InputManager {
       this.mouse.dy = e.movementY;
       this.mouse.x = e.clientX;
       this.mouse.y = e.clientY;
+      this.mouse.locked = !!document.pointerLockElement;
+    });
+    document.addEventListener('pointerlockchange', () => {
+      this.mouse.locked = !!document.pointerLockElement;
     });
     window.addEventListener('wheel', (e) => {
       this.wheel = e.deltaY;
@@ -40,8 +44,13 @@ class InputManager {
     return false;
   }
 
+  buttonPressed(button) {
+    return !!this.buttons[button] && !this._prevButtons?.[button];
+  }
+
   update() {
     this._prevKeys = { ...this.keys };
+    this._prevButtons = { ...this.buttons };
     this.mouse.dx = 0;
     this.mouse.dy = 0;
     this.wheel = 0;

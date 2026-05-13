@@ -312,7 +312,7 @@ export class ShopUI {
         <div class="shop-empty">
           <div style="font-size:48px;margin-bottom:12px;">📦</div>
           <div>No resources yet.</div>
-          <div style="font-size:13px;color:#888;margin-top:8px;">Mine floating blocks to collect resources!</div>
+          <div style="font-size:13px;color:#888;margin-top:8px;">Dig terrain or mine floating blocks to collect resources!</div>
         </div>
       `;
       return;

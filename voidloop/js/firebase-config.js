@@ -10,6 +10,14 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
 import { getDatabase } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-database.js';
 
+if (!globalThis.VOIDLOOP_FIREBASE_CONFIG) {
+  try {
+    await import('./firebase-config.local.js');
+  } catch {
+    // Local/deployment config is optional; multiplayer callers surface this.
+  }
+}
+
 const firebaseConfig = globalThis.VOIDLOOP_FIREBASE_CONFIG;
 
 let db = null;

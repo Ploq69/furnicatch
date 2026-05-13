@@ -18,7 +18,7 @@ import { Inventory } from './Inventory.js';
 import { ShopManager, SHOP_ITEMS } from './ShopManager.js';
 import { ShopUI } from './ShopUI.js';
 import { HazardSystem } from './HazardSystem.js';
-import { getKayKitPaths } from './KayKitLoadout.js';
+import { getKayKitItem, getKayKitPaths } from './KayKitLoadout.js';
 import { LetterPool, SPELLING_WORDS } from './SpellingData.js';
 import { SpellingChallenge } from './SpellingEngine.js';
 import { LetterDrop } from './LetterDrop.js';
@@ -28,7 +28,7 @@ import { PetLetter } from './PetLetter.js';
 import { RemotePlayer } from './RemotePlayer.js';
 import { Enemy } from './Enemy.js';
 import { settings } from './SettingsManager.js';
-import { ResourceInventory } from './ResourceInventory.js';
+import { ResourceInventory, RESOURCE_META } from './ResourceInventory.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -46,9 +46,11 @@ export class Game {
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    // Keep the main game at native CSS resolution. On Retina displays a 1.5x
+    // render scale is a large fragment-cost jump and makes 60fps fragile.
+    this.renderer.setPixelRatio(1);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.BasicShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.5;
     this.container.appendChild(this.renderer.domElement);
@@ -57,14 +59,26 @@ export class Game {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0a0a);
 
-    // Camera — Orthographic isometric (stationary)
+    // Camera — Orthographic isometric by default, with a toggleable first-person mining view
     this.cameraZoom = 3.0;
     this.baseD = 18;
     const aspect = window.innerWidth / window.innerHeight;
     const d = this.baseD / this.cameraZoom;
-    this.camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 200);
-    this.camera.position.set(20, 20, 20);
-    this.camera.lookAt(0, 0, 0);
+    this.isoCamera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 200);
+    this.isoCamera.position.set(20, 20, 20);
+    this.isoCamera.lookAt(0, 0, 0);
+    this.firstPersonCamera = new THREE.PerspectiveCamera(72, aspect, 0.05, 180);
+    this.scene.add(this.firstPersonCamera);
+    this.camera = this.isoCamera;
+    this.cameraMode = 'iso';
+    this.fpYaw = 0;
+    this.fpPitch = -0.12;
+    this.fpViewmodel = null;
+    this.fpViewmodelTool = null;
+    this.fpViewmodelItemId = null;
+    this.fpSwingTimer = 0;
+    this.fpSwingDuration = 0.32;
+    this._createFirstPersonViewmodel();
 
     // Lighting
     this.ambient = new THREE.AmbientLight(0x8888aa, 0.6);
@@ -73,7 +87,7 @@ export class Game {
     this.sun = new THREE.DirectionalLight(0xfff5e6, 1.2);
     this.sun.position.set(10, 30, 10);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(512, 512);
+    this.sun.shadow.mapSize.set(256, 256);
     this.sun.shadow.camera.near = 0.5;
     this.sun.shadow.camera.far = 80;
     this.sun.shadow.camera.left = -30;
@@ -91,8 +105,8 @@ export class Game {
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1510, roughness: 0.9 });
     this.floorPlane = new THREE.Mesh(floorGeo, floorMat);
     this.floorPlane.rotation.x = -Math.PI / 2;
-    this.floorPlane.position.y = -0.51;
-    this.floorPlane.receiveShadow = true;
+    this.floorPlane.position.y = -50;
+    this.floorPlane.receiveShadow = false;
     this.scene.add(this.floorPlane);
 
     // Systems
@@ -102,6 +116,10 @@ export class Game {
     this.player = new Player(this.scene);
     this.player.world = this.world;
     this.ui = new UIManager(this);
+    this.aimReticle = document.createElement('div');
+    this.aimReticle.textContent = '+';
+    this.aimReticle.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#e8fff2;text-shadow:0 1px 4px #000;font-size:22px;font-weight:700;z-index:20;pointer-events:none;display:none;';
+    document.body.appendChild(this.aimReticle);
     this.ui.onBrightnessChange = (val) => {
       this.renderer.toneMappingExposure = 1.5 * val;
     };
@@ -142,6 +160,11 @@ export class Game {
 
     // Resize
     window.addEventListener('resize', () => this._onResize());
+    this.renderer.domElement.addEventListener('click', () => {
+      if (this.cameraMode === 'firstPerson' && document.pointerLockElement !== this.renderer.domElement) {
+        this.renderer.domElement.requestPointerLock?.();
+      }
+    });
 
     // Listen for settings changes
     this._settingsUnsub = settings.onChange((key, value) => {
@@ -448,19 +471,6 @@ export class Game {
       this.scene.remove(t);
     }
     this.torches = [];
-
-    const size = GAME.FLOOR_SIZE;
-    // Place torch lights at corners
-    const corners = [
-      [size, size], [size, -size], [-size, size], [-size, -size],
-      [size, 0], [-size, 0], [0, size], [0, -size],
-    ];
-    for (const [tx, tz] of corners) {
-      const light = new THREE.PointLight(0xffaa44, 0.8, 20);
-      light.position.set(tx, 4, tz);
-      this.scene.add(light);
-      this.torches.push(light);
-    }
   }
 
   _initAudioOnInteraction() {
@@ -524,6 +534,10 @@ export class Game {
         this.ui.showShop();
       }
 
+      if (input.pressed('KeyV') && !this.paused && !this.ui.loadoutOpen && !this.ui.petDenOpen && !(this.shopUI && this.shopUI.isOpen)) {
+        this._toggleCameraMode();
+      }
+
       if (!this.ui.loadoutOpen && !this.ui.petDenOpen && !this.paused && !(this.shopUI && this.shopUI.isOpen)) {
         this._updatePlaying(dt);
       }
@@ -533,14 +547,15 @@ export class Game {
       if (input.pressed('Escape')) {
         this._onSpellingClose();
       }
-      // Camera still follows player but no gameplay updates
+      // Spelling uses the isometric camera so the glyph is visible.
+      this._setCameraMode('iso', false);
       const offset = 20 / this.cameraZoom;
-      this.camera.position.set(
+      this.isoCamera.position.set(
         this.player.position.x + offset,
         this.player.position.y + offset,
         this.player.position.z + offset
       );
-      this.camera.lookAt(this.player.position.x, this.player.position.y, this.player.position.z);
+      this.isoCamera.lookAt(this.player.position.x, this.player.position.y, this.player.position.z);
       // Bob the 3D glyph mesh if present
       if (this.spellingGlyphMesh) {
         this.spellingGlyphMesh.position.y = 1.5 + Math.sin(Date.now() * 0.003) * 0.15;
@@ -601,12 +616,7 @@ export class Game {
       shakeZ = (Math.random() - 0.5) * this.shakeIntensity * decay;
       if (this.shakeDuration <= 0) this.shakeIntensity = 0;
     }
-    this.camera.position.set(
-      this.player.position.x + offset + shakeX,
-      this.player.position.y + offset + shakeY,
-      this.player.position.z + offset + shakeZ
-    );
-    this.camera.lookAt(this.player.position.x, this.player.position.y, this.player.position.z);
+    this._updateCamera(dt, offset, shakeX, shakeY, shakeZ);
 
     // Player update
     this.player.update(dt, input);
@@ -620,7 +630,8 @@ export class Game {
     for (const w of this.player.weapons) w.update(dt);
 
     // Contextual J button — mine block or attack enemy
-    if (input.pressed('KeyJ') && this.player.weapons[this.player.currentSlot].cooldown <= 0) {
+    const minePressed = input.pressed('KeyJ') || (this.cameraMode === 'firstPerson' && input.buttonPressed?.('left'));
+    if (minePressed && this.player.weapons[this.player.currentSlot].cooldown <= 0) {
       const weapon = this.player.weapons[this.player.currentSlot];
 
       // Check for nearby enemy first (combat priority)
@@ -668,6 +679,7 @@ export class Game {
         if (nearestBlock && !nearestBlock.destroyed) {
           // Use the same weapon attack animation for mining
           this.player.playAttackAnim();
+          if (this.cameraMode === 'firstPerson') this._startFirstPersonSwing();
           SFXMapper.mineSwing();
           // Mine VFX
           const handPos2 = new THREE.Vector3();
@@ -679,14 +691,38 @@ export class Game {
           // Weapon elemental burst on mine swing
           const mineItemId = this.player.loadout?.rightHand;
           if (mineItemId) playWeaponBurst(this.scene, this.camera, blockPos, mineItemId);
-          const destroyed = nearestBlock.takeDamage(this._getMiningDamage(nearestBlock));
+
+          let destroyed = false;
+          let typeKey = nearestBlock.typeKey;
+          let zoneId = nearestBlock.zoneId;
+          const isFloat = nearestBlock.isFloating;
+          let terrainResult = null;
+
+          if (miningTarget.isTerrain) {
+            // ── Terrain block mining ──
+            const g = miningTarget.gridPos;
+            const result = this.world.mineTerrainBlock(g.x, g.y, g.z, this._getMiningDamage(nearestBlock), {
+              center: miningTarget.brushCenter,
+              zoneId,
+              type: typeKey,
+              radius: this._getTerrainBrushRadius(zoneId),
+            });
+            terrainResult = result;
+            destroyed = result.destroyed;
+            typeKey = result.cell?.type || typeKey;
+            zoneId = result.cell?.zoneId || zoneId;
+          } else {
+            // ── Floating block mining ──
+            destroyed = nearestBlock.takeDamage(this._getMiningDamage(nearestBlock));
+          }
+
           if (destroyed) {
             // Sync block destruction in multiplayer
             if (this.isMultiplayer && this.net) {
               this.net.syncEvent('block_broken', {
-                x: nearestBlock.position.x,
-                y: nearestBlock.position.y,
-                z: nearestBlock.position.z,
+                x: blockPos.x,
+                y: blockPos.y - 0.3,
+                z: blockPos.z,
               });
             }
 
@@ -700,30 +736,32 @@ export class Game {
             this.blocksMined++;
 
             // Block break VFX + screen shake (stronger for floating blocks)
-            const isFloat = nearestBlock.isFloating;
             this.particles.dust(blockPos, isFloat ? 10 : 8);
             this.particles.spark(blockPos, isFloat ? 8 : 6);
             this._screenShake(isFloat ? 0.8 : 0.5, 0.25);
-            const drop = this.world.mineBlock(nearestBlock, this.particles, audio);
 
-            // enemyLoot: spawn loot on enemy death from block table
-            const table = BLOCK_LOOT_TABLES[nearestBlock.typeKey];
-            if (table) {
-              this.loot.spawnFromTable(blockPos, table);
+            if (!miningTarget.isTerrain) {
+              this.world.mineBlock(nearestBlock, this.particles, audio);
             }
 
-            // Floating blocks: 25% letter drop + resource drop
-            if (isFloat) {
-              // Letter drop (25%)
+            if (miningTarget.isTerrain) {
+              this._awardTerrainDigRewards(terrainResult, blockPos, zoneId);
+            } else {
+              // enemyLoot: spawn loot on enemy death from block table
+              const table = BLOCK_LOOT_TABLES[typeKey];
+              if (table) {
+                this.loot.spawnFromTable(blockPos, table);
+              }
+
+              // Floating blocks keep the strongest letter/resource rewards.
               if (Math.random() < 0.25) {
-                const letter = this._pickLetterForZone(nearestBlock.zoneId || this.zoneManager.currentZoneId);
+                const letter = this._pickLetterForZone(zoneId || this.zoneManager.currentZoneId);
                 if (letter) {
                   this.letterDrops.spawn(blockPos, letter);
                   this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
                 }
               }
-              // Resource drop from block definition
-              const blockDef = BLOCK_TYPES[nearestBlock.typeKey];
+              const blockDef = BLOCK_TYPES[typeKey];
               if (blockDef && blockDef.resource) {
                 this.resources.add(blockDef.resource, 1);
                 const resName = blockDef.resource.replace(/_/g, ' ');
@@ -862,6 +900,139 @@ export class Game {
     }
   }
 
+  _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0) {
+    if (this.cameraMode === 'firstPerson') {
+      this._updateFirstPersonAim(dt);
+      this._updateFirstPersonViewmodel(dt);
+      const head = this.player.position.clone().add(new THREE.Vector3(0, 1.15, 0));
+      this.firstPersonCamera.position.set(head.x + shakeX * 0.2, head.y + shakeY * 0.2, head.z + shakeZ * 0.2);
+      this.firstPersonCamera.rotation.order = 'YXZ';
+      this.firstPersonCamera.rotation.y = this.fpYaw;
+      this.firstPersonCamera.rotation.x = this.fpPitch;
+      this.firstPersonCamera.rotation.z = 0;
+      this.player.rotation = this.fpYaw;
+      this.player.controlYaw = this.fpYaw;
+      if (this.player.mesh) this.player.mesh.visible = false;
+      return;
+    }
+
+    this.player.controlYaw = null;
+    if (this.player.mesh) this.player.mesh.visible = true;
+    this.isoCamera.position.set(
+      this.player.position.x + isoOffset + shakeX,
+      this.player.position.y + isoOffset + shakeY,
+      this.player.position.z + isoOffset + shakeZ
+    );
+    this.isoCamera.lookAt(this.player.position.x, this.player.position.y, this.player.position.z);
+  }
+
+  _updateFirstPersonAim(dt) {
+    const sensitivity = 0.0022;
+    if (input.mouse.locked) {
+      this.fpYaw -= input.mouse.dx * sensitivity;
+      this.fpPitch -= input.mouse.dy * sensitivity;
+      this.fpPitch = Math.max(-1.2, Math.min(0.75, this.fpPitch));
+    }
+    this.player.rotation = this.fpYaw;
+    this.player.controlYaw = this.fpYaw;
+  }
+
+  _createFirstPersonViewmodel() {
+    this.fpViewmodel = new THREE.Group();
+    this.fpViewmodel.visible = false;
+    this.firstPersonCamera.add(this.fpViewmodel);
+
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xc7865a, roughness: 0.85 });
+    const gloveMat = new THREE.MeshStandardMaterial({ color: 0x2f241d, roughness: 0.9 });
+
+    const makeArm = (x) => {
+      const arm = new THREE.Group();
+      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, 0.48), skinMat);
+      sleeve.position.set(0, -0.04, -0.18);
+      sleeve.rotation.x = -0.28;
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.16), gloveMat);
+      hand.position.set(0, -0.08, -0.45);
+      arm.add(sleeve, hand);
+      arm.position.set(x, -0.28, -0.58);
+      arm.rotation.z = x > 0 ? -0.16 : 0.16;
+      return arm;
+    };
+
+    this.fpViewmodel.add(makeArm(0.22));
+    this.fpViewmodel.add(makeArm(-0.18));
+    this._refreshFirstPersonTool();
+  }
+
+  _refreshFirstPersonTool() {
+    if (!this.fpViewmodel) return;
+    const itemId = this.player?.loadout?.rightHand || 'pickaxe';
+    const item = getKayKitItem(itemId);
+    const cloned = item?.model ? assetLoader.cloneModel(item.model) : null;
+    if (this.fpViewmodelItemId === itemId && this.fpViewmodelTool && (!this.fpViewmodelTool.userData.isFallback || !cloned?.scene)) return;
+
+    if (this.fpViewmodelTool) {
+      this.fpViewmodel.remove(this.fpViewmodelTool);
+      this.fpViewmodelTool.traverse?.((c) => {
+        if (c.isMesh && c.material?.dispose) c.material.dispose();
+      });
+      this.fpViewmodelTool = null;
+    }
+
+    if (cloned?.scene) {
+      this.fpViewmodelTool = cloned.scene;
+      this.fpViewmodelTool.position.set(0.28, -0.26, -0.78);
+      this.fpViewmodelTool.rotation.set(-0.55, 0.18, -0.8);
+      this.fpViewmodelTool.scale.setScalar(0.55);
+      this.fpViewmodelTool.userData.isFallback = false;
+    } else {
+      const group = new THREE.Group();
+      const handle = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.5, 0.06),
+        new THREE.MeshStandardMaterial({ color: 0x6b4324, roughness: 0.85 })
+      );
+      const head = new THREE.Mesh(
+        new THREE.BoxGeometry(0.38, 0.08, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.7 })
+      );
+      head.position.y = 0.25;
+      group.add(handle, head);
+      group.position.set(0.28, -0.28, -0.78);
+      group.rotation.set(-0.65, 0.12, -0.75);
+      group.userData.isFallback = true;
+      this.fpViewmodelTool = group;
+    }
+
+    this.fpViewmodelTool.userData.baseRotation = this.fpViewmodelTool.rotation.clone();
+    this.fpViewmodelItemId = itemId;
+    this.fpViewmodel.add(this.fpViewmodelTool);
+  }
+
+  _startFirstPersonSwing() {
+    this.fpSwingTimer = this.fpSwingDuration;
+    this._refreshFirstPersonTool();
+  }
+
+  _updateFirstPersonViewmodel(dt) {
+    if (!this.fpViewmodel) return;
+    this._refreshFirstPersonTool();
+    this.fpViewmodel.visible = true;
+    this.fpViewmodel.position.set(0, 0, 0);
+    this.fpViewmodel.rotation.set(0, 0, 0);
+
+    if (this.fpSwingTimer > 0) this.fpSwingTimer = Math.max(0, this.fpSwingTimer - dt);
+    const t = this.fpSwingTimer > 0 ? 1 - (this.fpSwingTimer / this.fpSwingDuration) : 1;
+    const swing = this.fpSwingTimer > 0 ? Math.sin(t * Math.PI) : 0;
+
+    this.fpViewmodel.position.y = -0.03 * swing;
+    this.fpViewmodel.position.z = -0.05 * swing;
+    this.fpViewmodel.rotation.x = -0.22 * swing;
+    this.fpViewmodel.rotation.z = -0.08 * swing;
+    if (this.fpViewmodelTool) {
+      const base = this.fpViewmodelTool.userData.baseRotation;
+      this.fpViewmodelTool.rotation.set(base.x - 0.65 * swing, base.y, base.z + 0.25 * swing);
+    }
+  }
+
   _findNearestEnemy(range) {
     let nearest = null;
     let nearestDist = range;
@@ -880,11 +1051,15 @@ export class Game {
     let nearest = null;
     let nearestDist = range;
     const playerPos = this.player.position;
-    const forward = new THREE.Vector3(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation));
+    const aim = this._getMiningAim();
+    const forward = new THREE.Vector3(aim.direction.x, 0, aim.direction.z);
+    if (forward.lengthSq() < 0.001) forward.set(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation));
+    forward.normalize();
 
     const weaponId = this.player.weapons[this.player.currentSlot]?.data?.id || 'unknown';
     const isPickaxe = weaponId === 'pickaxe';
 
+    // ── 1. Floating blocks (original behaviour) ──
     for (const block of this.world.blocks.values()) {
       if (block.destroyed) continue;
 
@@ -911,9 +1086,56 @@ export class Game {
       }
     }
 
-    if (!nearest) return null;
+    if (nearest) {
+      return this._getMiningStatusForBlock(nearest, { isPickaxe });
+    }
 
-    return this._getMiningStatusForBlock(nearest, { isPickaxe });
+    // ── 2. Terrain blocks — raycast against unified mesh ──
+    if (isPickaxe) {
+      const rayOrigin = aim.origin;
+      const rayDirs = this.cameraMode === 'firstPerson'
+        ? [aim.direction.clone()]
+        : [
+          aim.direction.clone(),
+          aim.direction.clone().multiplyScalar(0.75).add(new THREE.Vector3(0, -0.65, 0)).normalize(),
+          new THREE.Vector3(0, -1, 0),
+        ];
+      let hit = null;
+      for (const dir of rayDirs) {
+        const raycaster = new THREE.Raycaster(rayOrigin, dir, 0.05, range);
+        hit = this.world.terrainMesh.raycast(raycaster);
+        if (hit) break;
+      }
+      if (hit) {
+        const zone = getZoneAtPosition(hit.point.x, hit.point.z);
+        if (!zone) return null;
+        const normal = hit.face?.normal?.clone() || new THREE.Vector3(0, 1, 0);
+        normal.transformDirection(hit.object.matrixWorld).normalize();
+        let brushCenter = hit.point.clone().addScaledVector(normal, -0.45);
+        if (!this.world.terrainMesh.isSolidAt(brushCenter.x, brushCenter.y, brushCenter.z)) {
+          brushCenter = hit.point.clone().addScaledVector(normal, 0.45);
+        }
+        const depth = Math.max(0, 1 - brushCenter.y);
+        const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
+        const proxy = {
+          typeKey,
+          position: hit.point.clone(),
+          zoneId: zone.id,
+          isFloating: false,
+          destroyed: false,
+          tier: 1,
+        };
+        const status = this._getMiningStatusForBlock(proxy, { isPickaxe });
+        status.isTerrain = true;
+        status.gridPos = { x: brushCenter.x, y: brushCenter.y, z: brushCenter.z };
+        status.hitPoint = hit.point.clone();
+        status.brushCenter = brushCenter;
+        status.terrainCell = { type: typeKey, zoneId: zone.id };
+        return status;
+      }
+    }
+
+    return null;
   }
 
   _getMiningStatusForBlock(block, options = {}) {
@@ -944,6 +1166,42 @@ export class Game {
     const zonePickaxeTier = this.shop.getPickaxeTier(block.zoneId || blockDef.zone);
     const tierDamage = { 1: 1, 2: 2, 3: 3, 4: 5 };
     return tierDamage[zonePickaxeTier] || 1;
+  }
+
+  _getTerrainBrushRadius(zoneId) {
+    const tier = this.shop.getPickaxeTier(zoneId || this.zoneManager.currentZoneId) || 1;
+    const radii = { 1: 0.95, 2: 1.25, 3: 1.65, 4: 2.15 };
+    return radii[Math.min(tier, 4)] || radii[1];
+  }
+
+  _awardTerrainDigRewards(result, hitPos, zoneId) {
+    if (!result?.meaningful) return;
+
+    const tier = this.shop.getPickaxeTier(zoneId || this.zoneManager.currentZoneId) || 1;
+    const depth = result.depth || 0;
+    const luck = this.shop.getUpgradeLevel?.('mine_luck') || 0;
+    const volumeBonus = Math.min(3, Math.floor((result.removedVolume || 0) / 10));
+    const amount = Math.max(1, Math.min(4, 1 + Math.floor((tier - 1) / 2) + volumeBonus));
+    const resourceType = this._pickDigJunkResource(depth, tier, luck);
+
+    if (this.resources.add(resourceType, amount)) {
+      const name = RESOURCE_META[resourceType]?.name || resourceType.replace(/_/g, ' ');
+      this.ui.showFloatingText(`+${amount} ${name}`, 0x9bd47a);
+    }
+
+    for (const node of result.revealedLetters || []) {
+      const spawnPos = node.position.clone();
+      this.letterDrops.spawn(spawnPos, node.letter);
+      this.ui.showFloatingText(`Letter ${node.letter}!`, 0xfacc15);
+    }
+  }
+
+  _pickDigJunkResource(depth, tier, luck) {
+    const roll = Math.random() + luck * 0.02 + tier * 0.015;
+    if (depth > 12 && roll > 0.82) return 'old_junk';
+    if (depth > 5 && roll > 0.55) return 'scrap_stone';
+    if (roll > 0.45) return 'gravel_bits';
+    return 'loose_dirt';
   }
 
   _findMineableBlock(range) {
@@ -1168,11 +1426,57 @@ export class Game {
   _updateCameraZoom() {
     const aspect = window.innerWidth / window.innerHeight;
     const d = this.baseD / this.cameraZoom;
-    this.camera.left = -d * aspect;
-    this.camera.right = d * aspect;
-    this.camera.top = d;
-    this.camera.bottom = -d;
-    this.camera.updateProjectionMatrix();
+    this.isoCamera.left = -d * aspect;
+    this.isoCamera.right = d * aspect;
+    this.isoCamera.top = d;
+    this.isoCamera.bottom = -d;
+    this.isoCamera.updateProjectionMatrix();
+    this.firstPersonCamera.aspect = aspect;
+    this.firstPersonCamera.updateProjectionMatrix();
+  }
+
+  _toggleCameraMode() {
+    this._setCameraMode(this.cameraMode === 'firstPerson' ? 'iso' : 'firstPerson');
+  }
+
+  _setCameraMode(mode, showToast = true) {
+    if (mode === this.cameraMode && this.camera === (mode === 'firstPerson' ? this.firstPersonCamera : this.isoCamera)) return;
+
+    this.cameraMode = mode;
+    if (mode === 'firstPerson') {
+      this.camera = this.firstPersonCamera;
+      this.fpYaw = this.player.rotation;
+      this.fpPitch = -0.12;
+      this.renderer.domElement.requestPointerLock?.();
+      if (this.player.mesh) this.player.mesh.visible = false;
+      if (this.fpViewmodel) this.fpViewmodel.visible = true;
+      if (this.aimReticle) this.aimReticle.style.display = 'block';
+      if (showToast) this.ui.showFloatingText('First-person mining', 0x7dd3fc);
+    } else {
+      this.camera = this.isoCamera;
+      if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock?.();
+      this.player.controlYaw = null;
+      if (this.player.mesh) this.player.mesh.visible = true;
+      if (this.fpViewmodel) this.fpViewmodel.visible = false;
+      if (this.aimReticle) this.aimReticle.style.display = 'none';
+      if (showToast) this.ui.showFloatingText('Isometric view', 0x7dd3fc);
+    }
+  }
+
+  _getMiningAim() {
+    if (this.cameraMode === 'firstPerson') {
+      const direction = new THREE.Vector3();
+      this.firstPersonCamera.getWorldDirection(direction);
+      return {
+        origin: this.firstPersonCamera.position.clone(),
+        direction: direction.normalize(),
+      };
+    }
+
+    return {
+      origin: this.player.position.clone().add(new THREE.Vector3(0, 0.65, 0)),
+      direction: new THREE.Vector3(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation)),
+    };
   }
 
   _togglePause() {
@@ -1488,7 +1792,8 @@ export class Game {
   }
 
   _applyGraphicsSettings() {
-    const size = settings.getShadowMapSize();
+    const size = Math.min(settings.getShadowMapSize(), 512);
+    this.renderer.setPixelRatio(1);
     this.sun.shadow.mapSize.set(size, size);
     this.sun.shadow.mapSize.needsUpdate = true;
   }
@@ -1499,11 +1804,13 @@ export class Game {
     const h = document.documentElement.clientHeight || window.innerHeight;
     const aspect = w / h;
     const d = this.baseD / this.cameraZoom;
-    this.camera.left = -d * aspect;
-    this.camera.right = d * aspect;
-    this.camera.top = d;
-    this.camera.bottom = -d;
-    this.camera.updateProjectionMatrix();
+    this.isoCamera.left = -d * aspect;
+    this.isoCamera.right = d * aspect;
+    this.isoCamera.top = d;
+    this.isoCamera.bottom = -d;
+    this.isoCamera.updateProjectionMatrix();
+    this.firstPersonCamera.aspect = aspect;
+    this.firstPersonCamera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.ui.preview?.resize();
   }

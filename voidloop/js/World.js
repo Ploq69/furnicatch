@@ -39,6 +39,7 @@ export class World {
     this.occupancyGrid = new OccupancyGrid();
     this.terrainMesh = new TerrainMesh(scene);
     this.floatingBlocks = new Set();
+    this.hiddenLetterNodes = [];
   }
 
   setFloor(floorNum) {
@@ -57,7 +58,7 @@ export class World {
     if (!zone) throw new Error(`Unknown zone: ${zoneId}`);
 
     this.rng = seed != null ? new SeededRNG(seed) : null;
-    const rng = this.rng || { random: () => Math.random(), rangeInt: (a, b) => a + Math.floor(Math.random() * (b - a + 1)), choice: (arr) => arr[Math.floor(Math.random() * arr.length)], shuffle: (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; } };
+    const rng = this.rng || { random: () => Math.random(), range: (a, b) => a + Math.random() * (b - a), rangeInt: (a, b) => a + Math.floor(Math.random() * (b - a + 1)), choice: (arr) => arr[Math.floor(Math.random() * arr.length)], shuffle: (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; } };
 
     const b = zone.bounds;
     const types = zone.blockTypes;
@@ -68,6 +69,8 @@ export class World {
     const allTypes = [...new Set([...types, 'stone', 'stone_dark'])];
     await this.instancer.preloadTypes([...new Set([...allTypes, 'stone_dark'])]);
     await this.terrainMesh.preloadTypes(allTypes);
+    this.terrainMesh.addZone(zone, seed || 1);
+    this._generateHiddenLetters(zone, rng);
 
     const gridW = b.maxX - b.minX;
     const gridD = b.maxZ - b.minZ;
@@ -222,18 +225,52 @@ export class World {
   }
 
   async buildTerrainMesh() {
-    // Collect all unique block types across the entire occupancy grid
-    const allTypes = new Set();
-    for (const cell of this.occupancyGrid.values()) {
-      if (cell.type) allTypes.add(cell.type);
-    }
-    // Ensure materials are built for every type before mesh generation
-    if (allTypes.size > 0) {
-      await this.terrainMesh.preloadTypes([...allTypes]);
-    }
-    this.terrainMesh.generateFromOccupancyGrid(this.occupancyGrid);
+    await this.terrainMesh.preloadTypes();
+    this.terrainMesh.rebuildAll();
     const stats = this.terrainMesh.getStats();
-    console.log(`[World] Terrain mesh built: ${stats.blocks.toLocaleString()} blocks, ${stats.triangles.toLocaleString()} triangles`);
+    console.log(`[World] SDF terrain built: ${stats.chunks.toLocaleString()} chunks, ${stats.triangles.toLocaleString()} triangles`);
+  }
+
+  _generateHiddenLetters(zone, rng) {
+    const existing = this.hiddenLetterNodes.some(n => n.zoneId === zone.id);
+    if (existing || !zone.letters?.length) return;
+
+    const b = zone.bounds;
+    const count = Math.max(30, zone.letters.length * 10);
+    const nodes = [];
+    let attempts = 0;
+
+    while (nodes.length < count && attempts < count * 20) {
+      attempts++;
+      const x = rng.range(Math.ceil(b.minX) + 4, Math.floor(b.maxX) - 4);
+      const z = rng.range(Math.ceil(b.minZ) + 4, Math.floor(b.maxZ) - 4);
+      const y = -rng.range(4, 38);
+
+      const tooCloseToSpawn = Math.hypot(x - zone.spawnPoint.x, z - zone.spawnPoint.z) < 7;
+      const tooCloseToGateway = zone.exitGateway && Math.hypot(x - zone.exitGateway.x, z - zone.exitGateway.z) < 7;
+      if (tooCloseToSpawn || tooCloseToGateway) continue;
+
+      let tooCloseToOther = false;
+      for (const node of nodes) {
+        if (Math.hypot(x - node.position.x, y - node.position.y, z - node.position.z) < 6) {
+          tooCloseToOther = true;
+          break;
+        }
+      }
+      if (tooCloseToOther) continue;
+
+      const letter = zone.letters[nodes.length % zone.letters.length];
+      nodes.push({
+        id: `${zone.id}-hidden-letter-${nodes.length}`,
+        zoneId: zone.id,
+        letter,
+        position: new THREE.Vector3(x, y, z),
+        radius: 2.5,
+        revealed: false,
+      });
+    }
+
+    this.hiddenLetterNodes.push(...nodes);
   }
 
   async _spawnFloatingBlocksZone(zone, rng) {
@@ -549,16 +586,92 @@ export class World {
 
   _hasGround(x, z) {
     const colKey = `${Math.round(x)},${Math.round(z)}`;
-    return this.occupancyGrid.hasGround(x, z) || this.columnHeights.has(colKey);
+    return this.terrainMesh.getColumnTop(x, z) > -999 || this.occupancyGrid.hasGround(x, z) || this.columnHeights.has(colKey);
   }
 
   getColumnTop(x, z) {
-    // Check terrain occupancy grid first
+    const terrainSurface = this.terrainMesh.getColumnTop(x, z);
+    if (terrainSurface > -999) return terrainSurface;
+    // Backward compatibility for older block-authored ground
     const terrainTop = this.occupancyGrid.getColumnTop(x, z);
     if (terrainTop > -999) return terrainTop;
     // Fall back to placed blocks (gateways, authored levels)
     const colKey = `${Math.round(x)},${Math.round(z)}`;
     return this.columnHeights.get(colKey) ?? -999;
+  }
+
+  getGroundHeightAt(x, z, fromY = 2) {
+    const terrainSurface = this.terrainMesh.getColumnTop(x, z, fromY);
+    if (terrainSurface > -999) return terrainSurface;
+    return this.getColumnTop(x, z);
+  }
+
+  hasSdfTerrain() {
+    return this.terrainMesh?.zones?.size > 0;
+  }
+
+  isPlayerSpaceClear(x, y, z) {
+    if (!this.terrainMesh) return true;
+    const samples = [
+      [x, y + 0.25, z],
+      [x, y + 0.85, z],
+      [x, y + 1.35, z],
+      [x + 0.24, y + 0.75, z],
+      [x - 0.24, y + 0.75, z],
+      [x, y + 0.75, z + 0.24],
+      [x, y + 0.75, z - 0.24],
+    ];
+    return !samples.some(([sx, sy, sz]) => this.terrainMesh.isSolidAt(sx, sy, sz));
+  }
+
+  resolvePlayerTerrain(player, dt) {
+    if (!this.terrainMesh) return false;
+
+    const radius = 0.28;
+    const maxStepDown = player.velocity.y <= 0 ? 0.18 : 0.02;
+    const probes = [
+      [0, 0],
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+    ];
+
+    let groundY = -999;
+    const fromY = player.position.y + 0.6;
+    for (const [dx, dz] of probes) {
+      const y = this.terrainMesh.getColumnTop(player.position.x + dx, player.position.z + dz, fromY);
+      if (y > groundY) groundY = y;
+    }
+
+    player.velocity.y += GAME.GRAVITY * dt;
+    player.position.y += player.velocity.y * dt;
+
+    if (groundY > -999 && player.velocity.y <= 0 && player.position.y <= groundY + maxStepDown) {
+      player.position.y = groundY;
+      player.velocity.y = 0;
+      player.isGrounded = true;
+    } else {
+      player.isGrounded = false;
+    }
+
+    // Gently push out of terrain if a rebuild or falling edge leaves the body intersecting a wall.
+    const pushSamples = [
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+    ];
+    for (const [dx, dz] of pushSamples) {
+      const sx = player.position.x + dx;
+      const sy = player.position.y + 0.75;
+      const sz = player.position.z + dz;
+      if (!this.terrainMesh.isSolidAt(sx, sy, sz)) continue;
+      player.position.x -= dx * 0.35;
+      player.position.z -= dz * 0.35;
+    }
+
+    return true;
   }
 
   mineBlock(block, particles, audio) {
@@ -584,7 +697,55 @@ export class World {
     return block.drop;
   }
 
+  /**
+   * Mine SDF terrain with a spherical brush.
+   * @returns {{destroyed: boolean, meaningful: boolean, removedVolume: number, revealedLetters: Array, cell: Object|null}}
+   */
+  mineTerrainBlock(x, y, z, damage, options = {}) {
+    const center = options.center || new THREE.Vector3(x, y, z);
+    const zoneId = options.zoneId || options.cell?.zoneId || null;
+    const radius = options.radius || 0.9;
+    const result = this.terrainMesh.applyDigBrush(center, radius, 1, zoneId);
+    const revealedLetters = result.meaningful
+      ? this._revealHiddenLetters(result.center, result.radius, result.zoneId)
+      : [];
+
+    return {
+      destroyed: result.meaningful,
+      meaningful: result.meaningful,
+      removedVolume: result.removedVolume,
+      removedCells: result.removedCells,
+      depth: result.depth,
+      radius: result.radius,
+      center: result.center,
+      zoneId: result.zoneId,
+      revealedLetters,
+      drop: null,
+      cell: {
+        type: options.type || 'dirt',
+        zoneId: result.zoneId,
+        destroyed: result.meaningful,
+      },
+    };
+  }
+
+  _revealHiddenLetters(center, radius, zoneId) {
+    if (!zoneId) return [];
+    const revealed = [];
+    for (const node of this.hiddenLetterNodes) {
+      if (node.revealed || node.zoneId !== zoneId) continue;
+      if (center.distanceTo(node.position) <= radius + node.radius) {
+        node.revealed = true;
+        revealed.push(node);
+      }
+    }
+    return revealed;
+  }
+
   update(dt, playerPos, particles, audio, player) {
+    this.terrainMesh.update();
+    this.terrainMesh.setVisibleAround(playerPos, 58);
+
     // Update chunk visibility based on player position
     this.instancer.updateVisibility(playerPos, 45);
 
@@ -642,6 +803,7 @@ export class World {
     this.blocks.clear();
     this.floatingBlocks.clear();
     this.columnHeights.clear();
+    this.hiddenLetterNodes = [];
     for (const enemy of this.enemies) {
       enemy.cleanup(this.scene);
     }

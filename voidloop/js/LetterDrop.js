@@ -44,25 +44,20 @@ export class LetterDrop {
     mesh.position.copy(pos);
     mesh.position.y += 0.3;
     mesh.scale.setScalar(0.6);
-    mesh.castShadow = true;
-
-    // Add a point light for glow
-    const light = new THREE.PointLight(0xfacc15, 0.6, 4);
-    light.position.set(0, 0.3, 0);
-    mesh.add(light);
+    mesh.castShadow = false;
 
     this.scene.add(mesh);
 
     const drop = {
       mesh,
       letter: letter.toUpperCase(),
-      light,
       spinSpeed: 8.0,
       velocity: new THREE.Vector3(
         (Math.random() - 0.5) * 2,
         3 + Math.random() * 3,
         (Math.random() - 0.5) * 2
       ),
+      groundY: pos.y + 0.05,
       state: 'bounce',
       stateTime: 0,
       life: DESPAWN_TIME,
@@ -98,8 +93,8 @@ export class LetterDrop {
         d.velocity.y += GRAVITY * dt;
         d.mesh.position.addScaledVector(d.velocity, dt);
 
-        if (d.mesh.position.y < 0.15) {
-          d.mesh.position.y = 0.15;
+        if (d.mesh.position.y < d.groundY) {
+          d.mesh.position.y = d.groundY;
           d.velocity.y *= -BOUNCE_REST;
           d.velocity.x *= 0.8;
           d.velocity.z *= 0.8;
@@ -118,7 +113,7 @@ export class LetterDrop {
 
       if (d.state === 'hover') {
         d.bobPhase += dt * 3;
-        d.mesh.position.y = 0.25 + Math.sin(d.bobPhase) * 0.1;
+        d.mesh.position.y = d.groundY + 0.1 + Math.sin(d.bobPhase) * 0.1;
 
         if (dist < MAGNET_RANGE) {
           const dir = new THREE.Vector3().subVectors(playerPos, d.mesh.position).normalize();
