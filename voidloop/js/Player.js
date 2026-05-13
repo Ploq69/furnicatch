@@ -713,8 +713,11 @@ export class Player {
     return this.weapons[this.currentSlot].attack(origin, direction, scene, audio, particles, enemies, this.getEquippedWeapon());
   }
 
-  updateProjectiles(dt, scene, particles, enemies) {
-    this.weapons[this.currentSlot].updateProjectiles(dt, scene, particles, enemies, this.getEquippedWeapon());
+  updateProjectiles(dt, context, particles, enemies) {
+    const projectileContext = context?.scene ? context : { scene: context, particles, enemies };
+    for (const weapon of this.weapons) {
+      weapon.updateProjectiles(dt, projectileContext, particles, enemies, this.getEquippedWeapon());
+    }
   }
 
   getHandPosition() {

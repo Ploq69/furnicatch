@@ -7,8 +7,6 @@
  */
 
 import * as THREE from 'three';
-import { assetLoader } from './AssetLoader.js';
-import { BLOCK_TYPES } from './constants.js';
 
 const ISO_LEVEL = 0;
 const CHUNK_SIZE = 8;
@@ -17,14 +15,17 @@ const TERRAIN_MAX_Y = 2;
 const SURFACE_Y = 1;
 const CELL_SIZE = 1;
 const MAX_REBUILDS_PER_FRAME = 2;
-const MAX_TEXTURE_TILE_SPAN = 2;
-const TERRAIN_TYPE_BY_BAND = ['grass', 'dirt', 'stone', 'stone_dark'];
+const MAX_TEXTURE_TILE_SPAN = 8;
 const TERRAIN_COLORS = {
-  surface: new THREE.Color(0xf4fff0),
-  dirt: new THREE.Color(0xfff0dd),
-  stone: new THREE.Color(0xf1f1f1),
-  deep: new THREE.Color(0xe0e0e8),
+  surface: new THREE.Color(0x009959),
+  dirt: new THREE.Color(0xaa684d),
+  stone: new THREE.Color(0x9ca8ae),
+  deep: new THREE.Color(0x4a5054),
 };
+
+// Atlas UV regions extracted from KayKit BlockBits gltf models
+// x=u, y=v, z=width, w=height
+
 const FACE_NORMALS = {
   px: [1, 0, 0],
   nx: [-1, 0, 0],
@@ -33,7 +34,6 @@ const FACE_NORMALS = {
   pz: [0, 0, 1],
   nz: [0, 0, -1],
 };
-const FULL_UV_RECT = { u0: 0, v0: 0, u1: 1, v1: 1 };
 
 function zoneContains(zone, x, z) {
   const b = zone.bounds;
@@ -74,12 +74,11 @@ export class TerrainMesh {
     this.modifiedDensities = new Map();
     this.protectedPoints = [];
     this.stats = { chunks: 0, triangles: 0, samples: 0 };
-    this.uvRects = null;
   }
 
   async preloadTypes() {
     if (!this.material) {
-      await this._loadKayKitTerrainMaterial();
+      this.material = this._createKayKitStyleMaterial();
     }
   }
 
@@ -173,7 +172,7 @@ export class TerrainMesh {
     }
   }
 
-  applyDigBrush(center, radius, strength = 1, zoneId = null) {
+  applyDigBrush(center, radius, strength = 1, zoneId = null, options = {}) {
     const zoneEntry = zoneId ? this.zones.get(zoneId) : this._findZoneEntry(center.x, center.z);
     if (!zoneEntry) {
       return { meaningful: false, removedVolume: 0, removedCells: 0, touchedChunks: [], center, radius, zoneId: null, depth: 0 };
@@ -187,6 +186,8 @@ export class TerrainMesh {
     const minZ = Math.floor(center.z - brushRadius - 1);
     const maxZ = Math.ceil(center.z + brushRadius + 1);
     const touched = new Set();
+    const maxCells = Math.max(0, options.maxCells || 0);
+    const candidates = maxCells > 0 ? [] : null;
     let removedCells = 0;
     let removedVolume = 0;
 
@@ -203,18 +204,35 @@ export class TerrainMesh {
           const dx = cx - center.x;
           const dy = cy - center.y;
           const dz = cz - center.z;
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          if (dist > brushRadius) continue;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          if (distSq > brushRadius * brushRadius) continue;
 
           const oldDensity = this.sampleDensity(cx, cy, cz);
           if (oldDensity <= ISO_LEVEL) continue;
 
+          const dist = Math.sqrt(distSq);
           const newDensity = Math.min(oldDensity, dist - brushRadius - 0.15);
+          if (candidates) {
+            candidates.push({ x, y, z, distSq, oldDensity, newDensity });
+            continue;
+          }
           this._setDensity(x, y, z, newDensity);
           removedCells++;
           removedVolume += Math.max(0.2, Math.min(oldDensity, oldDensity - Math.max(newDensity, ISO_LEVEL)));
           this._collectTouchedChunks(x, y, z, touched);
         }
+      }
+    }
+
+    if (candidates) {
+      candidates.sort((a, b) => a.distSq - b.distSq);
+      const count = Math.min(maxCells, candidates.length);
+      for (let i = 0; i < count; i++) {
+        const c = candidates[i];
+        this._setDensity(c.x, c.y, c.z, c.newDensity);
+        removedCells++;
+        removedVolume += Math.max(0.2, Math.min(c.oldDensity, c.oldDensity - Math.max(c.newDensity, ISO_LEVEL)));
+        this._collectTouchedChunks(c.x, c.y, c.z, touched);
       }
     }
 
@@ -430,14 +448,15 @@ export class TerrainMesh {
     const colors = [];
     const normals = [];
     const uvs = [];
+    const bands = [];
     const indices = [];
 
-    this._buildGreedyFaces('px', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, indices);
-    this._buildGreedyFaces('nx', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, indices);
-    this._buildGreedyFaces('py', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, indices);
-    this._buildGreedyFaces('ny', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, indices);
-    this._buildGreedyFaces('pz', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, indices);
-    this._buildGreedyFaces('nz', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, indices);
+    this._buildGreedyFaces('px', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, bands, indices);
+    this._buildGreedyFaces('nx', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, bands, indices);
+    this._buildGreedyFaces('py', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, bands, indices);
+    this._buildGreedyFaces('ny', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, bands, indices);
+    this._buildGreedyFaces('pz', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, bands, indices);
+    this._buildGreedyFaces('nz', x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, bands, indices);
 
     if (positions.length === 0) return null;
 
@@ -446,12 +465,13 @@ export class TerrainMesh {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('band', new THREE.Float32BufferAttribute(bands, 1));
     geometry.setIndex(indices);
     geometry.computeBoundingSphere();
     return geometry;
   }
 
-  _buildGreedyFaces(dir, x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, indices) {
+  _buildGreedyFaces(dir, x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, bands, indices) {
     if (dir === 'px' || dir === 'nx') {
       const width = z1 - z0;
       const height = y1 - y0;
@@ -472,7 +492,7 @@ export class TerrainMesh {
           const zB = zA + w;
           const yA = y0 + v;
           const yB = yA + h;
-          this._pushGreedyQuad(dir, dir === 'px' ? x + 1 : x, yA, zA, dir === 'px' ? x + 1 : x, yB, zB, band, positions, colors, normals, uvs, indices);
+          this._pushGreedyQuad(dir, dir === 'px' ? x + 1 : x, yA, zA, dir === 'px' ? x + 1 : x, yB, zB, band, positions, colors, normals, uvs, bands, indices);
         });
       }
       return;
@@ -498,7 +518,7 @@ export class TerrainMesh {
           const xB = xA + w;
           const zA = z0 + v;
           const zB = zA + h;
-          this._pushGreedyQuad(dir, xA, dir === 'py' ? y + 1 : y, zA, xB, dir === 'py' ? y + 1 : y, zB, band, positions, colors, normals, uvs, indices);
+          this._pushGreedyQuad(dir, xA, dir === 'py' ? y + 1 : y, zA, xB, dir === 'py' ? y + 1 : y, zB, band, positions, colors, normals, uvs, bands, indices);
         });
       }
       return;
@@ -523,7 +543,7 @@ export class TerrainMesh {
         const xB = xA + w;
         const yA = y0 + v;
         const yB = yA + h;
-        this._pushGreedyQuad(dir, xA, yA, dir === 'pz' ? z + 1 : z, xB, yB, dir === 'pz' ? z + 1 : z, band, positions, colors, normals, uvs, indices);
+        this._pushGreedyQuad(dir, xA, yA, dir === 'pz' ? z + 1 : z, xB, yB, dir === 'pz' ? z + 1 : z, band, positions, colors, normals, uvs, bands, indices);
       });
     }
   }
@@ -556,10 +576,9 @@ export class TerrainMesh {
     }
   }
 
-  _pushGreedyQuad(dir, x0, y0, z0, x1, y1, z1, band, positions, colors, normals, uvs, indices) {
+  _pushGreedyQuad(dir, x0, y0, z0, x1, y1, z1, band, positions, colors, normals, uvs, bands, indices) {
     const base = positions.length / 3;
     const color = this._colorForBand(band);
-    const uvRect = this._uvRectFor(dir, band);
     let normal;
     let corners;
     switch (dir) {
@@ -593,119 +612,142 @@ export class TerrainMesh {
       positions.push(c[0] * CELL_SIZE, c[1] * CELL_SIZE, c[2] * CELL_SIZE);
       colors.push(color.r, color.g, color.b);
       normals.push(normal[0], normal[1], normal[2]);
+      // World-space UVs tiled 1:1 with blocks
+      let u, v;
+      switch (dir) {
+        case 'px':
+        case 'nx':
+          u = c[2];
+          v = c[1];
+          break;
+        case 'py':
+        case 'ny':
+          u = c[0];
+          v = c[2];
+          break;
+        case 'pz':
+        case 'nz':
+          u = c[0];
+          v = c[1];
+          break;
+      }
+      uvs.push(u, v);
+      bands.push(band);
     }
-    uvs.push(
-      uvRect.u0, uvRect.v0,
-      uvRect.u1, uvRect.v0,
-      uvRect.u1, uvRect.v1,
-      uvRect.u0, uvRect.v1
-    );
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
 
-  async _loadKayKitTerrainMaterial() {
-    const loaded = new Map();
-    for (const typeKey of new Set(TERRAIN_TYPE_BY_BAND)) {
-      const def = BLOCK_TYPES[typeKey];
-      if (!def?.model) continue;
-      try {
-        loaded.set(typeKey, await assetLoader.loadGLTF(def.model));
-      } catch (error) {
-        console.warn('[TerrainMesh] Failed to load KayKit terrain material:', typeKey, error);
-      }
-    }
+  _createKayKitStyleMaterial() {
+    return new THREE.ShaderMaterial({
+      vertexColors: true,
+      side: THREE.FrontSide,
+      uniforms: {
+        lightDir: { value: new THREE.Vector3(0.35, 0.85, 0.32).normalize() },
+      },
+      vertexShader: `
+        attribute float band;
+        varying vec3 vNormal;
+        varying vec2 vUv;
+        varying float vBand;
 
-    const surface = this._extractKayKitModelInfo(loaded.get('grass'));
-    const fallback = surface?.material || this._extractKayKitModelInfo(loaded.get('dirt'))?.material;
-    this.material = fallback
-      ? fallback.clone()
-      : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0.02 });
+        void main() {
+          vBand = band;
+          vNormal = normalize(normalMatrix * normal);
+          vUv = uv;
+          gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 lightDir;
 
-    this.material.side = THREE.FrontSide;
-    this.material.vertexColors = true;
-    this.material.roughness = 0.72;
-    this.material.metalness = 0.02;
-    if (this.material.map) {
-      this.material.map.wrapS = THREE.ClampToEdgeWrapping;
-      this.material.map.wrapT = THREE.ClampToEdgeWrapping;
-      this.material.map.needsUpdate = true;
-    }
+        varying vec3 vNormal;
+        varying vec2 vUv;
+        varying float vBand;
 
-    this.uvRects = {};
-    for (let band = 0; band < TERRAIN_TYPE_BY_BAND.length; band++) {
-      const typeKey = TERRAIN_TYPE_BY_BAND[band];
-      const info = this._extractKayKitModelInfo(loaded.get(typeKey));
-      this.uvRects[band] = info?.rects || {};
-    }
-  }
+        // KayKit BlockBits colors extracted from atlas
+        vec3 grassColor = vec3(0.000, 0.600, 0.349);
+        vec3 dirtColor  = vec3(0.667, 0.408, 0.298);
+        vec3 stoneColor = vec3(0.612, 0.659, 0.682);
+        vec3 deepColor  = vec3(0.290, 0.314, 0.329);
 
-  _extractKayKitModelInfo(gltf) {
-    if (!gltf?.scene) return null;
-    let material = null;
-    let geometry = null;
-    gltf.scene.traverse((child) => {
-      if (!child.isMesh || !child.geometry || geometry) return;
-      geometry = child.geometry;
-      material = Array.isArray(child.material) ? child.material[0] : child.material;
+        vec3 getBaseColor(float band, float ny) {
+          if (band < 0.5) {
+            return (ny > 0.9) ? grassColor : dirtColor;
+          }
+          if (band < 1.5) return dirtColor;
+          if (band < 2.5) return stoneColor;
+          return deepColor;
+        }
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          float a = hash(i);
+          float b = hash(i + vec2(1.0, 0.0));
+          float c = hash(i + vec2(0.0, 1.0));
+          float d = hash(i + vec2(1.0, 1.0));
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+        }
+
+        void main() {
+          vec3 n = normalize(vNormal);
+          vec3 color = getBaseColor(vBand, n.y);
+
+          vec2 uv = vUv;
+
+          // Procedural texture based on material type
+          if (vBand < 0.5 && n.y > 0.9) {
+            // Grass top: subtle variation + wavy edge
+            float wave = sin(uv.x * 6.283) * 0.03;
+            float grain = (hash(floor(uv * 8.0)) - 0.5) * 0.04;
+            color += grain + wave;
+
+            // Wavy grass overhang at block edges
+            vec2 cell = fract(uv);
+            float edgeDist = min(min(cell.x, 1.0 - cell.x), min(cell.y, 1.0 - cell.y));
+            float edgeWave = sin((uv.x + uv.y) * 4.0) * 0.5 + 0.5;
+            float grassEdge = smoothstep(0.10, 0.0, edgeDist) * edgeWave * 0.06;
+            color += grassEdge;
+          } else if (vBand < 1.5) {
+            // Dirt: pebble dots + grain
+            float pebble = smoothstep(0.18, 0.0, length(fract(uv * 5.0) - vec2(0.5))) * step(0.75, hash(floor(uv * 5.0)));
+            float grain = (hash(floor(uv * 12.0)) - 0.5) * 0.06;
+            color += pebble * 0.10 + grain;
+          } else if (vBand < 2.5) {
+            // Stone: subtle cracks + spots
+            float crack = abs(noise(uv * 8.0) - noise(uv * 8.0 + vec2(0.05))) * 3.0;
+            float spot = step(0.88, hash(floor(uv * 6.0))) * 0.06;
+            color -= crack * 0.06;
+            color += spot;
+          } else {
+            // Deep: very subtle variation
+            float grain = (hash(floor(uv * 6.0)) - 0.5) * 0.04;
+            color += grain;
+          }
+
+          // Lighting
+          float light = 0.62 + max(dot(n, normalize(lightDir)), 0.0) * 0.38;
+          float sideShade = 1.0 - (1.0 - max(n.y, 0.0)) * 0.15;
+          float topBoost = smoothstep(0.45, 0.95, n.y) * 0.10;
+
+          color *= sideShade + topBoost;
+          color *= light;
+
+          // Subtle bevel edge
+          vec2 cell = fract(uv);
+          float edgeDist = min(min(cell.x, 1.0 - cell.x), min(cell.y, 1.0 - cell.y));
+          float bevel = smoothstep(0.0, 0.06, edgeDist);
+          color *= 0.94 + 0.06 * bevel;
+
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
     });
-    if (!geometry) return null;
-
-    const rects = {};
-    for (const dir of Object.keys(FACE_NORMALS)) {
-      rects[dir] = this._extractUvRectForNormal(geometry, FACE_NORMALS[dir]);
-    }
-    return { material, rects };
-  }
-
-  _extractUvRectForNormal(geometry, targetNormal) {
-    const normal = geometry.getAttribute('normal');
-    const uv = geometry.getAttribute('uv');
-    const index = geometry.index;
-    if (!normal || !uv) return FULL_UV_RECT;
-
-    let u0 = Infinity;
-    let v0 = Infinity;
-    let u1 = -Infinity;
-    let v1 = -Infinity;
-    const includeVertex = (i) => {
-      const u = uv.getX(i);
-      const v = uv.getY(i);
-      u0 = Math.min(u0, u);
-      v0 = Math.min(v0, v);
-      u1 = Math.max(u1, u);
-      v1 = Math.max(v1, v);
-    };
-    const triCount = index ? index.count / 3 : normal.count / 3;
-    for (let tri = 0; tri < triCount; tri++) {
-      const ia = index ? index.getX(tri * 3) : tri * 3;
-      const ib = index ? index.getX(tri * 3 + 1) : tri * 3 + 1;
-      const ic = index ? index.getX(tri * 3 + 2) : tri * 3 + 2;
-      const nx = (normal.getX(ia) + normal.getX(ib) + normal.getX(ic)) / 3;
-      const ny = (normal.getY(ia) + normal.getY(ib) + normal.getY(ic)) / 3;
-      const nz = (normal.getZ(ia) + normal.getZ(ib) + normal.getZ(ic)) / 3;
-      const len = Math.max(0.0001, Math.sqrt(nx * nx + ny * ny + nz * nz));
-      const dot = (nx / len) * targetNormal[0] + (ny / len) * targetNormal[1] + (nz / len) * targetNormal[2];
-      if (dot < 0.72) continue;
-      includeVertex(ia);
-      includeVertex(ib);
-      includeVertex(ic);
-    }
-
-    if (!Number.isFinite(u0) || !Number.isFinite(v0) || !Number.isFinite(u1) || !Number.isFinite(v1)) {
-      return FULL_UV_RECT;
-    }
-
-    const pad = 0.001;
-    return {
-      u0: clamp(u0 + pad, 0, 1),
-      v0: clamp(v0 + pad, 0, 1),
-      u1: clamp(u1 - pad, 0, 1),
-      v1: clamp(v1 - pad, 0, 1),
-    };
-  }
-
-  _uvRectFor(dir, band) {
-    return this.uvRects?.[band]?.[dir] || FULL_UV_RECT;
   }
 
   _colorForDepth(depth) {

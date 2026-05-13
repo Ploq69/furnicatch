@@ -633,6 +633,16 @@ export class Game {
     const minePressed = input.pressed('KeyJ') || (this.cameraMode === 'firstPerson' && input.buttonPressed?.('left'));
     if (minePressed && this.player.weapons[this.player.currentSlot].cooldown <= 0) {
       const weapon = this.player.weapons[this.player.currentSlot];
+      if (weapon.data.type === 'thrown') {
+        const aim = this._getMiningAim();
+        const thrown = this.player.attack(aim.origin, aim.direction, this.scene, audio, this.particles, this.world.enemies);
+        if (thrown) {
+          this.player.playAttackAnim();
+          if (this.cameraMode === 'firstPerson') this._startFirstPersonSwing();
+        } else {
+          SFXMapper.swingMiss();
+        }
+      } else {
 
       // Check for nearby enemy first (combat priority)
       const nearestEnemy = this._findNearestEnemy(2.5);
@@ -793,6 +803,7 @@ export class Game {
         // Dynamic swing cooldown based on mineSpeed upgrade
         weapon.cooldown = this.player.getSwingCooldown();
       }
+      }
     }
 
     // Hotbar
@@ -805,7 +816,13 @@ export class Game {
     }
 
     // Update projectiles
-    this.player.updateProjectiles(dt, this.scene, this.particles, this.world.enemies);
+    this.player.updateProjectiles(dt, {
+      scene: this.scene,
+      particles: this.particles,
+      enemies: this.world.enemies,
+      world: this.world,
+      game: this,
+    });
 
     // World update (enemies + blocks)
     this.world.update(dt, this.player.position, this.particles, audio, this.player);
@@ -1196,6 +1213,117 @@ export class Game {
     }
   }
 
+  _explodeGrenade(position, config = {}) {
+    const radius = config.radius || GAME.GRENADE_RADIUS;
+    const damage = config.damage || GAME.GRENADE_DAMAGE;
+    const radiusSq = radius * radius;
+    const isRemote = !!config.remote;
+    const attackerWeaponId = config.attackerWeaponId || 'grenade';
+
+    SFXMapper.explosion('large');
+    this.particles.burst(position, 0xff6600, 22);
+    this.particles.spark(position, 14);
+    this.particles.spawn({ pos: position, count: 18, color: 0x6f6254, speed: 5, life: 0.75, size: 0.34, texture: 'smoke' });
+    this.flipbooks.spawn({ pos: position.clone().add(new THREE.Vector3(0, 0.2, 0)), ...FLIPBOOK_EFFECTS.explosion });
+    this._screenShake(1.15, 0.32);
+
+    if (this.isMultiplayer && this.net && !isRemote) {
+      this.net.syncEvent('grenade_exploded', {
+        x: position.x,
+        y: position.y,
+        z: position.z,
+        radius,
+        damage,
+        attackerWeaponId,
+      });
+    }
+
+    for (const enemy of this.world.enemies) {
+      if (enemy.dead) continue;
+      const hitPos = enemy.position.clone().add(new THREE.Vector3(0, 0.45, 0));
+      const distSq = hitPos.distanceToSquared(position);
+      if (distSq > radiusSq) continue;
+      const dist = Math.sqrt(distSq);
+      const falloff = Math.max(0.25, 1 - dist / radius);
+      enemy.takeDamage(Math.round(damage * falloff), attackerWeaponId);
+      this.particles.spark(hitPos, 3);
+    }
+
+    const zone = getZoneAtPosition(position.x, position.z);
+    const depth = Math.max(0, 1 - position.y);
+    const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
+    const terrainResult = this.world.explodeTerrain(position, {
+      radius,
+      zoneId: zone?.id || null,
+      type: typeKey,
+      maxCells: GAME.GRENADE_MAX_TERRAIN_CELLS,
+    });
+    if (terrainResult.meaningful && !isRemote) {
+      this.blocksMined += Math.max(1, Math.min(12, Math.round((terrainResult.removedCells || 1) / 24)));
+      this._awardTerrainDigRewards(terrainResult, position, terrainResult.zoneId);
+    }
+
+    const candidates = [];
+    for (const block of this.world.floatingBlocks) {
+      if (!block || block.destroyed) continue;
+      const blockCenter = block.position.clone().add(new THREE.Vector3(0.5, 0.5, 0.5));
+      const distSq = blockCenter.distanceToSquared(position);
+      if (distSq <= radiusSq) candidates.push({ block, distSq, blockCenter });
+    }
+    candidates.sort((a, b) => a.distSq - b.distSq);
+
+    let destroyedFloating = 0;
+    let lootBudget = 5;
+    let letterBudget = 2;
+    const resourceRewards = new Map();
+    const maxFloating = GAME.GRENADE_FLOATING_BLOCK_CAP;
+
+    for (const { block, blockCenter } of candidates) {
+      if (destroyedFloating >= maxFloating) break;
+      const status = this._getMiningStatusForBlock(block, { isPickaxe: true });
+      if (!status.allowed) continue;
+
+      const blockType = block.typeKey;
+      const blockZoneId = block.zoneId;
+      this.world.mineBlock(block, this.particles, audio);
+      destroyedFloating++;
+
+      if (isRemote) continue;
+
+      if (lootBudget > 0) {
+        const table = BLOCK_LOOT_TABLES[blockType];
+        if (table) {
+          this.loot.spawnFromTable(blockCenter, table);
+          lootBudget--;
+        }
+      }
+
+      if (letterBudget > 0 && Math.random() < 0.18) {
+        const letter = this._pickLetterForZone(blockZoneId || this.zoneManager.currentZoneId);
+        if (letter) {
+          this.letterDrops.spawn(blockCenter, letter);
+          letterBudget--;
+        }
+      }
+
+      const blockDef = BLOCK_TYPES[blockType];
+      if (blockDef?.resource) {
+        resourceRewards.set(blockDef.resource, (resourceRewards.get(blockDef.resource) || 0) + 1);
+      }
+    }
+
+    if (!isRemote && destroyedFloating > 0) {
+      this.blocksMined += destroyedFloating;
+      this.ui.showFloatingText(`Blast broke ${destroyedFloating}`, 0xffaa00);
+      for (const [resource, amount] of resourceRewards) {
+        if (this.resources.add(resource, amount)) {
+          const name = resource.replace(/_/g, ' ');
+          this.ui.showFloatingText(`+${amount} ${name}`, 0x88ccff);
+        }
+      }
+    }
+  }
+
   _pickDigJunkResource(depth, tier, luck) {
     const roll = Math.random() + luck * 0.02 + tier * 0.015;
     if (depth > 12 && roll > 0.82) return 'old_junk';
@@ -1578,6 +1706,13 @@ export class Game {
         enemy.dead = true;
         enemy.justDied = true;
       }
+    } else if (type === 'grenade_exploded') {
+      this._explodeGrenade(new THREE.Vector3(data.x, data.y, data.z), {
+        radius: data.radius || GAME.GRENADE_RADIUS,
+        damage: data.damage || GAME.GRENADE_DAMAGE,
+        attackerWeaponId: data.attackerWeaponId || 'grenade',
+        remote: true,
+      });
     } else if (type === 'floor_changed') {
       if (!this.isHost && data.floorNum && data.seed != null) {
         this._worldSeed = data.seed;

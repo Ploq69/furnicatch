@@ -729,6 +729,31 @@ export class World {
     };
   }
 
+  explodeTerrain(center, options = {}) {
+    if (!this.terrainMesh) {
+      return { meaningful: false, removedVolume: 0, removedCells: 0, revealedLetters: [], zoneId: null, center, radius: 0 };
+    }
+    const radius = options.radius || 3.5;
+    const zoneId = options.zoneId || null;
+    const result = this.terrainMesh.applyDigBrush(center, radius, 1, zoneId, {
+      maxCells: options.maxCells || 0,
+    });
+    const revealedLetters = result.meaningful
+      ? this._revealHiddenLetters(result.center, result.radius, result.zoneId)
+      : [];
+
+    return {
+      ...result,
+      revealedLetters,
+      drop: null,
+      cell: {
+        type: options.type || 'dirt',
+        zoneId: result.zoneId,
+        destroyed: result.meaningful,
+      },
+    };
+  }
+
   _revealHiddenLetters(center, radius, zoneId) {
     if (!zoneId) return [];
     const revealed = [];

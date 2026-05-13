@@ -50,16 +50,19 @@ export class Weapon {
 
   attack(origin, direction, scene, audio, particles, enemies, attackerWeaponId = null) {
     if (this.cooldown > 0) return false;
-    this.cooldown = GAME.ATTACK_COOLDOWN;
 
+    let didAttack = false;
     if (this.data.type === 'melee') {
-      return this._meleeAttack(origin, direction, scene, audio, particles, enemies, attackerWeaponId);
+      didAttack = this._meleeAttack(origin, direction, scene, audio, particles, enemies, attackerWeaponId);
     } else if (this.data.type === 'ranged') {
-      return this._rangedAttack(origin, direction, scene, audio, particles, enemies);
+      didAttack = this._rangedAttack(origin, direction, scene, audio, particles, enemies);
     } else if (this.data.type === 'thrown') {
-      return this._thrownAttack(origin, direction, scene, audio, particles, enemies);
+      didAttack = this._thrownAttack(origin, direction, scene, audio, particles, enemies);
     }
-    return false;
+    if (didAttack) {
+      this.cooldown = this.data.type === 'thrown' ? GAME.GRENADE_COOLDOWN : GAME.ATTACK_COOLDOWN;
+    }
+    return didAttack;
   }
 
   _meleeAttack(origin, direction, scene, audio, particles, enemies, attackerWeaponId = null) {
@@ -117,19 +120,31 @@ export class Weapon {
   }
 
   _thrownAttack(origin, direction, scene, audio, particles, enemies) {
+    const activeGrenades = this.projectiles.filter(p => p.explosive).length;
+    if (activeGrenades >= GAME.GRENADE_MAX_ACTIVE) return false;
+
+    const throwDir = direction.clone().normalize();
+    if (throwDir.y < 0.08) throwDir.y += 0.18;
+    throwDir.normalize();
+
     const proj = {
       mesh: null,
-      velocity: direction.clone().multiplyScalar(10).add(new THREE.Vector3(0, 5, 0)),
-      life: 2,
-      damage: this.data.damage,
+      velocity: throwDir.multiplyScalar(13).add(new THREE.Vector3(0, 5.5, 0)),
+      life: GAME.GRENADE_FUSE,
+      age: 0,
+      armedAt: GAME.GRENADE_ARM_TIME,
+      damage: GAME.GRENADE_DAMAGE,
       explosive: true,
-      radius: 2.5,
+      radius: GAME.GRENADE_RADIUS,
+      smokeTimer: 0,
+      angularVelocity: new THREE.Vector3(8 + Math.random() * 4, 10 + Math.random() * 5, 6 + Math.random() * 4),
+      bounceCount: 0,
     };
 
     const geo = new THREE.IcosahedronGeometry(0.12, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x334433, emissive: 0x112211 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0x334433, emissive: 0x112211, emissiveIntensity: 0.35 });
     proj.mesh = new THREE.Mesh(geo, mat);
-    proj.mesh.position.copy(origin).add(direction.clone().multiplyScalar(0.5));
+    proj.mesh.position.copy(origin).add(direction.clone().multiplyScalar(0.6));
     scene.add(proj.mesh);
 
     this.projectiles.push(proj);
@@ -139,33 +154,124 @@ export class Weapon {
     return true;
   }
 
-  updateProjectiles(dt, scene, particles, enemies, attackerWeaponId = null) {
+  updateProjectiles(dt, context, particlesArg, enemiesArg, attackerWeaponId = null) {
+    const scene = context?.scene || context;
+    const particles = context?.particles || particlesArg;
+    const enemies = context?.enemies || enemiesArg || [];
+    const world = context?.world || null;
+    const game = context?.game || null;
+
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.life -= dt;
+      p.age = (p.age || 0) + dt;
 
       if (p.explosive) {
-        p.velocity.y -= GAME.GRAVITY * -0.5 * dt;
-      }
+        const explode = (pos) => {
+          if (game?._explodeGrenade) {
+            game._explodeGrenade(pos.clone(), {
+              radius: p.radius,
+              damage: p.damage,
+              attackerWeaponId: attackerWeaponId || this.data.id,
+            });
+          } else {
+            particles?.burst(pos, 0xff6600, 20);
+            SFXMapper.explosion('large');
+            for (const enemy of enemies) {
+              if (enemy.dead) continue;
+              if (enemy.position.distanceTo(pos) < p.radius) {
+                enemy.takeDamage(p.damage, attackerWeaponId || this.data.id);
+              }
+            }
+          }
+          scene.remove(p.mesh);
+          this.projectiles.splice(i, 1);
+        };
 
-      p.mesh.position.addScaledVector(p.velocity, dt);
+        const previous = p.mesh.position.clone();
+        const impactSpeed = p.velocity.length();
+        p.velocity.y += GAME.GRAVITY * dt;
+        const next = previous.clone().addScaledVector(p.velocity, dt);
+        let collided = false;
 
-      // Ground collision for thrown
-      if (p.explosive && p.mesh.position.y < 0.1) {
-        p.life = 0;
+        const terrain = world?.terrainMesh;
+        const isSolid = (pos) => !!terrain?.isSolidAt(pos.x, pos.y, pos.z);
+        const groundY = world?.getGroundHeightAt?.(next.x, next.z, previous.y + 0.5);
+
+        if (Number.isFinite(groundY) && groundY > -999 && next.y <= groundY + 0.12 && p.velocity.y <= 0) {
+          next.y = groundY + 0.14;
+          p.velocity.y = Math.abs(p.velocity.y) * 0.42;
+          p.velocity.x *= 0.72;
+          p.velocity.z *= 0.72;
+          collided = true;
+        } else if (isSolid(next)) {
+          const testX = new THREE.Vector3(previous.x, next.y, next.z);
+          const testY = new THREE.Vector3(next.x, previous.y, next.z);
+          const testZ = new THREE.Vector3(next.x, next.y, previous.z);
+          if (!isSolid(testX)) {
+            next.x = previous.x;
+            p.velocity.x *= -0.48;
+          } else if (!isSolid(testZ)) {
+            next.z = previous.z;
+            p.velocity.z *= -0.48;
+          } else if (!isSolid(testY)) {
+            next.y = previous.y;
+            p.velocity.y *= -0.42;
+          } else {
+            next.copy(previous);
+            p.velocity.multiplyScalar(-0.35);
+          }
+          p.velocity.x *= 0.82;
+          p.velocity.z *= 0.82;
+          collided = true;
+        }
+
+        if (collided) {
+          p.bounceCount++;
+          if (p.age >= p.armedAt && impactSpeed > 7) {
+            explode(next);
+            continue;
+          }
+          if (p.velocity.lengthSq() < 1.2) {
+            p.velocity.set(0, 0, 0);
+          }
+        }
+
+        p.mesh.position.copy(next);
+        p.mesh.rotation.x += p.angularVelocity.x * dt;
+        p.mesh.rotation.y += p.angularVelocity.y * dt;
+        p.mesh.rotation.z += p.angularVelocity.z * dt;
+        p.angularVelocity.multiplyScalar(Math.max(0.2, 1 - dt * 0.55));
+
+        p.smokeTimer -= dt;
+        if (p.smokeTimer <= 0) {
+          p.smokeTimer = 0.08;
+          particles?.spawn({ pos: p.mesh.position, count: 1, color: 0x808070, speed: 0.5, life: 0.35, size: 0.18, texture: 'smoke' });
+        }
+
+        const blinkWindow = Math.max(0, 0.75 - p.life);
+        const mat = p.mesh.material;
+        if (mat?.emissive && blinkWindow > 0) {
+          const blink = Math.sin((0.75 - p.life) * 42) > 0 ? 1.4 : 0.3;
+          mat.emissive.setHex(0xff5522);
+          mat.emissiveIntensity = blink;
+        }
+      } else {
+        p.mesh.position.addScaledVector(p.velocity, dt);
       }
 
       if (p.life <= 0) {
         // Explode or remove
         if (p.explosive) {
-          particles.burst(p.mesh.position, 0xff6600, 20);
-          SFXMapper.explosion('large');
-          // AoE damage
-          for (const enemy of enemies) {
-            if (enemy.dead) continue;
-            if (enemy.position.distanceTo(p.mesh.position) < p.radius) {
-              enemy.takeDamage(p.damage, attackerWeaponId || this.data.id);
-            }
+          if (game?._explodeGrenade) {
+            game._explodeGrenade(p.mesh.position.clone(), {
+              radius: p.radius,
+              damage: p.damage,
+              attackerWeaponId: attackerWeaponId || this.data.id,
+            });
+          } else {
+            particles?.burst(p.mesh.position, 0xff6600, 20);
+            SFXMapper.explosion('large');
           }
         }
         scene.remove(p.mesh);
