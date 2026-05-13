@@ -7,6 +7,69 @@ import { PropCreature } from './PropCreature.js';
 import { NPC } from './NPC.js';
 import { SimplexNoise } from './SimplexNoise.js';
 
+const BLOCK = {
+  air: 0,
+  grass: 1,
+  dirt: 2,
+  stone: 3,
+  wood: 4,
+  brick: 5,
+  ore: 6,
+  crystal: 7,
+};
+
+const BLOCK_COLORS = {
+  [BLOCK.grass]: [0x466d25, 0x5f8f2e, 0x78a944],
+  [BLOCK.dirt]: [0x7b5436, 0x9b6f45, 0xb78755],
+  [BLOCK.stone]: [0x555f6b, 0x737d88, 0x8f98a3],
+  [BLOCK.wood]: [0x7a4b28, 0x9b6535, 0xc1844a],
+  [BLOCK.brick]: [0x7f3f37, 0xa75145, 0xc76858],
+  [BLOCK.ore]: [0x334155, 0x64748b, 0xfbbf24],
+  [BLOCK.crystal]: [0x2563eb, 0x38bdf8, 0xa78bfa],
+};
+
+const BIOME_TERRAIN = {
+  farm_garden: { top: BLOCK.grass, path: BLOCK.dirt, base: -2, height: 8, roughness: 3, terrace: true },
+  food_market: { top: BLOCK.wood, path: BLOCK.brick, base: -2, height: 4, roughness: 1.5, terrace: false },
+  space_camp: { top: BLOCK.stone, path: BLOCK.brick, base: -5, height: 13, roughness: 5, terrace: false },
+  meadow: { top: BLOCK.grass, path: BLOCK.dirt, base: -2, height: 8, roughness: 3, terrace: true },
+};
+
+const AO_LIGHT = [0.48, 0.64, 0.82, 1.0];
+
+const FACE_DEFS = [
+  {
+    normal: [1, 0, 0],
+    corners: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]],
+    aoSides: [[[0, -1, 0], [0, 0, 1]], [[0, -1, 0], [0, 0, -1]], [[0, 1, 0], [0, 0, -1]], [[0, 1, 0], [0, 0, 1]]],
+  },
+  {
+    normal: [-1, 0, 0],
+    corners: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]],
+    aoSides: [[[0, -1, 0], [0, 0, -1]], [[0, -1, 0], [0, 0, 1]], [[0, 1, 0], [0, 0, 1]], [[0, 1, 0], [0, 0, -1]]],
+  },
+  {
+    normal: [0, 1, 0],
+    corners: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]],
+    aoSides: [[[-1, 0, 0], [0, 0, 1]], [[1, 0, 0], [0, 0, 1]], [[1, 0, 0], [0, 0, -1]], [[-1, 0, 0], [0, 0, -1]]],
+  },
+  {
+    normal: [0, -1, 0],
+    corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
+    aoSides: [[[-1, 0, 0], [0, 0, -1]], [[1, 0, 0], [0, 0, -1]], [[1, 0, 0], [0, 0, 1]], [[-1, 0, 0], [0, 0, 1]]],
+  },
+  {
+    normal: [0, 0, 1],
+    corners: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]],
+    aoSides: [[[-1, 0, 0], [0, -1, 0]], [[1, 0, 0], [0, -1, 0]], [[1, 0, 0], [0, 1, 0]], [[-1, 0, 0], [0, 1, 0]]],
+  },
+  {
+    normal: [0, 0, -1],
+    corners: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]],
+    aoSides: [[[1, 0, 0], [0, -1, 0]], [[-1, 0, 0], [0, -1, 0]], [[-1, 0, 0], [0, 1, 0]], [[1, 0, 0], [0, 1, 0]]],
+  },
+];
+
 export class World {
   constructor(scene, options = {}) {
     this.scene = scene;
@@ -29,24 +92,25 @@ export class World {
     this.getFurnitureLevel = options.getFurnitureLevel || (() => 1);
     this.getLetterLevel = options.getLetterLevel || (() => 1);
     this.getPropLevel = options.getPropLevel || (() => 1);
-    this.tileGeometry = new THREE.BoxGeometry(this.tileSize, this.tileSize, this.tileSize);
-    this.tileMaterials = {
-      grass: new THREE.MeshStandardMaterial({ color: 0x567c1e, roughness: 0.8 }),
-      dirt: new THREE.MeshStandardMaterial({ color: 0x9b7650, roughness: 0.85 }),
-      stone: new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.8 }),
-      wood: new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.75 }),
-      brick: new THREE.MeshStandardMaterial({ color: 0x9a4b3f, roughness: 0.8 }),
+    this.voxelHeight = 64;
+    this.voxelMinY = -24;
+    this.chunkHalf = this.chunkSize / 2;
+    this.dirtyChunks = new Set();
+    this.maxRemeshesPerFrame = 2;
+    this.terrainMaterial = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.82,
+      metalness: 0.02,
+    });
+    this.debugStats = {
+      generatedChunks: 0,
+      remeshedChunks: 0,
+      lastMeshMs: 0,
+      lastEditedBlocks: 0,
     };
+    this.blockTypes = BLOCK;
     // Deterministic smooth noise for terrain
     this.simplex = new SimplexNoise(12345);
-    // FBM parameters for terrain
-    this.terrainScale = 0.012;
-    this.terrainOctaves = 4;
-    this.terrainPersistence = 0.5;
-    this.terrainLacunarity = 2.0;
-    this.terrainMinBlockY = -2; // lowest block layer
-    this.terrainMaxBlockH = 3;  // highest surface height
-    this.terrainHeightRange = this.terrainMaxBlockH - this.terrainMinBlockY + 1; // number of possible surface heights
   }
 
   async generate(biomeKey = 'meadow') {
@@ -58,12 +122,11 @@ export class World {
   update(dt, playerPos) {
     this.ensureActiveChunks(playerPos);
     this._frameCount = (this._frameCount || 0) + 1;
-    // Fade in newly loaded chunks
+    this._processDirtyChunks();
+    // Keep fade state for chunk lifecycle without scaling absolute terrain meshes.
     for (const chunk of this.chunks.values()) {
       if (chunk.fadeIn < 1.0) {
         chunk.fadeIn = Math.min(1.0, chunk.fadeIn + dt / 0.5);
-        const s = 0.2 + 0.8 * chunk.fadeIn; // subtle scale pop
-        chunk.group.scale.setScalar(s);
       }
     }
     // Cull entity visibility by distance (Minecraft-style entity culling)
@@ -172,6 +235,7 @@ export class World {
     this.chunks.clear();
     this.loadingChunks.clear();
     this.activeChunkKeys.clear();
+    this.dirtyChunks.clear();
     this.tiles = [];
     this.decorations = [];
     this.furniture = [];
@@ -223,14 +287,13 @@ export class World {
     if (awaitLoads && loads.length) await Promise.all(loads);
   }
 
-  // Terrain height in world units at a given world x,z
-  // smooth = true uses bilinear interpolation for smooth walking surfaces
+  // Terrain height in world units at a given world x,z.
+  // smooth=true bilinearly samples nearby voxel columns for stable walking.
   getTerrainHeight(wx, wz, smooth = true) {
     if (!smooth) {
-      const h = this._heightNoise(wx, wz);
-      return h * this.tileSize;
+      const { gx, gz } = this._worldToGlobalVoxelXZ(wx, wz);
+      return this._getColumnSurfaceWorldY(gx, gz);
     }
-    // Bilinear interpolation of the 4 nearest grid columns
     const gx = wx / this.tileSize;
     const gz = wz / this.tileSize;
     const x0 = Math.floor(gx);
@@ -240,16 +303,16 @@ export class World {
     const fx = gx - x0;
     const fz = gz - z0;
 
-    const h00 = this._heightNoise(x0 * this.tileSize, z0 * this.tileSize);
-    const h10 = this._heightNoise(x1 * this.tileSize, z0 * this.tileSize);
-    const h01 = this._heightNoise(x0 * this.tileSize, z1 * this.tileSize);
-    const h11 = this._heightNoise(x1 * this.tileSize, z1 * this.tileSize);
+    const h00 = this._getColumnSurfaceWorldY(x0, z0);
+    const h10 = this._getColumnSurfaceWorldY(x1, z0);
+    const h01 = this._getColumnSurfaceWorldY(x0, z1);
+    const h11 = this._getColumnSurfaceWorldY(x1, z1);
 
     const h0 = h00 * (1 - fx) + h10 * fx;
     const h1 = h01 * (1 - fx) + h11 * fx;
     const h = h0 * (1 - fz) + h1 * fz;
 
-    return h * this.tileSize;
+    return h;
   }
 
   // Sample terrain at multiple points and return the MAX height —
@@ -281,11 +344,29 @@ export class World {
     const key = this._chunkKey(cx, cz);
     this.loadingChunks.add(key);
     const biome = BIOMES[biomeKey];
-    const chunk = { key, cx, cz, detail, upgrading: false, fadeIn: 0.0, group: new THREE.Group(), furniture: [], letters: [], props: [], npcs: [], decorations: [] };
+    const chunk = {
+      key,
+      cx,
+      cz,
+      detail,
+      upgrading: false,
+      fadeIn: 0.0,
+      group: new THREE.Group(),
+      furniture: [],
+      letters: [],
+      props: [],
+      npcs: [],
+      decorations: [],
+      voxels: new Uint8Array(this.chunkSize * this.voxelHeight * this.chunkSize),
+      heightMap: new Int16Array(this.chunkSize * this.chunkSize),
+      terrainMesh: null,
+      dirty: false,
+    };
     this.chunks.set(key, chunk);
     this.scene.add(chunk.group);
 
     this._generateTerrain(chunk, biome);
+    this._markNeighborChunksDirty(cx, cz);
     if (detail === 'full') {
       await this._populateChunkContent(chunk, biome);
     }
@@ -304,73 +385,400 @@ export class World {
   }
 
   _generateTerrain(chunk, biome) {
-    const counts = {};
-    for (const block of biome.groundBlocks) counts[block] = 0;
-    const choices = [];
-    const half = this.chunkSize / 2;
+    const t0 = performance.now();
+    const biomeProfile = BIOME_TERRAIN[this.biomeKey] || BIOME_TERRAIN.farm_garden;
+    const minY = this.voxelMinY;
+    const maxY = this.voxelMinY + this.voxelHeight - 1;
 
     for (let x = 0; x < this.chunkSize; x++) {
       for (let z = 0; z < this.chunkSize; z++) {
-        const wx = chunk.cx * this.chunkSize * this.tileSize + (x - half + 0.5) * this.tileSize;
-        const wz = chunk.cz * this.chunkSize * this.tileSize + (z - half + 0.5) * this.tileSize;
-        const surfaceH = this._heightNoise(wx, wz); // block units
+        const gx = this._localToGlobalX(chunk.cx, x);
+        const gz = this._localToGlobalZ(chunk.cz, z);
+        const surfaceY = THREE.MathUtils.clamp(this._terrainSurfaceBlockY(gx, gz, this.biomeKey), minY, maxY);
+        chunk.heightMap[this._heightMapIndex(x, z)] = surfaceY;
 
-        for (let by = this.terrainMinBlockY; by <= surfaceH; by++) {
-          let block;
-          if (by === surfaceH) {
-            block = surfaceH >= 0 ? 'grass' : 'dirt';
-          } else if (surfaceH - by <= 2) {
-            block = 'dirt';
-          } else {
-            block = 'stone';
+        for (let gy = minY; gy <= surfaceY; gy++) {
+          const localY = gy - this.voxelMinY;
+          const depth = surfaceY - gy;
+          let blockId = this._blockForDepth(depth, gx, gy, gz, biomeProfile);
+          if (depth > 4 && this._voxelHash(gx, gy, gz) > 0.985) {
+            blockId = this.biomeKey === 'space_camp' ? BLOCK.crystal : BLOCK.ore;
           }
-          choices.push({ wx, wz, by, block });
-          counts[block] = (counts[block] || 0) + 1;
+          chunk.voxels[this._voxelIndex(x, localY, z)] = blockId;
         }
       }
     }
 
-    const meshes = {};
-    for (const [block, count] of Object.entries(counts)) {
-      if (count <= 0) continue;
-      const mesh = new THREE.InstancedMesh(this.tileGeometry, this.tileMaterials[block] || this.tileMaterials.grass, count);
-      mesh.receiveShadow = true;
-      mesh.castShadow = false;
-      meshes[block] = { mesh, index: 0 };
-      chunk.group.add(mesh);
-      this.tiles.push(mesh);
+    this._remeshChunk(chunk);
+    this.debugStats.generatedChunks += 1;
+    this.debugStats.lastMeshMs = performance.now() - t0;
+  }
+
+  _remeshChunk(chunk) {
+    if (!chunk || !chunk.voxels) return;
+    const t0 = performance.now();
+    if (chunk.terrainMesh) {
+      chunk.group.remove(chunk.terrainMesh);
+      this.scene.remove(chunk.terrainMesh);
+      chunk.terrainMesh.geometry.dispose();
+      this.tiles = this.tiles.filter(mesh => mesh !== chunk.terrainMesh);
+      chunk.terrainMesh = null;
     }
 
-    for (const tile of choices) {
-      const entry = meshes[tile.block];
-      if (!entry) continue;
-      const worldY = tile.by * this.tileSize - this.tileSize / 2;
-      const matrix = new THREE.Matrix4().makeTranslation(tile.wx, worldY, tile.wz);
-      entry.mesh.setMatrixAt(entry.index++, matrix);
+    const data = this._buildChunkGeometryData(chunk);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(data.positions), 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(data.normals), 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(data.colors), 3));
+    geometry.setIndex(data.indices);
+    geometry.computeBoundingSphere();
+    geometry.computeBoundingBox();
+
+    const mesh = new THREE.Mesh(geometry, this.terrainMaterial);
+    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.frustumCulled = true;
+    chunk.group.add(mesh);
+    chunk.terrainMesh = mesh;
+    chunk.dirty = false;
+    this.tiles.push(mesh);
+    this.debugStats.remeshedChunks += 1;
+    this.debugStats.lastMeshMs = performance.now() - t0;
+  }
+
+  _buildChunkGeometryData(chunk) {
+    const positions = [];
+    const normals = [];
+    const colors = [];
+    const indices = [];
+    let vertexIndex = 0;
+
+    for (let x = 0; x < this.chunkSize; x++) {
+      for (let y = 0; y < this.voxelHeight; y++) {
+        for (let z = 0; z < this.chunkSize; z++) {
+          const blockId = chunk.voxels[this._voxelIndex(x, y, z)];
+          if (blockId === BLOCK.air) continue;
+
+          const gx = this._localToGlobalX(chunk.cx, x);
+          const gy = this.voxelMinY + y;
+          const gz = this._localToGlobalZ(chunk.cz, z);
+
+          for (const face of FACE_DEFS) {
+            const [nx, ny, nz] = face.normal;
+            if (this._isSolidGlobal(gx + nx, gy + ny, gz + nz)) continue;
+
+            for (let i = 0; i < 4; i++) {
+              const corner = face.corners[i];
+              positions.push(
+                (gx + corner[0]) * this.tileSize,
+                (gy + corner[1]) * this.tileSize,
+                (gz + corner[2]) * this.tileSize
+              );
+              normals.push(nx, ny, nz);
+              const ao = this._vertexAO(gx, gy, gz, face.normal, face.aoSides[i][0], face.aoSides[i][1]);
+              const color = this._blockColor(blockId, gx, gy, gz, face.normal, ao);
+              colors.push(color.r, color.g, color.b);
+            }
+
+            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2, vertexIndex, vertexIndex + 2, vertexIndex + 3);
+            vertexIndex += 4;
+          }
+        }
+      }
     }
-    for (const entry of Object.values(meshes)) {
-      entry.mesh.instanceMatrix.needsUpdate = true;
+
+    return { positions, normals, colors, indices };
+  }
+
+  _terrainSurfaceBlockY(gx, gz, biomeKey) {
+    const profile = BIOME_TERRAIN[biomeKey] || BIOME_TERRAIN.farm_garden;
+    const large = this._fbm2(gx, gz, 0.034, 4, 0.52, 2.0);
+    const medium = this._fbm2(gx + 137, gz - 91, 0.095, 3, 0.5, 2.1);
+    const ridgeNoise = this.simplex.noise2D(gx * 0.052 + 20.5, gz * 0.052 - 14.25);
+    const ridge = 1 - Math.abs(ridgeNoise);
+    let height = profile.base + large * profile.height + medium * profile.roughness;
+
+    if (biomeKey === 'farm_garden' || biomeKey === 'meadow') {
+      const terraceBand = this.simplex.noise2D(gx * 0.018 - 40, gz * 0.018 + 12);
+      if (profile.terrace && terraceBand > 0.2) height = Math.round(height / 2) * 2;
+    } else if (biomeKey === 'food_market') {
+      const plaza = this.simplex.noise2D(gx * 0.025 + 9, gz * 0.025 - 21);
+      if (plaza > 0.42) height = Math.round(height / 2) * 2;
+      height += this._pathMask(gx, gz) ? 1 : 0;
+    } else if (biomeKey === 'space_camp') {
+      const crater = Math.max(0, this.simplex.noise2D(gx * 0.045 - 70, gz * 0.045 + 33));
+      height += ridge * 5 - crater * crater * 7;
+    }
+
+    return Math.round(height);
+  }
+
+  _blockForDepth(depth, gx, gy, gz, profile) {
+    if (depth === 0) {
+      if (this._pathMask(gx, gz)) return profile.path;
+      return profile.top;
+    }
+    if (depth <= 3) return BLOCK.dirt;
+    return BLOCK.stone;
+  }
+
+  _pathMask(gx, gz) {
+    const roadX = Math.abs(((gx % 18) + 18) % 18 - 9) <= 1;
+    const roadZ = Math.abs(((gz % 22) + 22) % 22 - 11) <= 1;
+    const softBreak = this.simplex.noise2D(gx * 0.11, gz * 0.11) > -0.35;
+    return (roadX || roadZ) && softBreak;
+  }
+
+  _fbm2(x, z, scale, octaves, persistence, lacunarity) {
+    let amplitude = 1;
+    let frequency = scale;
+    let value = 0;
+    let maxValue = 0;
+    for (let i = 0; i < octaves; i++) {
+      value += this.simplex.noise2D(x * frequency, z * frequency) * amplitude;
+      maxValue += amplitude;
+      amplitude *= persistence;
+      frequency *= lacunarity;
+    }
+    return maxValue > 0 ? value / maxValue : 0;
+  }
+
+  _blockColor(blockId, gx, gy, gz, normal, aoLevel) {
+    const ramp = BLOCK_COLORS[blockId] || BLOCK_COLORS[BLOCK.stone];
+    const pick = Math.min(ramp.length - 1, Math.floor(this._voxelHash(gx, gy, gz) * ramp.length));
+    const base = new THREE.Color(ramp[pick]);
+    const vertical = normal[1] > 0 ? 1.12 : normal[1] < 0 ? 0.62 : 0.88;
+    const variation = 0.92 + this._voxelHash(gx + 17, gy - 11, gz + 23) * 0.16;
+    const light = AO_LIGHT[aoLevel] * vertical * variation;
+    base.multiplyScalar(light);
+    return base;
+  }
+
+  _vertexAO(gx, gy, gz, normal, sideA, sideB) {
+    const sx = gx + normal[0];
+    const sy = gy + normal[1];
+    const sz = gz + normal[2];
+    const side1 = this._isSolidGlobal(sx + sideA[0], sy + sideA[1], sz + sideA[2]) ? 1 : 0;
+    const side2 = this._isSolidGlobal(sx + sideB[0], sy + sideB[1], sz + sideB[2]) ? 1 : 0;
+    const corner = this._isSolidGlobal(sx + sideA[0] + sideB[0], sy + sideA[1] + sideB[1], sz + sideA[2] + sideB[2]) ? 1 : 0;
+    if (side1 && side2) return 0;
+    return 3 - (side1 + side2 + corner);
+  }
+
+  _getColumnSurfaceWorldY(gx, gz) {
+    const { cx, cz, lx, lz } = this._globalXZToChunkLocal(gx, gz);
+    const chunk = this.chunks.get(this._chunkKey(cx, cz));
+    if (chunk?.voxels) {
+      for (let y = this.voxelHeight - 1; y >= 0; y--) {
+        if (chunk.voxels[this._voxelIndex(lx, y, lz)] !== BLOCK.air) {
+          return (this.voxelMinY + y + 1) * this.tileSize;
+        }
+      }
+      return this.voxelMinY * this.tileSize;
+    }
+    return (this._terrainSurfaceBlockY(gx, gz, this.biomeKey) + 1) * this.tileSize;
+  }
+
+  getBlock(worldX, worldY, worldZ) {
+    const { gx, gy, gz } = this._worldToGlobalVoxel(worldX, worldY, worldZ);
+    return this.getBlockAtVoxel(gx, gy, gz);
+  }
+
+  getBlockAtVoxel(gx, gy, gz) {
+    const local = this._globalToChunkLocal(gx, gy, gz);
+    if (!local) return BLOCK.air;
+    const chunk = this.chunks.get(this._chunkKey(local.cx, local.cz));
+    if (!chunk?.voxels) return BLOCK.air;
+    return chunk.voxels[this._voxelIndex(local.lx, local.ly, local.lz)];
+  }
+
+  setBlock(worldX, worldY, worldZ, blockId) {
+    const { gx, gy, gz } = this._worldToGlobalVoxel(worldX, worldY, worldZ);
+    return this.setBlockAtVoxel(gx, gy, gz, blockId);
+  }
+
+  setBlockAtVoxel(gx, gy, gz, blockId) {
+    const local = this._globalToChunkLocal(gx, gy, gz);
+    if (!local) return false;
+    const chunk = this.chunks.get(this._chunkKey(local.cx, local.cz));
+    if (!chunk?.voxels) return false;
+    const index = this._voxelIndex(local.lx, local.ly, local.lz);
+    const next = blockId || BLOCK.air;
+    if (chunk.voxels[index] === next) return false;
+    chunk.voxels[index] = next;
+    this._markChunkDirty(local.cx, local.cz);
+    if (local.lx === 0) this._markChunkDirty(local.cx - 1, local.cz);
+    if (local.lx === this.chunkSize - 1) this._markChunkDirty(local.cx + 1, local.cz);
+    if (local.lz === 0) this._markChunkDirty(local.cx, local.cz - 1);
+    if (local.lz === this.chunkSize - 1) this._markChunkDirty(local.cx, local.cz + 1);
+    return true;
+  }
+
+  destroySphere(center, radius, options = {}) {
+    const blockRadius = Math.ceil(radius / this.tileSize);
+    const { gx, gy, gz } = this._worldToGlobalVoxel(center.x, center.y, center.z);
+    const radiusSq = radius * radius;
+    let edited = 0;
+    const editedChunks = new Set();
+
+    for (let x = gx - blockRadius; x <= gx + blockRadius; x++) {
+      for (let y = gy - blockRadius; y <= gy + blockRadius; y++) {
+        for (let z = gz - blockRadius; z <= gz + blockRadius; z++) {
+          const voxelCenter = this._voxelCenterWorld(x, y, z);
+          if (voxelCenter.distanceToSquared(center) > radiusSq) continue;
+          const previous = this.getBlockAtVoxel(x, y, z);
+          if (previous === BLOCK.air) continue;
+          if (options.preserveTop && previous === BLOCK.grass) continue;
+          if (this.setBlockAtVoxel(x, y, z, BLOCK.air)) {
+            const local = this._globalToChunkLocal(x, y, z);
+            if (local) editedChunks.add(this._chunkKey(local.cx, local.cz));
+            edited += 1;
+          }
+        }
+      }
+    }
+
+    this.debugStats.lastEditedBlocks = edited;
+    return { edited, chunks: editedChunks.size };
+  }
+
+  raycastVoxel(origin, direction, maxDistance = 60) {
+    const dir = direction.clone().normalize();
+    const pos = origin.clone();
+    let { gx, gy, gz } = this._worldToGlobalVoxel(pos.x, pos.y, pos.z);
+    const stepX = dir.x >= 0 ? 1 : -1;
+    const stepY = dir.y >= 0 ? 1 : -1;
+    const stepZ = dir.z >= 0 ? 1 : -1;
+    const nextBoundary = (g, step) => (step > 0 ? (g + 1) * this.tileSize : g * this.tileSize);
+    let tMaxX = dir.x !== 0 ? (nextBoundary(gx, stepX) - origin.x) / dir.x : Infinity;
+    let tMaxY = dir.y !== 0 ? (nextBoundary(gy, stepY) - origin.y) / dir.y : Infinity;
+    let tMaxZ = dir.z !== 0 ? (nextBoundary(gz, stepZ) - origin.z) / dir.z : Infinity;
+    const tDeltaX = dir.x !== 0 ? this.tileSize / Math.abs(dir.x) : Infinity;
+    const tDeltaY = dir.y !== 0 ? this.tileSize / Math.abs(dir.y) : Infinity;
+    const tDeltaZ = dir.z !== 0 ? this.tileSize / Math.abs(dir.z) : Infinity;
+    let distance = 0;
+    let normal = new THREE.Vector3();
+
+    while (distance <= maxDistance) {
+      const blockId = this.getBlockAtVoxel(gx, gy, gz);
+      if (blockId !== BLOCK.air) {
+        return {
+          blockId,
+          voxel: { x: gx, y: gy, z: gz },
+          point: origin.clone().addScaledVector(dir, Math.max(0, distance)),
+          normal,
+          distance,
+        };
+      }
+
+      if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+        gx += stepX;
+        distance = tMaxX;
+        tMaxX += tDeltaX;
+        normal = new THREE.Vector3(-stepX, 0, 0);
+      } else if (tMaxY < tMaxZ) {
+        gy += stepY;
+        distance = tMaxY;
+        tMaxY += tDeltaY;
+        normal = new THREE.Vector3(0, -stepY, 0);
+      } else {
+        gz += stepZ;
+        distance = tMaxZ;
+        tMaxZ += tDeltaZ;
+        normal = new THREE.Vector3(0, 0, -stepZ);
+      }
+    }
+    return null;
+  }
+
+  _processDirtyChunks() {
+    let remeshed = 0;
+    for (const key of [...this.dirtyChunks]) {
+      if (remeshed >= this.maxRemeshesPerFrame) break;
+      const chunk = this.chunks.get(key);
+      this.dirtyChunks.delete(key);
+      if (!chunk?.dirty) continue;
+      this._remeshChunk(chunk);
+      remeshed += 1;
     }
   }
 
-  // Deterministic height in block units (integer) using FBM Simplex noise
-  _heightNoise(wx, wz) {
-    let amplitude = 1.0;
-    let frequency = this.terrainScale;
-    let value = 0.0;
-    let maxValue = 0.0;
+  _markNeighborChunksDirty(cx, cz) {
+    this._markChunkDirty(cx - 1, cz);
+    this._markChunkDirty(cx + 1, cz);
+    this._markChunkDirty(cx, cz - 1);
+    this._markChunkDirty(cx, cz + 1);
+  }
 
-    for (let i = 0; i < this.terrainOctaves; i++) {
-      value += this.simplex.noise2D(wx * frequency, wz * frequency) * amplitude;
-      maxValue += amplitude;
-      amplitude *= this.terrainPersistence;
-      frequency *= this.terrainLacunarity;
-    }
+  _markChunkDirty(cx, cz) {
+    const key = this._chunkKey(cx, cz);
+    const chunk = this.chunks.get(key);
+    if (!chunk) return;
+    chunk.dirty = true;
+    this.dirtyChunks.add(key);
+  }
 
-    // Normalize from [-1, 1] to [0, 1], then map to block height range
-    const normalized = (value / maxValue + 1.0) / 2.0;
-    const h = Math.floor(normalized * this.terrainHeightRange) + this.terrainMinBlockY;
-    return Math.max(this.terrainMinBlockY, Math.min(this.terrainMaxBlockH, h));
+  _isSolidGlobal(gx, gy, gz) {
+    return this.getBlockAtVoxel(gx, gy, gz) !== BLOCK.air;
+  }
+
+  _worldToGlobalVoxel(worldX, worldY, worldZ) {
+    return {
+      gx: Math.floor(worldX / this.tileSize),
+      gy: Math.floor(worldY / this.tileSize),
+      gz: Math.floor(worldZ / this.tileSize),
+    };
+  }
+
+  _worldToGlobalVoxelXZ(worldX, worldZ) {
+    return {
+      gx: Math.floor(worldX / this.tileSize),
+      gz: Math.floor(worldZ / this.tileSize),
+    };
+  }
+
+  _globalToChunkLocal(gx, gy, gz) {
+    const ly = gy - this.voxelMinY;
+    if (ly < 0 || ly >= this.voxelHeight) return null;
+    const xz = this._globalXZToChunkLocal(gx, gz);
+    return { ...xz, ly };
+  }
+
+  _globalXZToChunkLocal(gx, gz) {
+    const cx = Math.floor((gx + this.chunkHalf) / this.chunkSize);
+    const cz = Math.floor((gz + this.chunkHalf) / this.chunkSize);
+    const lx = gx - cx * this.chunkSize + this.chunkHalf;
+    const lz = gz - cz * this.chunkSize + this.chunkHalf;
+    return { cx, cz, lx, lz };
+  }
+
+  _localToGlobalX(cx, lx) {
+    return cx * this.chunkSize + lx - this.chunkHalf;
+  }
+
+  _localToGlobalZ(cz, lz) {
+    return cz * this.chunkSize + lz - this.chunkHalf;
+  }
+
+  _voxelIndex(x, y, z) {
+    return y * this.chunkSize * this.chunkSize + z * this.chunkSize + x;
+  }
+
+  _heightMapIndex(x, z) {
+    return z * this.chunkSize + x;
+  }
+
+  _voxelCenterWorld(gx, gy, gz) {
+    return new THREE.Vector3(
+      (gx + 0.5) * this.tileSize,
+      (gy + 0.5) * this.tileSize,
+      (gz + 0.5) * this.tileSize
+    );
+  }
+
+  _voxelHash(x, y, z) {
+    const n = Math.sin((x * 127.1 + y * 311.7 + z * 74.7) * 12.9898) * 43758.5453123;
+    return n - Math.floor(n);
   }
 
   async _generateDecorations(chunk, biome) {
@@ -571,6 +979,13 @@ export class World {
 
   _disposeChunk(chunk) {
     this.scene.remove(chunk.group);
+    this.dirtyChunks.delete(chunk.key);
+    if (chunk.terrainMesh) {
+      this.tiles = this.tiles.filter(mesh => mesh !== chunk.terrainMesh);
+      chunk.group.remove(chunk.terrainMesh);
+      chunk.terrainMesh.geometry.dispose();
+      chunk.terrainMesh = null;
+    }
     for (const deco of chunk.decorations) chunk.group.remove(deco);
     for (const item of chunk.furniture) item.dispose();
     for (const item of chunk.letters) item.dispose();
@@ -590,7 +1005,7 @@ export class World {
       this.props = this.props.filter(item => !chunk.props.includes(item));
       this.npcs = this.npcs.filter(item => !chunk.npcs.includes(item));
       this.decorations = this.decorations.filter(item => !chunk.decorations.includes(item));
-      this.tiles = this.tiles.filter(item => !chunk.group.children.includes(item));
+      this.tiles = this.tiles.filter(item => item !== chunk.terrainMesh && !chunk.group.children.includes(item));
     }
   }
 

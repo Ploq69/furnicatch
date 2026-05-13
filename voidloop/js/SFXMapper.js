@@ -148,12 +148,33 @@ export const SFXMapper = {
   explosion(size = 'small') {
     const map = {
       small: ['DSGNImpt', 'EXPLOSION-Grainy Burst'],
-      large: ['DSGNImpt', 'EXPLOSION-Crunchy Burst'],
-      fire: ['DSGNImpt', 'EXPLOSION-Fire Hit'],
-      electric: ['DSGNImpt', 'EXPLOSION-Electric Hit'],
+      large: ['DSGNImpt', 'EXPLOSION-Forced Shutdown'],
+      fire: ['DSGNImpt', 'EXPLOSION-Magisplosion'],
+      electric: ['DSGNImpt', 'EXPLOSION-Mecha Core Damage'],
     };
     const [pre, name] = map[size] || map.small;
     playVariant(pre, name, { volume: 0.6 });
+  },
+
+  grenadeExplosion() {
+    audio.playExplosion({ volume: 0.9, freq: 104 });
+    playVariant('DSGNImpt', 'EXPLOSION-Forced Shutdown', { volume: 0.82, pitch: 0.92 });
+    playVariant('DSGNImpt', 'EXPLOSION-Mecha Core Damage', { volume: 0.62, pitch: 0.82 });
+    playVariant('DSGNImpt', 'EXPLOSION-Thud', { volume: 0.72, pitch: 0.75 });
+    playVariant('DSGNImpt', 'EXPLOSION-Grainy Burst', { volume: 0.42, pitch: 1.08 });
+  },
+
+  missileIncoming() {
+    playVariant('WHSH', 'MOVEMENT-Mecha Ship Passby', { volume: 0.55, pitch: 1.22 });
+    playVariant('DSGNSynth', 'CAST-Mecha Laser Prepare', { volume: 0.35, pitch: 0.72 });
+  },
+
+  missileImpact() {
+    audio.playExplosion({ volume: 1.0, freq: 68 });
+    playVariant('DSGNImpt', 'EXPLOSION-Forced Shutdown', { volume: 0.95, pitch: 0.68 });
+    playVariant('DSGNImpt', 'EXPLOSION-Mecha Core Damage', { volume: 0.8, pitch: 0.72 });
+    playVariant('DSGNImpt', 'EXPLOSION-Thud', { volume: 0.9, pitch: 0.58 });
+    playVariant('DSGNImpt', 'EXPLOSION-Grainy Burst', { volume: 0.62, pitch: 0.82 });
   },
 
   // === ENEMY SOUNDS ===
@@ -213,13 +234,13 @@ export const SFXMapper = {
       slime: ['DSGNImpt', 'EXPLOSION-Flare Extinguish'],
       goblin: ['DSGNImpt', 'EXPLOSION-Forced Interruption'],
       skeleton: ['DSGNImpt', 'EXPLOSION-Forced Interruption'],
-      demon: ['DSGNImpt', 'EXPLOSION-Crunchy Burst'],
+      demon: ['DSGNImpt', 'EXPLOSION-Forced Shutdown'],
       yeti: ['DSGNImpt', 'EXPLOSION-Bass Hit'],
       bat: ['DSGNImpt', 'EXPLOSION-Flare Extinguish'],
       pirate: ['DSGNImpt', 'EXPLOSION-Forced Interruption'],
       soldier: ['DSGNImpt', 'EXPLOSION-Bit Bomb'],
       zombie: ['DSGNImpt', 'EXPLOSION-Grainy Burst'],
-      space: ['DSGNImpt', 'EXPLOSION-Electric Hit'],
+      space: ['DSGNImpt', 'EXPLOSION-Mecha Core Damage'],
     };
     const [pre, name] = map[type] || map.goblin;
     playVariant(pre, name, { volume: 0.5 });

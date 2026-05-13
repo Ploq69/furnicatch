@@ -20,6 +20,16 @@ const FLOAT_BLOCK_TYPES = {
   'Void Depths':      ['crystal', 'decorative_block_blue', 'decorative_block_red', 'lava'],
 };
 
+const ISO_UNDERGROUND_CUTAWAY = {
+  DEPTH_START: 0.8,
+  DEPTH_FULL: 7.0,
+  RADIUS_BOOST: 4.25,
+  REACH_BOOST: 6.0,
+  HEIGHT_BOOST: 1.15,
+};
+
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+
 export class World {
   constructor(scene) {
     this.scene = scene;
@@ -795,9 +805,13 @@ export class World {
     if (allowCutaway) {
       this._cutawayAmount += (cutawayTarget - this._cutawayAmount) * (1 - Math.exp(-cutawayRate * dt));
     }
-    const cutawayRadius = Math.min(16, 7.5 + playerDepth * 0.28);
-    const cutawayReach = Math.min(28, 4 + playerDepth * 1.15);
-    this.terrainMesh.setCutaway(playerPos, this._cutawayAmount, cutawayRadius, playerPos.y + 2.25, {
+    const isoUndergroundT = allowCutaway
+      ? clamp01((playerDepth - ISO_UNDERGROUND_CUTAWAY.DEPTH_START) / (ISO_UNDERGROUND_CUTAWAY.DEPTH_FULL - ISO_UNDERGROUND_CUTAWAY.DEPTH_START))
+      : 0;
+    const cutawayRadius = Math.min(22, 7.5 + playerDepth * 0.34 + ISO_UNDERGROUND_CUTAWAY.RADIUS_BOOST * isoUndergroundT);
+    const cutawayReach = Math.min(34, 4 + playerDepth * 1.2 + ISO_UNDERGROUND_CUTAWAY.REACH_BOOST * isoUndergroundT);
+    const cutawayHeight = playerPos.y + 2.25 + ISO_UNDERGROUND_CUTAWAY.HEIGHT_BOOST * isoUndergroundT;
+    this.terrainMesh.setCutaway(playerPos, this._cutawayAmount, cutawayRadius, cutawayHeight, {
       forward: { x: Math.SQRT1_2, z: Math.SQRT1_2 },
       reach: cutawayReach,
     });

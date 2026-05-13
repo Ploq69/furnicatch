@@ -15,6 +15,7 @@ async function startGame() {
   document.body.appendChild(container);
   
   game = new Game(container);
+  window.game = game;
   await game.init();
 }
 

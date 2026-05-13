@@ -89,6 +89,38 @@ class AudioManager {
     this._synthFallback(opts);
   }
 
+  playExplosion(opts = {}) {
+    if (!this.initialized) this.init();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const volume = opts.volume ?? 0.75;
+
+    const rumble = this.ctx.createOscillator();
+    const rumbleGain = this.ctx.createGain();
+    rumble.type = 'sine';
+    rumble.frequency.setValueAtTime(opts.freq ?? 96, now);
+    rumble.frequency.exponentialRampToValueAtTime(34, now + 0.38);
+    rumbleGain.gain.setValueAtTime(volume * 0.55, now);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    rumble.connect(rumbleGain);
+    rumbleGain.connect(this.sfxGain);
+    rumble.start(now);
+    rumble.stop(now + 0.44);
+
+    const crack = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crack.type = 'square';
+    crack.frequency.setValueAtTime(170, now);
+    crack.frequency.exponentialRampToValueAtTime(58, now + 0.12);
+    crackGain.gain.setValueAtTime(volume * 0.22, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    crack.connect(crackGain);
+    crackGain.connect(this.sfxGain);
+    crack.start(now);
+    crack.stop(now + 0.14);
+  }
+
   _synthFallback(opts) {
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();

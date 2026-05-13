@@ -176,7 +176,7 @@ export class Weapon {
             });
           } else {
             particles?.burst(pos, 0xff6600, 20);
-            SFXMapper.explosion('large');
+            SFXMapper.grenadeExplosion();
             for (const enemy of enemies) {
               if (enemy.dead) continue;
               if (enemy.position.distanceTo(pos) < p.radius) {
@@ -271,7 +271,7 @@ export class Weapon {
             });
           } else {
             particles?.burst(p.mesh.position, 0xff6600, 20);
-            SFXMapper.explosion('large');
+            SFXMapper.grenadeExplosion();
           }
         }
         scene.remove(p.mesh);

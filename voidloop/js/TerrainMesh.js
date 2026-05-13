@@ -11,8 +11,8 @@ import * as THREE from 'three';
 const ISO_LEVEL = 0;
 const CHUNK_SIZE = 8;
 const TERRAIN_MIN_Y = -48;
-const TERRAIN_MAX_Y = 2;
-const SURFACE_Y = 1;
+const TERRAIN_MAX_Y = 10;
+const SURFACE_Y = 2;
 const CELL_SIZE = 1;
 const MAX_REBUILDS_PER_FRAME = 2;
 const REBUILD_TIME_BUDGET_MS = 2.5;
@@ -30,6 +30,16 @@ const TERRAIN_COLORS = {
   dirt: new THREE.Color(0xaa684d),
   stone: new THREE.Color(0x9ca8ae),
   deep: new THREE.Color(0x4a5054),
+};
+
+const ZONE_SURFACE_PROFILES = {
+  forest: { base: 1.2, amplitude: 3.8, roughness: 1.4, terrace: 1.0, ridge: 0.8, basin: 1.0 },
+  fire: { base: 0.8, amplitude: 4.8, roughness: 2.2, terrace: 1.0, ridge: 1.8, basin: 1.2 },
+  ice: { base: 1.4, amplitude: 5.2, roughness: 1.5, terrace: 1.0, ridge: 2.4, basin: 0.7 },
+  desert: { base: 0.7, amplitude: 4.2, roughness: 1.9, terrace: 0.5, ridge: 0.4, basin: 0.8 },
+  steelworks: { base: 1.0, amplitude: 2.2, roughness: 1.0, terrace: 1.0, ridge: 0.6, basin: 0.4 },
+  mire: { base: 0.3, amplitude: 2.8, roughness: 1.2, terrace: 0.5, ridge: 0.5, basin: 1.4 },
+  citadel: { base: 1.0, amplitude: 2.0, roughness: 0.8, terrace: 1.0, ridge: 0.5, basin: 0.3 },
 };
 
 // Atlas UV regions extracted from KayKit BlockBits gltf models
@@ -53,6 +63,11 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+function smoothstep(edge0, edge1, x) {
+  const t = clamp((x - edge0) / Math.max(0.0001, edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 function hashNoise(x, z, seed) {
   const n = Math.sin(x * 12.9898 + z * 78.233 + seed * 0.0001) * 43758.5453;
   return n - Math.floor(n);
@@ -70,6 +85,20 @@ function smoothNoise(x, z, seed) {
   const c = hashNoise(x0, z0 + 1, seed);
   const d = hashNoise(x0 + 1, z0 + 1, seed);
   return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sz;
+}
+
+function fbmNoise(x, z, seed, octaves = 4) {
+  let value = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let total = 0;
+  for (let i = 0; i < octaves; i++) {
+    value += (smoothNoise(x * frequency, z * frequency, seed + i * 1013) - 0.5) * amplitude;
+    total += amplitude;
+    amplitude *= 0.5;
+    frequency *= 2.03;
+  }
+  return total > 0 ? value / total : 0;
 }
 
 export class TerrainMesh {
@@ -807,10 +836,41 @@ export class TerrainMesh {
     const b = zone.bounds;
     const edge = Math.min(x - b.minX, b.maxX - x, z - b.minZ, b.maxZ - z);
     const edgeWall = clamp(edge, -1, 1);
-    const broad = smoothNoise(x * 0.055, z * 0.055, seed) - 0.5;
-    const fine = smoothNoise(x * 0.18, z * 0.18, seed + 991) - 0.5;
-    const surface = SURFACE_Y + broad * 0.55 + fine * 0.18;
+    const surface = this._surfaceHeightAt(x, z, zoneEntry);
     return Math.min(surface - y, edgeWall + 0.25);
+  }
+
+  _surfaceHeightAt(x, z, zoneEntry) {
+    const { zone, seed } = zoneEntry;
+    const profile = ZONE_SURFACE_PROFILES[zone.id] || ZONE_SURFACE_PROFILES.forest;
+    const broad = fbmNoise(x * 0.035, z * 0.035, seed, 4);
+    const medium = fbmNoise(x * 0.095 + 41.7, z * 0.095 - 22.4, seed + 991, 3);
+    const ridgeRaw = smoothNoise(x * 0.055 - 18.5, z * 0.055 + 9.25, seed + 2077);
+    const ridge = Math.max(0, 1 - Math.abs(ridgeRaw * 2 - 1) * 1.45);
+    const basin = Math.max(0, smoothNoise(x * 0.07 + 113.2, z * 0.07 - 81.6, seed + 6151) - 0.62);
+    let height = profile.base
+      + broad * profile.amplitude
+      + medium * profile.roughness
+      + ridge * profile.ridge
+      - basin * profile.basin * 3.2;
+
+    if (profile.terrace > 0) {
+      height = Math.round(height / profile.terrace) * profile.terrace;
+    }
+
+    const spawn = zone.spawnPoint;
+    if (spawn) {
+      const dist = Math.hypot(x - spawn.x, z - spawn.z);
+      const flat = 1 - smoothstep(4.0, 8.5, dist);
+      height = height * (1 - flat) + SURFACE_Y * flat;
+    }
+    if (zone.exitGateway) {
+      const dist = Math.hypot(x - zone.exitGateway.x, z - zone.exitGateway.z);
+      const flat = 1 - smoothstep(3.0, 6.0, dist);
+      height = height * (1 - flat) + SURFACE_Y * flat;
+    }
+
+    return clamp(height, -2.5, TERRAIN_MAX_Y - 0.2);
   }
 
   _setDensity(x, y, z, density) {

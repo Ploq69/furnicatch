@@ -130,6 +130,11 @@ export class AimController {
     }
     if (best) return best;
 
+    const voxelHit = world.raycastVoxel?.(ray.origin, ray.direction, 60);
+    if (voxelHit) {
+      return { point: voxelHit.point, entity: null };
+    }
+
     const groundPlane = new THREE.Plane(UP, 0);
     const point = new THREE.Vector3();
     if (ray.intersectPlane(groundPlane, point)) {

@@ -18,7 +18,7 @@ import { Inventory } from './Inventory.js';
 import { ShopManager, SHOP_ITEMS } from './ShopManager.js';
 import { ShopUI } from './ShopUI.js';
 import { HazardSystem } from './HazardSystem.js';
-import { getKayKitItem, getKayKitPaths } from './KayKitLoadout.js';
+import { getKayKitItem, getKayKitPaths, getKayKitCharacter, KAYKIT_ANIMATIONS, KAYKIT_FP_ANIMATIONS } from './KayKitLoadout.js';
 import { LetterPool, SPELLING_WORDS } from './SpellingData.js';
 import { SpellingChallenge } from './SpellingEngine.js';
 import { LetterDrop } from './LetterDrop.js';
@@ -35,6 +35,56 @@ const STATES = {
   PLAYING: 'playing',
   CAMP: 'camp',
   SPELLING: 'spelling',
+};
+
+const ISO_UNDERGROUND_VIEW = {
+  DEPTH_START: 0.8,
+  DEPTH_FULL: 7.0,
+  HORIZONTAL_SCALE: 0.68,
+  VERTICAL_SCALE: 1.26,
+  TARGET_Y_BIAS: -0.35,
+  TARGET_FORWARD_BIAS: 1.65,
+  BACKDROP_DARKNESS: 0.16,
+  BACKDROP_SATURATION: 0.42,
+  AMBIENT_BOOST: 0.34,
+  FOG_NEAR: 18,
+  FOG_FAR: 56,
+};
+
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const smoothstep = (edge0, edge1, value) => {
+  const t = clamp01((value - edge0) / Math.max(0.0001, edge1 - edge0));
+  return t * t * (3 - 2 * t);
+};
+const easeOutCubic = (value) => 1 - Math.pow(1 - clamp01(value), 3);
+const easeInOutSine = (value) => -(Math.cos(Math.PI * clamp01(value)) - 1) / 2;
+
+const FIRST_PERSON_ITEM_TRANSFORMS = {
+  default: {
+    position: [0.32, -0.41, -0.74],
+    rotation: [-0.66, 0.18, -0.82],
+    scale: 0.46,
+  },
+  pickaxe: {
+    position: [0.35, -0.43, -0.78],
+    rotation: [-0.72, 0.24, -0.92],
+    scale: 0.5,
+  },
+  sword_1handed: {
+    position: [0.34, -0.4, -0.82],
+    rotation: [-0.46, 0.14, -0.52],
+    scale: 0.48,
+  },
+  crossbow_1handed: {
+    position: [0.18, -0.36, -0.9],
+    rotation: [-0.28, 0.04, -0.12],
+    scale: 0.5,
+  },
+  smokebomb: {
+    position: [0.28, -0.36, -0.72],
+    rotation: [-0.35, 0.2, -0.42],
+    scale: 0.58,
+  },
 };
 
 export class Game {
@@ -79,7 +129,16 @@ export class Game {
     this.fpViewmodelTool = null;
     this.fpViewmodelItemId = null;
     this.fpSwingTimer = 0;
-    this.fpSwingDuration = 0.32;
+    this.fpSwingDuration = 0.42;
+    this.fpMoveCycle = 0;
+    this.fpSway = new THREE.Vector2();
+    this.fpViewmodelParts = {};
+    // First-person animated arms
+    this.fpCharacterModel = null;
+    this.fpCharacterId = null;
+    this.fpMixer = null;
+    this.fpCurrentAnim = null;
+    this._fpArmsLoading = false;
     this._createFirstPersonViewmodel();
 
     // Lighting
@@ -191,6 +250,10 @@ export class Game {
     this.mineCombo = 0;
     this.mineComboTimer = 0;
 
+    // Missile strike special attack
+    this.activeMissiles = [];
+    this.missileStrikeCooldown = 0;
+
     // Zone progression systems
     this.zoneManager = new ZoneManager();
     this.inventory = new Inventory();
@@ -252,6 +315,7 @@ export class Game {
 
     this._initAudioOnInteraction();
     await this.player.spawn();
+    await this._loadFirstPersonArms();
     await this.player.equipWeapon(1); // Sync functional weapon with sword visual
 
     // Multiplayer: host generates and shares world seed, guest waits for it
@@ -608,6 +672,7 @@ export class Game {
     }
 
     // Camera hard follow with screen shake
+    const isoDepthFactor = this._getIsoUndergroundFactor();
     const offset = 20 / this.cameraZoom;
     let shakeX = 0, shakeY = 0, shakeZ = 0;
     if (this.shakeDuration > 0) {
@@ -618,7 +683,7 @@ export class Game {
       shakeZ = (Math.random() - 0.5) * this.shakeIntensity * decay;
       if (this.shakeDuration <= 0) this.shakeIntensity = 0;
     }
-    this._updateCamera(dt, offset, shakeX, shakeY, shakeZ);
+    this._updateCamera(dt, offset, shakeX, shakeY, shakeZ, isoDepthFactor);
 
     // Player update
     this.player.update(dt, input);
@@ -639,6 +704,11 @@ export class Game {
 
     // Update weapon cooldowns
     for (const w of this.player.weapons) w.update(dt);
+    this.missileStrikeCooldown = Math.max(0, this.missileStrikeCooldown - dt);
+
+    if (input.pressed('KeyQ')) {
+      this._tryCallMissileStrike();
+    }
 
     // Contextual J button — mine block or attack enemy
     const minePressed = input.pressed('KeyJ') || (this.cameraMode === 'firstPerson' && input.buttonPressed?.('left'));
@@ -834,6 +904,7 @@ export class Game {
       world: this.world,
       game: this,
     });
+    this._updateActiveMissiles(dt);
 
     // World update (enemies + blocks)
     this.world.update(dt, this.player.position, this.particles, audio, this.player, {
@@ -889,25 +960,7 @@ export class Game {
       this.hazards.update(dt);
     }
 
-    // Zone atmosphere — dynamic fog and ambient based on current zone
-    const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
-    if (currentZone) {
-      this.scene.background = new THREE.Color(currentZone.fogColor);
-      // Adjust ambient based on zone theme
-      const ambientColors = {
-        forest: 0x88aa88,
-        fire: 0xaa6644,
-        ice: 0x88aacc,
-        desert: 0xccaa66,
-        steelworks: 0x8899aa,
-        mire: 0x669966,
-        citadel: 0xccaa77,
-      };
-      this.ambient.color.setHex(ambientColors[currentZone.id] || 0x8888aa);
-    } else {
-      this.scene.background = new THREE.Color(0x0a0a0a);
-      this.ambient.color.setHex(0x8888aa);
-    }
+    this._updateZoneAtmosphere(isoDepthFactor);
 
     // Check death
     if (this.player.hp <= 0) {
@@ -947,7 +1000,55 @@ export class Game {
     };
   }
 
-  _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0) {
+  _getIsoUndergroundFactor() {
+    if (this.cameraMode !== 'iso' || !this.world || !this.player) return 0;
+    const depth = this.world.getTerrainDepthAtPlayer?.(this.player.position) || 0;
+    return smoothstep(ISO_UNDERGROUND_VIEW.DEPTH_START, ISO_UNDERGROUND_VIEW.DEPTH_FULL, depth);
+  }
+
+  _updateZoneAtmosphere(isoDepthFactor = 0) {
+    const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
+    const baseBackground = new THREE.Color(currentZone?.fogColor || 0x0a0a0a);
+    const ambientColors = {
+      forest: 0x88aa88,
+      fire: 0xaa6644,
+      ice: 0x88aacc,
+      desert: 0xccaa66,
+      steelworks: 0x8899aa,
+      mire: 0x669966,
+      citadel: 0xccaa77,
+    };
+    const baseAmbient = new THREE.Color(currentZone ? (ambientColors[currentZone.id] || 0x8888aa) : 0x8888aa);
+    const undergroundT = clamp01(isoDepthFactor);
+
+    if (undergroundT > 0) {
+      const hsl = {};
+      baseBackground.getHSL(hsl);
+      const caveBackground = new THREE.Color().setHSL(
+        hsl.h,
+        hsl.s * ISO_UNDERGROUND_VIEW.BACKDROP_SATURATION,
+        Math.max(0.06, hsl.l * ISO_UNDERGROUND_VIEW.BACKDROP_DARKNESS)
+      );
+      this.scene.background = baseBackground.clone().lerp(caveBackground, undergroundT);
+
+      const fogColor = this.scene.background.clone().lerp(new THREE.Color(0x111820), 0.22);
+      const fogNear = currentZone?.fogNear || ISO_UNDERGROUND_VIEW.FOG_NEAR;
+      const fogFar = currentZone?.fogFar || ISO_UNDERGROUND_VIEW.FOG_FAR;
+      this.scene.fog = new THREE.Fog(
+        fogColor,
+        fogNear + (ISO_UNDERGROUND_VIEW.FOG_NEAR - fogNear) * undergroundT,
+        fogFar + (ISO_UNDERGROUND_VIEW.FOG_FAR - fogFar) * undergroundT
+      );
+
+      this.ambient.color.copy(baseAmbient).lerp(new THREE.Color(0xd9e4d0), ISO_UNDERGROUND_VIEW.AMBIENT_BOOST * undergroundT);
+    } else {
+      this.scene.background = baseBackground;
+      this.scene.fog = null;
+      this.ambient.color.copy(baseAmbient);
+    }
+  }
+
+  _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0, isoDepthFactor = 0) {
     if (this.cameraMode === 'firstPerson') {
       this._updateFirstPersonAim(dt);
       this._updateFirstPersonViewmodel(dt);
@@ -965,8 +1066,15 @@ export class Game {
 
     this.player.controlYaw = null;
     if (this.player.mesh) this.player.mesh.visible = true;
+    const undergroundT = clamp01(isoDepthFactor);
+    const horizontalScale = 1 + (ISO_UNDERGROUND_VIEW.HORIZONTAL_SCALE - 1) * undergroundT;
+    const verticalScale = 1 + (ISO_UNDERGROUND_VIEW.VERTICAL_SCALE - 1) * undergroundT;
+    const targetForwardBias = ISO_UNDERGROUND_VIEW.TARGET_FORWARD_BIAS * undergroundT;
+    const targetYBias = ISO_UNDERGROUND_VIEW.TARGET_Y_BIAS * undergroundT;
     const desiredTarget = this.player.position.clone();
-    desiredTarget.y += 0.55;
+    desiredTarget.y += 0.55 + targetYBias;
+    desiredTarget.x += targetForwardBias;
+    desiredTarget.z += targetForwardBias;
     if (!this._cameraTargetReady) {
       this.cameraTarget.copy(desiredTarget);
       this._cameraTargetReady = true;
@@ -978,9 +1086,9 @@ export class Game {
       this.cameraTarget.z += (desiredTarget.z - this.cameraTarget.z) * horizontalT;
     }
     this.isoCamera.position.set(
-      this.cameraTarget.x + isoOffset + shakeX,
-      this.cameraTarget.y + isoOffset + shakeY,
-      this.cameraTarget.z + isoOffset + shakeZ
+      this.cameraTarget.x + isoOffset * horizontalScale + shakeX,
+      this.cameraTarget.y + isoOffset * verticalScale + shakeY,
+      this.cameraTarget.z + isoOffset * horizontalScale + shakeZ
     );
     this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
   }
@@ -999,69 +1107,217 @@ export class Game {
   _createFirstPersonViewmodel() {
     this.fpViewmodel = new THREE.Group();
     this.fpViewmodel.visible = false;
+    this.fpViewmodel.position.set(0, -0.02, 0);
+    this.fpViewmodelParts = {};
     this.firstPersonCamera.add(this.fpViewmodel);
 
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xc7865a, roughness: 0.85 });
-    const gloveMat = new THREE.MeshStandardMaterial({ color: 0x2f241d, roughness: 0.9 });
-
-    const makeArm = (x) => {
-      const arm = new THREE.Group();
-      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, 0.48), skinMat);
-      sleeve.position.set(0, -0.04, -0.18);
-      sleeve.rotation.x = -0.28;
-      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.16), gloveMat);
-      hand.position.set(0, -0.08, -0.45);
-      arm.add(sleeve, hand);
-      arm.position.set(x, -0.28, -0.58);
-      arm.rotation.z = x > 0 ? -0.16 : 0.16;
-      return arm;
-    };
-
-    this.fpViewmodel.add(makeArm(0.22));
-    this.fpViewmodel.add(makeArm(-0.18));
+    const viewLight = new THREE.PointLight(0xffdfbd, 1.25, 2.4, 2);
+    viewLight.position.set(0.2, -0.18, -0.42);
+    this.fpViewmodel.add(viewLight);
     this._refreshFirstPersonTool();
+  }
+
+  async _loadFirstPersonArms() {
+    if (!this.player?.loadout?.characterId) return;
+    const characterId = this.player.loadout.characterId;
+    if (this.fpCharacterId === characterId && this.fpCharacterModel) return;
+    if (this._fpArmsLoading) return;
+    this._fpArmsLoading = true;
+
+    const character = getKayKitCharacter(characterId);
+    if (!character) {
+      this._fpArmsLoading = false;
+      return;
+    }
+
+    try {
+      await assetLoader.loadGLTF(character.model);
+      const cloned = assetLoader.cloneModel(character.model);
+      if (!cloned?.scene) {
+        this._fpArmsLoading = false;
+        return;
+      }
+
+      // Remove old model
+      if (this.fpCharacterModel) {
+        this.fpViewmodel.remove(this.fpCharacterModel);
+        this.fpCharacterModel.traverse((c) => {
+          if (c.isMesh || c.isSkinnedMesh) {
+            const mats = Array.isArray(c.material) ? c.material : [c.material];
+            mats.forEach((m) => m?.dispose?.());
+          }
+        });
+        this.fpCharacterModel = null;
+      }
+      if (this.fpMixer) {
+        this.fpMixer.stopAllAction();
+        this.fpMixer = null;
+      }
+
+      this.fpCharacterModel = cloned.scene;
+      this.fpCharacterId = characterId;
+
+      // Hide everything except arm meshes
+      this.fpCharacterModel.traverse((child) => {
+        if (child.isMesh || child.isSkinnedMesh) {
+          const name = child.name.toLowerCase();
+          const isArm = name.includes('armleft') || name.includes('armright');
+          child.visible = isArm;
+          if (isArm) {
+            child.renderOrder = 1000;
+            child.frustumCulled = false;
+            child.castShadow = false;
+            child.receiveShadow = false;
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            for (const mat of mats) {
+              if (!mat) continue;
+              mat.depthTest = false;
+              mat.depthWrite = false;
+              mat.roughness = Math.min(0.9, mat.roughness ?? 0.8);
+            }
+          }
+        }
+      });
+
+      // Match player's scale
+      const scale = this.player.meshBaseScale || 1;
+      this.fpCharacterModel.scale.setScalar(scale);
+
+      // Position arms in view (tune these values for your screen)
+      this.fpCharacterModel.position.set(0, -1.15, -0.8);
+      this.fpCharacterModel.rotation.set(0, 0, 0);
+
+      this.fpViewmodel.add(this.fpCharacterModel);
+
+      // Create animation mixer
+      this.fpMixer = new THREE.AnimationMixer(this.fpCharacterModel);
+
+      // Sync current animation immediately
+      this.fpCurrentAnim = null;
+      this._syncFpAnimation();
+
+      console.log('[FP Arms] Loaded character arms:', characterId, 'scale:', scale);
+    } catch (e) {
+      console.error('[FP Arms] Failed to load character arms:', e);
+    } finally {
+      this._fpArmsLoading = false;
+    }
+  }
+
+  _syncFpAnimation() {
+    if (!this.fpMixer || !this.player) return;
+    const logicalName = this.player.currentAnim;
+    if (!logicalName || this.fpCurrentAnim === logicalName) return;
+    this.fpCurrentAnim = logicalName;
+
+    const fpMappedName = KAYKIT_FP_ANIMATIONS[logicalName];
+    const tpMappedName = KAYKIT_ANIMATIONS[logicalName] || logicalName;
+    const clipName = fpMappedName || tpMappedName;
+
+    const clip = this.player.animations.find((a) => a.name === clipName);
+    if (!clip) {
+      console.warn(`[FP Arms] Animation clip not found: ${clipName} (logical: ${logicalName})`);
+      return;
+    }
+
+    const isLoop = logicalName === 'Idle' || logicalName === 'Walk' || logicalName === 'Run' || logicalName === 'Block';
+    const action = this.fpMixer.clipAction(clip);
+    action.reset().fadeIn(0.12);
+    action.loop = isLoop ? THREE.LoopRepeat : THREE.LoopOnce;
+    action.clampWhenFinished = !isLoop;
+    action.play();
+
+    // Fade out other actions
+    this.player.animations.forEach((a) => {
+      if (a !== clip) this.fpMixer.clipAction(a).fadeOut(0.12);
+    });
+  }
+
+  _prepareFirstPersonObject(object) {
+    object.traverse?.((child) => {
+      if (!child.isMesh) return;
+      child.castShadow = false;
+      child.receiveShadow = false;
+      child.frustumCulled = false;
+      child.renderOrder = 1001;
+      if (Array.isArray(child.material)) {
+        child.material = child.material.map((mat) => mat.clone());
+      } else if (child.material) {
+        child.material = child.material.clone();
+      }
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of mats) {
+        if (!mat) continue;
+        mat.depthTest = false;
+        mat.depthWrite = false;
+        mat.roughness = Math.min(0.9, mat.roughness ?? 0.8);
+      }
+    });
+  }
+
+  _applyFirstPersonToolTransform(itemId) {
+    if (!this.fpViewmodelTool) return;
+    const transform = FIRST_PERSON_ITEM_TRANSFORMS[itemId] || FIRST_PERSON_ITEM_TRANSFORMS.default;
+    this.fpViewmodelTool.position.fromArray(transform.position);
+    this.fpViewmodelTool.rotation.set(...transform.rotation);
+    this.fpViewmodelTool.scale.setScalar(transform.scale);
+    this.fpViewmodelTool.userData.basePosition = this.fpViewmodelTool.position.clone();
+    this.fpViewmodelTool.userData.baseRotation = this.fpViewmodelTool.rotation.clone();
   }
 
   _refreshFirstPersonTool() {
     if (!this.fpViewmodel) return;
     const itemId = this.player?.loadout?.rightHand || 'pickaxe';
     const item = getKayKitItem(itemId);
+    if (this.fpViewmodelItemId === itemId && this.fpViewmodelTool && !this.fpViewmodelTool.userData.isFallback) return;
     const cloned = item?.model ? assetLoader.cloneModel(item.model) : null;
-    if (this.fpViewmodelItemId === itemId && this.fpViewmodelTool && (!this.fpViewmodelTool.userData.isFallback || !cloned?.scene)) return;
+    if (this.fpViewmodelItemId === itemId && this.fpViewmodelTool && !cloned?.scene) return;
 
     if (this.fpViewmodelTool) {
       this.fpViewmodel.remove(this.fpViewmodelTool);
       this.fpViewmodelTool.traverse?.((c) => {
-        if (c.isMesh && c.material?.dispose) c.material.dispose();
+        if (!c.isMesh) return;
+        if (Array.isArray(c.material)) {
+          c.material.forEach((mat) => mat.dispose?.());
+        } else {
+          c.material?.dispose?.();
+        }
       });
       this.fpViewmodelTool = null;
     }
 
     if (cloned?.scene) {
       this.fpViewmodelTool = cloned.scene;
-      this.fpViewmodelTool.position.set(0.28, -0.26, -0.78);
-      this.fpViewmodelTool.rotation.set(-0.55, 0.18, -0.8);
-      this.fpViewmodelTool.scale.setScalar(0.55);
+      this._prepareFirstPersonObject(this.fpViewmodelTool);
       this.fpViewmodelTool.userData.isFallback = false;
     } else {
       const group = new THREE.Group();
+      const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x6b4324, roughness: 0.85, flatShading: true });
+      const headMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.7, flatShading: true });
+      fallbackMat.depthTest = false;
+      fallbackMat.depthWrite = false;
+      headMat.depthTest = false;
+      headMat.depthWrite = false;
       const handle = new THREE.Mesh(
         new THREE.BoxGeometry(0.06, 0.5, 0.06),
-        new THREE.MeshStandardMaterial({ color: 0x6b4324, roughness: 0.85 })
+        fallbackMat
       );
       const head = new THREE.Mesh(
         new THREE.BoxGeometry(0.38, 0.08, 0.1),
-        new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.7 })
+        headMat
       );
       head.position.y = 0.25;
       group.add(handle, head);
-      group.position.set(0.28, -0.28, -0.78);
-      group.rotation.set(-0.65, 0.12, -0.75);
+      group.traverse((child) => {
+        child.renderOrder = 1001;
+        child.castShadow = false;
+        child.receiveShadow = false;
+      });
       group.userData.isFallback = true;
       this.fpViewmodelTool = group;
     }
 
-    this.fpViewmodelTool.userData.baseRotation = this.fpViewmodelTool.rotation.clone();
+    this._applyFirstPersonToolTransform(itemId);
     this.fpViewmodelItemId = itemId;
     this.fpViewmodel.add(this.fpViewmodelTool);
   }
@@ -1075,20 +1331,70 @@ export class Game {
     if (!this.fpViewmodel) return;
     this._refreshFirstPersonTool();
     this.fpViewmodel.visible = true;
-    this.fpViewmodel.position.set(0, 0, 0);
-    this.fpViewmodel.rotation.set(0, 0, 0);
+
+    // Ensure arms are loaded for current character
+    if (this.player?.loadout?.characterId && this.player.loadout.characterId !== this.fpCharacterId && !this._fpArmsLoading) {
+      this._loadFirstPersonArms();
+    }
+
+    // Update animation mixer and sync animation state
+    if (this.fpMixer) {
+      this.fpMixer.update(dt);
+      this._syncFpAnimation();
+    }
 
     if (this.fpSwingTimer > 0) this.fpSwingTimer = Math.max(0, this.fpSwingTimer - dt);
     const t = this.fpSwingTimer > 0 ? 1 - (this.fpSwingTimer / this.fpSwingDuration) : 1;
     const swing = this.fpSwingTimer > 0 ? Math.sin(t * Math.PI) : 0;
+    const strike = this.fpSwingTimer > 0
+      ? (t < 0.58 ? easeOutCubic(t / 0.58) : 1 - easeInOutSine((t - 0.58) / 0.42) * 0.7)
+      : 0;
 
-    this.fpViewmodel.position.y = -0.03 * swing;
-    this.fpViewmodel.position.z = -0.05 * swing;
-    this.fpViewmodel.rotation.x = -0.22 * swing;
-    this.fpViewmodel.rotation.z = -0.08 * swing;
+    const moving = input.isDown('KeyW') || input.isDown('KeyA') || input.isDown('KeyS') || input.isDown('KeyD') ||
+      input.isDown('ArrowUp') || input.isDown('ArrowLeft') || input.isDown('ArrowDown') || input.isDown('ArrowRight');
+    const sprinting = moving && input.isDown('ShiftLeft') && this.player?.stamina > 0;
+    const bobSpeed = moving ? (sprinting ? 11.5 : 8.2) : 2.1;
+    const bobAmount = moving ? (sprinting ? 1.15 : 0.82) : 0.22;
+    this.fpMoveCycle += dt * bobSpeed;
+
+    const swayTargetX = THREE.MathUtils.clamp(-input.mouse.dx * 0.0016, -0.055, 0.055);
+    const swayTargetY = THREE.MathUtils.clamp(-input.mouse.dy * 0.0012, -0.045, 0.045);
+    const swayT = 1 - Math.exp(-18 * dt);
+    this.fpSway.x += (swayTargetX - this.fpSway.x) * swayT;
+    this.fpSway.y += (swayTargetY - this.fpSway.y) * swayT;
+
+    const bobX = Math.sin(this.fpMoveCycle) * 0.012 * bobAmount;
+    const bobY = Math.abs(Math.cos(this.fpMoveCycle)) * 0.018 * bobAmount;
+    const bobRoll = Math.sin(this.fpMoveCycle) * 0.015 * bobAmount;
+
+    this.fpViewmodel.position.set(
+      0.015 + this.fpSway.x * 0.55 + bobX,
+      -0.035 + this.fpSway.y * 0.55 - bobY - swing * 0.022,
+      -0.025 - swing * 0.055
+    );
+    this.fpViewmodel.rotation.set(
+      this.fpSway.y * 0.5 - swing * 0.08,
+      -this.fpSway.x * 0.65,
+      bobRoll - this.fpSway.x * 0.28 - swing * 0.06
+    );
+
+    // Tool swing (arms are now animated via skeleton, tool stays camera-attached)
     if (this.fpViewmodelTool) {
+      const basePos = this.fpViewmodelTool.userData.basePosition;
       const base = this.fpViewmodelTool.userData.baseRotation;
-      this.fpViewmodelTool.rotation.set(base.x - 0.65 * swing, base.y, base.z + 0.25 * swing);
+      if (basePos) {
+        this.fpViewmodelTool.position.copy(basePos);
+        this.fpViewmodelTool.position.y -= swing * 0.05;
+        this.fpViewmodelTool.position.z -= strike * 0.12;
+        this.fpViewmodelTool.position.x += swing * 0.025;
+      }
+      if (base) {
+        this.fpViewmodelTool.rotation.set(
+          base.x - strike * 0.72,
+          base.y + swing * 0.06,
+          base.z + swing * 0.34
+        );
+      }
     }
   }
 
@@ -1256,21 +1562,67 @@ export class Game {
   }
 
   _explodeGrenade(position, config = {}) {
+    return this._explodeBlast(position, {
+      kind: 'grenade',
+      radius: config.radius || GAME.GRENADE_RADIUS,
+      damage: config.damage || GAME.GRENADE_DAMAGE,
+      attackerWeaponId: config.attackerWeaponId || 'grenade',
+      remote: !!config.remote,
+      syncEventType: 'grenade_exploded',
+      maxTerrainCells: GAME.GRENADE_MAX_TERRAIN_CELLS,
+      floatingBlockCap: GAME.GRENADE_FLOATING_BLOCK_CAP,
+      terrainCenterOffsetY: 0,
+      terrainMinedCap: 12,
+      lootBudget: 5,
+      letterBudget: 2,
+    });
+  }
+
+  _explodeMissile(position, config = {}) {
+    return this._explodeBlast(position, {
+      kind: 'missile',
+      radius: config.radius || GAME.MISSILE_STRIKE_RADIUS,
+      damage: config.damage || GAME.MISSILE_STRIKE_DAMAGE,
+      attackerWeaponId: config.attackerWeaponId || 'missile_strike',
+      remote: !!config.remote,
+      maxTerrainCells: GAME.MISSILE_STRIKE_MAX_TERRAIN_CELLS,
+      floatingBlockCap: GAME.MISSILE_STRIKE_FLOATING_BLOCK_CAP,
+      terrainCenterOffsetY: -0.85,
+      terrainMinedCap: 24,
+      lootBudget: 7,
+      letterBudget: 2,
+    });
+  }
+
+  _explodeBlast(position, config = {}) {
     const radius = config.radius || GAME.GRENADE_RADIUS;
     const damage = config.damage || GAME.GRENADE_DAMAGE;
     const radiusSq = radius * radius;
     const isRemote = !!config.remote;
     const attackerWeaponId = config.attackerWeaponId || 'grenade';
+    const isMissile = config.kind === 'missile';
 
-    SFXMapper.explosion('large');
-    this.particles.burst(position, 0xff6600, 22);
-    this.particles.spark(position, 14);
-    this.particles.spawn({ pos: position, count: 18, color: 0x6f6254, speed: 5, life: 0.75, size: 0.34, texture: 'smoke' });
-    this.flipbooks.spawn({ pos: position.clone().add(new THREE.Vector3(0, 0.2, 0)), ...FLIPBOOK_EFFECTS.explosion });
-    this._screenShake(1.15, 0.32);
+    if (isMissile) {
+      SFXMapper.missileImpact();
+      this.particles.burst(position, 0xff8a00, 40);
+      this.particles.spark(position, 26);
+      this.particles.spawn({ pos: position, count: 34, color: 0x4f453c, speed: 7.5, life: 1.1, size: 0.52, texture: 'smoke' });
+      this.particles.spawn({ pos: position, count: 24, color: 0x9a6b35, speed: 7, life: 0.9, size: 0.36, texture: 'dirt' });
+      this.flipbooks.spawn({ ...FLIPBOOK_EFFECTS.explosion, pos: position.clone().add(new THREE.Vector3(0, 0.35, 0)), scale: 5.6, fps: 20 });
+      this._spawnShockwave(position, radius, 0xffaa33);
+      this._spawnImpactLight(position, 0xff8a33, 4.8, 0.28);
+      this._screenShake(2.35, 0.56);
+    } else {
+      SFXMapper.grenadeExplosion();
+      this.particles.burst(position, 0xff6600, 22);
+      this.particles.spark(position, 14);
+      this.particles.spawn({ pos: position, count: 18, color: 0x6f6254, speed: 5, life: 0.75, size: 0.34, texture: 'smoke' });
+      this.flipbooks.spawn({ pos: position.clone().add(new THREE.Vector3(0, 0.2, 0)), ...FLIPBOOK_EFFECTS.explosion });
+      this._screenShake(1.15, 0.32);
+    }
 
-    if (this.isMultiplayer && this.net && !isRemote) {
-      this.net.syncEvent('grenade_exploded', {
+    if (this.isMultiplayer && this.net && !isRemote && config.syncEventType) {
+      this.net.syncEvent(config.syncEventType, {
         x: position.x,
         y: position.y,
         z: position.z,
@@ -1292,17 +1644,19 @@ export class Game {
     }
 
     const zone = getZoneAtPosition(position.x, position.z);
-    const depth = Math.max(0, 1 - position.y);
+    const terrainCenter = position.clone();
+    terrainCenter.y += config.terrainCenterOffsetY || 0;
+    const depth = Math.max(0, 1 - terrainCenter.y);
     const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
-    const terrainResult = this.world.explodeTerrain(position, {
+    const terrainResult = this.world.explodeTerrain(terrainCenter, {
       radius,
       zoneId: zone?.id || null,
       type: typeKey,
-      maxCells: GAME.GRENADE_MAX_TERRAIN_CELLS,
+      maxCells: config.maxTerrainCells || GAME.GRENADE_MAX_TERRAIN_CELLS,
     });
     if (terrainResult.meaningful && !isRemote) {
-      this.blocksMined += Math.max(1, Math.min(12, Math.round((terrainResult.removedCells || 1) / 24)));
-      this._awardTerrainDigRewards(terrainResult, position, terrainResult.zoneId);
+      this.blocksMined += Math.max(1, Math.min(config.terrainMinedCap || 12, Math.round((terrainResult.removedCells || 1) / 24)));
+      this._awardTerrainDigRewards(terrainResult, terrainCenter, terrainResult.zoneId);
     }
 
     const candidates = [];
@@ -1315,10 +1669,10 @@ export class Game {
     candidates.sort((a, b) => a.distSq - b.distSq);
 
     let destroyedFloating = 0;
-    let lootBudget = 5;
-    let letterBudget = 2;
+    let lootBudget = config.lootBudget ?? 5;
+    let letterBudget = config.letterBudget ?? 2;
     const resourceRewards = new Map();
-    const maxFloating = GAME.GRENADE_FLOATING_BLOCK_CAP;
+    const maxFloating = config.floatingBlockCap || GAME.GRENADE_FLOATING_BLOCK_CAP;
 
     for (const { block, blockCenter } of candidates) {
       if (destroyedFloating >= maxFloating) break;
@@ -1356,7 +1710,7 @@ export class Game {
 
     if (!isRemote && destroyedFloating > 0) {
       this.blocksMined += destroyedFloating;
-      this.ui.showFloatingText(`Blast broke ${destroyedFloating}`, 0xffaa00);
+      this.ui.showFloatingText(`${isMissile ? 'Strike' : 'Blast'} broke ${destroyedFloating}`, 0xffaa00);
       for (const [resource, amount] of resourceRewards) {
         if (this.resources.add(resource, amount)) {
           const name = resource.replace(/_/g, ' ');
@@ -1364,6 +1718,273 @@ export class Game {
         }
       }
     }
+  }
+
+  _tryCallMissileStrike() {
+    if (this.missileStrikeCooldown > 0) {
+      this.ui.showFloatingText(`${this.missileStrikeCooldown.toFixed(1)}s`, 0xffaa00);
+      SFXMapper.swingMiss();
+      return false;
+    }
+
+    const payload = this._buildMissileStrikePayload();
+    if (!payload) {
+      this.ui.showFloatingText('No strike target', 0xff4444);
+      SFXMapper.swingMiss();
+      return false;
+    }
+
+    this.missileStrikeCooldown = GAME.MISSILE_STRIKE_COOLDOWN;
+    this._callMissileStrike(payload, { sync: true });
+    this.ui.showFloatingText('Missile strike', 0xffaa00);
+    return true;
+  }
+
+  _buildMissileStrikePayload() {
+    const center = this._getMissileStrikeCenter();
+    if (!center) return null;
+
+    const min = GAME.MISSILE_STRIKE_MIN || 3;
+    const max = GAME.MISSILE_STRIKE_MAX || min;
+    const count = min + Math.floor(Math.random() * (max - min + 1));
+    const missiles = [];
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const spread = i === 0 ? Math.random() * 0.8 : 1.9 + Math.random() * 4.3;
+      const x = center.x + Math.cos(angle) * spread;
+      const z = center.z + Math.sin(angle) * spread;
+      const target = this._getGroundedStrikePoint(x, z, center.y);
+      const start = target.clone().add(new THREE.Vector3(
+        -5 + Math.random() * 10,
+        28 + Math.random() * 12,
+        -5 + Math.random() * 10
+      ));
+
+      missiles.push({
+        sx: start.x,
+        sy: start.y,
+        sz: start.z,
+        tx: target.x,
+        ty: target.y,
+        tz: target.z,
+        delay: i * 0.14 + Math.random() * 0.12,
+        duration: 0.42 + Math.random() * 0.18,
+      });
+    }
+
+    return {
+      radius: GAME.MISSILE_STRIKE_RADIUS,
+      damage: GAME.MISSILE_STRIKE_DAMAGE,
+      missiles,
+    };
+  }
+
+  _getMissileStrikeCenter() {
+    const aim = this._getMiningAim();
+    const terrain = this.world?.terrainMesh;
+    if (terrain?.raycast) {
+      const dirs = this.cameraMode === 'firstPerson'
+        ? [aim.direction.clone()]
+        : [
+          aim.direction.clone().normalize(),
+          aim.direction.clone().multiplyScalar(0.75).add(new THREE.Vector3(0, -0.55, 0)).normalize(),
+          new THREE.Vector3(0, -1, 0),
+        ];
+      for (const dir of dirs) {
+        const raycaster = new THREE.Raycaster(aim.origin, dir, 0.05, 70);
+        const hit = terrain.raycast(raycaster);
+        if (hit?.point) return hit.point.clone();
+      }
+    }
+
+    const forward = aim.direction.clone();
+    forward.y = 0;
+    if (forward.lengthSq() < 0.001) forward.set(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation));
+    forward.normalize();
+    const fallback = this.player.position.clone().addScaledVector(forward, 7.5);
+    return this._getGroundedStrikePoint(fallback.x, fallback.z, fallback.y);
+  }
+
+  _getGroundedStrikePoint(x, z, fallbackY = 0) {
+    const groundY = this.world?.getGroundHeightAt?.(x, z, 80);
+    const y = Number.isFinite(groundY) && groundY > -998 ? groundY + 0.12 : fallbackY;
+    return new THREE.Vector3(x, y, z);
+  }
+
+  _callMissileStrike(payload, options = {}) {
+    if (!payload?.missiles?.length) return;
+
+    if (this.isMultiplayer && this.net && options.sync) {
+      this.net.syncEvent('missile_strike', payload);
+    }
+
+    for (const spec of payload.missiles) {
+      const start = new THREE.Vector3(spec.sx, spec.sy, spec.sz);
+      const target = new THREE.Vector3(spec.tx, spec.ty, spec.tz);
+      const visual = this._createMissileVisual(start, target);
+      this.activeMissiles.push({
+        ...spec,
+        start,
+        target,
+        mesh: visual.mesh,
+        marker: visual.marker,
+        age: 0,
+        trailTimer: 0,
+        started: false,
+        remote: !!options.remote,
+        radius: payload.radius || GAME.MISSILE_STRIKE_RADIUS,
+        damage: payload.damage || GAME.MISSILE_STRIKE_DAMAGE,
+      });
+    }
+  }
+
+  _createMissileVisual(start, target) {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x2f3338,
+      metalness: 0.45,
+      roughness: 0.42,
+      emissive: 0x331100,
+      emissiveIntensity: 0.55,
+    });
+    const noseMat = new THREE.MeshStandardMaterial({
+      color: 0xff6a22,
+      emissive: 0xff3b00,
+      emissiveIntensity: 1.4,
+    });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.82, 10), bodyMat);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.32, 10), noseMat);
+    nose.position.y = -0.56;
+    nose.rotation.x = Math.PI;
+    group.add(body, nose);
+    group.position.copy(start);
+    const dir = target.clone().sub(start).normalize();
+    group.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
+    group.visible = false;
+    this.scene.add(group);
+
+    const markerMat = new THREE.MeshBasicMaterial({
+      color: 0xff3b00,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+    const marker = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.025, 8, 48), markerMat);
+    marker.rotation.x = Math.PI / 2;
+    marker.position.copy(target).add(new THREE.Vector3(0, 0.05, 0));
+    this.scene.add(marker);
+
+    return { mesh: group, marker };
+  }
+
+  _updateActiveMissiles(dt) {
+    for (let i = this.activeMissiles.length - 1; i >= 0; i--) {
+      const missile = this.activeMissiles[i];
+      missile.age += dt;
+
+      if (missile.marker) {
+        const pulse = 1 + Math.sin(missile.age * 18) * 0.12;
+        missile.marker.scale.setScalar(pulse);
+        missile.marker.material.opacity = 0.35 + Math.max(0, Math.sin(missile.age * 18)) * 0.28;
+      }
+
+      if (missile.age < missile.delay) continue;
+
+      if (!missile.started) {
+        missile.started = true;
+        missile.mesh.visible = true;
+        SFXMapper.missileIncoming();
+      }
+
+      const rawT = Math.min(1, (missile.age - missile.delay) / Math.max(0.05, missile.duration));
+      const t = 1 - Math.pow(1 - rawT, 2.4);
+      missile.mesh.position.lerpVectors(missile.start, missile.target, t);
+
+      missile.trailTimer -= dt;
+      if (missile.trailTimer <= 0) {
+        missile.trailTimer = 0.035;
+        const trailPos = missile.mesh.position.clone();
+        this.particles.spawn({ pos: trailPos, count: 2, color: 0x3b352f, speed: 1.1, life: 0.45, size: 0.32, texture: 'smoke' });
+        this.particles.spawn({ pos: trailPos, count: 1, color: 0xff7a18, speed: 0.8, life: 0.24, size: 0.2, texture: 'flare' });
+      }
+
+      if (rawT >= 1) {
+        const impact = this._getGroundedStrikePoint(missile.target.x, missile.target.z, missile.target.y);
+        this._removeMissileVisual(missile);
+        this._explodeMissile(impact, {
+          radius: missile.radius,
+          damage: missile.damage,
+          remote: missile.remote,
+        });
+        this.activeMissiles.splice(i, 1);
+      }
+    }
+  }
+
+  _removeMissileVisual(missile) {
+    for (const obj of [missile.mesh, missile.marker]) {
+      if (!obj) continue;
+      this.scene.remove(obj);
+      obj.traverse?.((child) => {
+        child.geometry?.dispose?.();
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => mat.dispose?.());
+        } else {
+          child.material?.dispose?.();
+        }
+      });
+      obj.geometry?.dispose?.();
+      obj.material?.dispose?.();
+    }
+  }
+
+  _spawnShockwave(position, radius, color = 0xffaa33) {
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.035, 8, 64), mat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.copy(position).add(new THREE.Vector3(0, 0.08, 0));
+    this.scene.add(ring);
+
+    const start = performance.now();
+    const duration = 360;
+    const animate = () => {
+      const t = Math.min(1, (performance.now() - start) / duration);
+      ring.scale.setScalar(1 + t * radius * 1.15);
+      mat.opacity = 0.72 * (1 - t);
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        this.scene.remove(ring);
+        ring.geometry.dispose();
+        mat.dispose();
+      }
+    };
+    animate();
+  }
+
+  _spawnImpactLight(position, color = 0xff8a33, intensity = 4, duration = 0.25) {
+    const light = new THREE.PointLight(color, intensity, 18, 2);
+    light.position.copy(position).add(new THREE.Vector3(0, 1.2, 0));
+    this.scene.add(light);
+    const start = performance.now();
+    const total = duration * 1000;
+    const animate = () => {
+      const t = Math.min(1, (performance.now() - start) / total);
+      light.intensity = intensity * (1 - t);
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        this.scene.remove(light);
+      }
+    };
+    animate();
   }
 
   _pickDigJunkResource(depth, tier, luck) {
@@ -1756,6 +2377,8 @@ export class Game {
         attackerWeaponId: data.attackerWeaponId || 'grenade',
         remote: true,
       });
+    } else if (type === 'missile_strike') {
+      this._callMissileStrike(data, { remote: true });
     } else if (type === 'floor_changed') {
       if (!this.isHost && data.floorNum && data.seed != null) {
         this._worldSeed = data.seed;

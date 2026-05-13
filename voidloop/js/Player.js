@@ -662,18 +662,30 @@ export class Player {
 
     const moveX = dx * speed * dt;
     const moveZ = dz * speed * dt;
+    const tryStepUp = () => {
+      if (!this.world?.isPlayerSpaceClear || !this.isGrounded) return false;
+      const oldY = this.position.y;
+      this.position.y += 1.05;
+      const clear = this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z);
+      if (clear) {
+        this.velocity.y = 0;
+        return true;
+      }
+      this.position.y = oldY;
+      return false;
+    };
     if (moveX !== 0) {
       const oldX = this.position.x;
       this.position.x += moveX;
       if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
-        this.position.x = oldX;
+        if (!tryStepUp()) this.position.x = oldX;
       }
     }
     if (moveZ !== 0) {
       const oldZ = this.position.z;
       this.position.z += moveZ;
       if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
-        this.position.z = oldZ;
+        if (!tryStepUp()) this.position.z = oldZ;
       }
     }
 

@@ -40,6 +40,35 @@ export const KAYKIT_ANIMATIONS = {
   AxeChop: 'Tool_Axe_Chop',
 };
 
+// First-person viewmodel uses a holding pose for idle so arms appear forward
+export const KAYKIT_FP_ANIMATIONS = {
+  Idle: 'Holding_B',
+  Walk: 'Walking_A',
+  Run: 'Running_A',
+  Hit: 'Hit_A',
+  HitHeavy: 'Hit_B',
+  Death: 'Death_A',
+  Use: 'Use_Item',
+  Throw: 'Throw',
+  Jump: 'Jump_Full_Short',
+  DodgeForward: 'Dodge_Forward',
+  DodgeBack: 'Dodge_Backward',
+  DodgeLeft: 'Dodge_Left',
+  DodgeRight: 'Dodge_Right',
+  Block: 'Melee_Blocking',
+  BlockHit: 'Melee_Block_Hit',
+  BlockAttack: 'Melee_Block_Attack',
+  Melee1HSlice: 'Melee_1H_Attack_Slice_Horizontal',
+  Melee1HChop: 'Melee_1H_Attack_Chop',
+  Melee1HStab: 'Melee_1H_Attack_Stab',
+  Melee2HSlice: 'Melee_2H_Attack_Slice',
+  Melee2HChop: 'Melee_2H_Attack_Chop',
+  BowShoot: 'Ranged_Bow_Attack_Shoot',
+  CrossbowShoot: 'Ranged_Crossbow_Attack_Shoot',
+  PickaxeMine: 'Pickaxe',
+  AxeChop: 'Chop',
+};
+
 // Map equipped item IDs to their attack animation key and raw duration (seconds)
 export const WEAPON_ATTACK_ANIMS = {
   sword_1handed:  { animKey: 'Melee1HSlice',  duration: 0.67 },
