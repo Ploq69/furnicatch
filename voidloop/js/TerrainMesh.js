@@ -10,7 +10,7 @@ import * as THREE from 'three';
 
 const ISO_LEVEL = 0;
 const CHUNK_SIZE = 8;
-const TERRAIN_MIN_Y = -48;
+const TERRAIN_MIN_Y = -150;
 const TERRAIN_MAX_Y = 10;
 const SURFACE_Y = 2;
 const CELL_SIZE = 1;
@@ -249,7 +249,7 @@ export class TerrainMesh {
     const now = this._nowMs();
     const cameraMode = options.cameraMode || 'iso';
     const camera = options.camera || null;
-    const budget = cameraMode === 'firstPerson' ? FP_VISIBLE_CHUNK_BUDGET : ISO_VISIBLE_CHUNK_BUDGET;
+    const budget = cameraMode === 'thirdPerson' ? FP_VISIBLE_CHUNK_BUDGET : ISO_VISIBLE_CHUNK_BUDGET;
     this._lastPlayerPos.copy(position);
     this._streamBuildsThisFrame = 0;
 
@@ -370,7 +370,7 @@ export class TerrainMesh {
   }
 
   _computeVisibleChunkKeys(position, cameraMode, budget) {
-    if (cameraMode !== 'firstPerson') {
+    if (cameraMode !== 'thirdPerson') {
       return this._computeIsoVisibleChunkKeys(position, budget);
     }
 
@@ -467,7 +467,7 @@ export class TerrainMesh {
     const distSq = this._chunkDistanceSqToPoint(key, position);
     if (distSq < CHUNK_SIZE * CHUNK_SIZE * 4) return true;
     if (this._chunkIntersectsFrustum(key)) return true;
-    if (cameraMode === 'firstPerson') return this._chunkInLookCorridor(key, 7.5, 90);
+    if (cameraMode === 'thirdPerson') return this._chunkInLookCorridor(key, 7.5, 90);
     return this._chunkInCutawayCorridor(key) || distSq < 34 * 34;
   }
 
@@ -476,7 +476,7 @@ export class TerrainMesh {
     const distSq = this._tmpCenter.distanceToSquared(position);
     let score = distSq;
     if (this._chunkIntersectsFrustum(key)) score -= 900;
-    if (cameraMode === 'firstPerson') {
+    if (cameraMode === 'thirdPerson') {
       const tx = this._tmpCenter.x - position.x;
       const ty = this._tmpCenter.y - position.y;
       const tz = this._tmpCenter.z - position.z;
@@ -728,9 +728,9 @@ export class TerrainMesh {
     const cellX = Math.floor(x);
     const cellZ = Math.floor(z);
     const minFloorY = footY - Math.max(0.01, maxDistance);
-    const maxFloorY = footY + 0.12;
+    const maxFloorY = footY + 2.5;
     const startY = Math.floor(clamp(maxFloorY, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
-    const endY = Math.floor(clamp(minFloorY - 1, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
+    const endY = Math.floor(clamp(minFloorY - 3, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
 
     for (let y = startY; y >= endY; y--) {
       if (!this.isCellSolid(cellX, y, cellZ)) continue;
@@ -745,14 +745,35 @@ export class TerrainMesh {
   }
 
   isCapsuleBlockedAt(x, y, z, radius = 0.28, height = 1.45) {
+    const r = radius;
+    const h0 = y + 0.20;
+    const h1 = y + height * 0.50;
+    const h2 = y + height;
     const samples = [
-      [x, y + 0.20, z],
-      [x, y + height * 0.50, z],
-      [x, y + height, z],
-      [x + radius, y + 0.75, z],
-      [x - radius, y + 0.75, z],
-      [x, y + 0.75, z + radius],
-      [x, y + 0.75, z - radius],
+      // core vertical line
+      [x, h0, z],
+      [x, h1, z],
+      [x, h2, z],
+      // mid-ring
+      [x + r, h1, z],
+      [x - r, h1, z],
+      [x, h1, z + r],
+      [x, h1, z - r],
+      // foot-ring
+      [x + r, h0, z],
+      [x - r, h0, z],
+      [x, h0, z + r],
+      [x, h0, z - r],
+      // head-ring
+      [x + r, h2, z],
+      [x - r, h2, z],
+      [x, h2, z + r],
+      [x, h2, z - r],
+      // corners at mid height
+      [x + r * 0.7, h1, z + r * 0.7],
+      [x + r * 0.7, h1, z - r * 0.7],
+      [x - r * 0.7, h1, z + r * 0.7],
+      [x - r * 0.7, h1, z - r * 0.7],
     ];
     return samples.some(([sx, sy, sz]) => this.isSolidAt(sx, sy, sz));
   }

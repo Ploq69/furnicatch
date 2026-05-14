@@ -256,7 +256,7 @@ export class World {
       attempts++;
       const x = rng.range(Math.ceil(b.minX) + 4, Math.floor(b.maxX) - 4);
       const z = rng.range(Math.ceil(b.minZ) + 4, Math.floor(b.maxZ) - 4);
-      const y = -rng.range(4, 38);
+      const y = -rng.range(4, 100);
 
       const tooCloseToSpawn = Math.hypot(x - zone.spawnPoint.x, z - zone.spawnPoint.z) < 7;
       const tooCloseToGateway = zone.exitGateway && Math.hypot(x - zone.exitGateway.x, z - zone.exitGateway.z) < 7;
@@ -654,16 +654,17 @@ export class World {
 
     let floorY = -999;
     if (player.velocity.y <= 0) {
+      const fallDistance = -player.velocity.y * dt;
       const maxSnapDown = player.isGrounded
-        ? 0.26
-        : Math.min(1.1, Math.max(0.24, -player.velocity.y * dt + 0.12));
+        ? 0.6
+        : Math.max(2.5, fallDistance * 2.0 + 0.5);
       for (const [dx, dz] of probes) {
         const y = this.findFloorBelow(player.position.x + dx, player.position.z + dz, player.position.y, maxSnapDown);
         if (y > floorY) floorY = y;
       }
     }
 
-    if (floorY > -999 && player.velocity.y <= 0 && player.position.y <= floorY + 0.24) {
+    if (floorY > -999 && player.velocity.y <= 0 && player.position.y <= floorY + 0.35) {
       player.position.y = floorY;
       player.velocity.y = 0;
       player.isGrounded = true;
@@ -671,11 +672,22 @@ export class World {
       player.isGrounded = false;
     }
 
+    // Ceiling collision
     if (player.velocity.y > 0 && this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45)) {
-      for (let i = 0; i < 5 && this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45); i++) {
-        player.position.y -= 0.08;
+      for (let i = 0; i < 8 && this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45); i++) {
+        player.position.y -= 0.12;
       }
       player.velocity.y = 0;
+    }
+
+    // Stuck recovery: if still inside terrain after vertical resolve, push up until free
+    let stuckIter = 0;
+    while (this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45) && stuckIter < 20) {
+      player.position.y += 0.25;
+      stuckIter++;
+      if (stuckIter >= 20) {
+        player.position.y += 1.0; // emergency pop
+      }
     }
 
     // Gently push out of side terrain without changing vertical position.
@@ -690,8 +702,8 @@ export class World {
       const sy = player.position.y + 0.75;
       const sz = player.position.z + dz;
       if (!this.terrainMesh.isSolidAt(sx, sy, sz)) continue;
-      player.position.x -= dx * 0.35;
-      player.position.z -= dz * 0.35;
+      player.position.x -= dx * 0.45;
+      player.position.z -= dz * 0.45;
     }
 
     return true;
@@ -792,7 +804,7 @@ export class World {
 
   update(dt, playerPos, particles, audio, player, options = {}) {
     const playerDepth = this.getTerrainDepthAtPlayer(playerPos);
-    const allowCutaway = options.cameraMode !== 'firstPerson';
+    const allowCutaway = options.cameraMode !== 'thirdPerson';
     if (allowCutaway) {
       if (!this._cutawayActive && playerDepth > 1.2) this._cutawayActive = true;
       if (this._cutawayActive && playerDepth < 0.6) this._cutawayActive = false;

@@ -18,7 +18,7 @@ import { Inventory } from './Inventory.js';
 import { ShopManager, SHOP_ITEMS } from './ShopManager.js';
 import { ShopUI } from './ShopUI.js';
 import { HazardSystem } from './HazardSystem.js';
-import { getKayKitItem, getKayKitPaths, getKayKitCharacter, KAYKIT_ANIMATIONS, KAYKIT_FP_ANIMATIONS } from './KayKitLoadout.js';
+import { getKayKitItem, getKayKitPaths, getKayKitCharacter, KAYKIT_ANIMATIONS } from './KayKitLoadout.js';
 import { LetterPool, SPELLING_WORDS } from './SpellingData.js';
 import { SpellingChallenge } from './SpellingEngine.js';
 import { LetterDrop } from './LetterDrop.js';
@@ -59,33 +59,13 @@ const smoothstep = (edge0, edge1, value) => {
 const easeOutCubic = (value) => 1 - Math.pow(1 - clamp01(value), 3);
 const easeInOutSine = (value) => -(Math.cos(Math.PI * clamp01(value)) - 1) / 2;
 
-const FIRST_PERSON_ITEM_TRANSFORMS = {
-  default: {
-    position: [0.32, -0.41, -0.74],
-    rotation: [-0.66, 0.18, -0.82],
-    scale: 0.46,
-  },
-  pickaxe: {
-    position: [0.35, -0.43, -0.78],
-    rotation: [-0.72, 0.24, -0.92],
-    scale: 0.5,
-  },
-  sword_1handed: {
-    position: [0.34, -0.4, -0.82],
-    rotation: [-0.46, 0.14, -0.52],
-    scale: 0.48,
-  },
-  crossbow_1handed: {
-    position: [0.18, -0.36, -0.9],
-    rotation: [-0.28, 0.04, -0.12],
-    scale: 0.5,
-  },
-  smokebomb: {
-    position: [0.28, -0.36, -0.72],
-    rotation: [-0.35, 0.2, -0.42],
-    scale: 0.58,
-  },
-};
+const TP_DISTANCE = 2.4;
+const TP_HEIGHT = 1.55;
+const TP_SHOULDER_X = 0.45;
+const TP_SHOULDER_Y = 0.05;
+const TP_PITCH_MIN = -1.0;
+const TP_PITCH_MAX = 1.0;
+const TP_SMOOTH_SPEED = 8.0;
 
 export class Game {
   constructor(container) {
@@ -109,7 +89,7 @@ export class Game {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0a0a);
 
-    // Camera — Orthographic isometric by default, with a toggleable first-person mining view
+    // Camera — Orthographic isometric by default, with a toggleable third-person mining view
     this.cameraZoom = 3.0;
     this.baseD = 18;
     const aspect = window.innerWidth / window.innerHeight;
@@ -117,29 +97,15 @@ export class Game {
     this.isoCamera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 200);
     this.isoCamera.position.set(20, 20, 20);
     this.isoCamera.lookAt(0, 0, 0);
-    this.firstPersonCamera = new THREE.PerspectiveCamera(72, aspect, 0.05, 180);
-    this.scene.add(this.firstPersonCamera);
+    this.thirdPersonCamera = new THREE.PerspectiveCamera(72, aspect, 0.05, 180);
+    this.scene.add(this.thirdPersonCamera);
     this.camera = this.isoCamera;
     this.cameraMode = 'iso';
     this.cameraTarget = new THREE.Vector3();
     this._cameraTargetReady = false;
-    this.fpYaw = 0;
-    this.fpPitch = -0.12;
-    this.fpViewmodel = null;
-    this.fpViewmodelTool = null;
-    this.fpViewmodelItemId = null;
-    this.fpSwingTimer = 0;
-    this.fpSwingDuration = 0.42;
-    this.fpMoveCycle = 0;
-    this.fpSway = new THREE.Vector2();
-    this.fpViewmodelParts = {};
-    // First-person animated arms
-    this.fpCharacterModel = null;
-    this.fpCharacterId = null;
-    this.fpMixer = null;
-    this.fpCurrentAnim = null;
-    this._fpArmsLoading = false;
-    this._createFirstPersonViewmodel();
+    this.camYaw = 0;
+    this.camPitch = -0.12;
+    this.camPos = new THREE.Vector3();
 
     // Lighting
     this.ambient = new THREE.AmbientLight(0x8888aa, 0.6);
@@ -166,7 +132,7 @@ export class Game {
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1510, roughness: 0.9 });
     this.floorPlane = new THREE.Mesh(floorGeo, floorMat);
     this.floorPlane.rotation.x = -Math.PI / 2;
-    this.floorPlane.position.y = -50;
+    this.floorPlane.position.y = -160;
     this.floorPlane.receiveShadow = false;
     this.scene.add(this.floorPlane);
 
@@ -222,7 +188,7 @@ export class Game {
     // Resize
     window.addEventListener('resize', () => this._onResize());
     this.renderer.domElement.addEventListener('click', () => {
-      if (this.cameraMode === 'firstPerson' && document.pointerLockElement !== this.renderer.domElement) {
+      if (this.cameraMode === 'thirdPerson' && document.pointerLockElement !== this.renderer.domElement) {
         this.renderer.domElement.requestPointerLock?.();
       }
     });
@@ -315,7 +281,6 @@ export class Game {
 
     this._initAudioOnInteraction();
     await this.player.spawn();
-    await this._loadFirstPersonArms();
     await this.player.equipWeapon(1); // Sync functional weapon with sword visual
 
     // Multiplayer: host generates and shares world seed, guest waits for it
@@ -711,7 +676,7 @@ export class Game {
     }
 
     // Contextual J button — mine block or attack enemy
-    const minePressed = input.pressed('KeyJ') || (this.cameraMode === 'firstPerson' && input.buttonPressed?.('left'));
+    const minePressed = input.pressed('KeyJ') || (this.cameraMode === 'thirdPerson' && input.buttonPressed?.('left'));
     if (minePressed && this.player.weapons[this.player.currentSlot].cooldown <= 0) {
       const weapon = this.player.weapons[this.player.currentSlot];
       if (weapon.data.type === 'thrown') {
@@ -719,7 +684,7 @@ export class Game {
         const thrown = this.player.attack(aim.origin, aim.direction, this.scene, audio, this.particles, this.world.enemies);
         if (thrown) {
           this.player.playAttackAnim();
-          if (this.cameraMode === 'firstPerson') this._startFirstPersonSwing();
+          // third-person uses full-body attack animation, no viewmodel swing needed
         } else {
           SFXMapper.swingMiss();
         }
@@ -770,7 +735,6 @@ export class Game {
         if (nearestBlock && !nearestBlock.destroyed) {
           // Use the same weapon attack animation for mining
           this.player.playAttackAnim();
-          if (this.cameraMode === 'firstPerson') this._startFirstPersonSwing();
           SFXMapper.mineSwing();
           // Mine VFX
           const handPos2 = new THREE.Vector3();
@@ -1049,18 +1013,10 @@ export class Game {
   }
 
   _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0, isoDepthFactor = 0) {
-    if (this.cameraMode === 'firstPerson') {
-      this._updateFirstPersonAim(dt);
-      this._updateFirstPersonViewmodel(dt);
-      const head = this.player.position.clone().add(new THREE.Vector3(0, 1.15, 0));
-      this.firstPersonCamera.position.set(head.x + shakeX * 0.2, head.y + shakeY * 0.2, head.z + shakeZ * 0.2);
-      this.firstPersonCamera.rotation.order = 'YXZ';
-      this.firstPersonCamera.rotation.y = this.fpYaw;
-      this.firstPersonCamera.rotation.x = this.fpPitch;
-      this.firstPersonCamera.rotation.z = 0;
-      this.player.rotation = this.fpYaw;
-      this.player.controlYaw = this.fpYaw;
-      if (this.player.mesh) this.player.mesh.visible = false;
+    if (this.cameraMode === 'thirdPerson') {
+      this._updateThirdPersonAim(dt);
+      this._updateThirdPersonCamera(dt, shakeX, shakeY, shakeZ);
+      if (this.player.mesh) this.player.mesh.visible = true;
       return;
     }
 
@@ -1093,309 +1049,89 @@ export class Game {
     this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
   }
 
-  _updateFirstPersonAim(dt) {
+  _updateThirdPersonAim(dt) {
     const sensitivity = 0.0022;
     if (input.mouse.locked) {
-      this.fpYaw -= input.mouse.dx * sensitivity;
-      this.fpPitch -= input.mouse.dy * sensitivity;
-      this.fpPitch = Math.max(-1.2, Math.min(0.75, this.fpPitch));
+      this.camYaw -= input.mouse.dx * sensitivity;
+      this.camPitch += input.mouse.dy * sensitivity;
+      this.camPitch = Math.max(TP_PITCH_MIN, Math.min(TP_PITCH_MAX, this.camPitch));
     }
-    this.player.rotation = this.fpYaw;
-    this.player.controlYaw = this.fpYaw;
+    this.player.controlYaw = this.camYaw;
   }
 
-  _createFirstPersonViewmodel() {
-    this.fpViewmodel = new THREE.Group();
-    this.fpViewmodel.visible = false;
-    this.fpViewmodel.position.set(0, -0.02, 0);
-    this.fpViewmodelParts = {};
-    this.firstPersonCamera.add(this.fpViewmodel);
+  _updateThirdPersonCamera(dt, shakeX = 0, shakeY = 0, shakeZ = 0) {
+    const playerPos = this.player.position;
+    const pivot = new THREE.Vector3(playerPos.x, playerPos.y + TP_HEIGHT, playerPos.z);
 
-    const viewLight = new THREE.PointLight(0xffdfbd, 1.25, 2.4, 2);
-    viewLight.position.set(0.2, -0.18, -0.42);
-    this.fpViewmodel.add(viewLight);
-    this._refreshFirstPersonTool();
-  }
+    // Lazy follow / auto-recenter: when moving, camera gently swings behind player
+    let forwardMove = 0;
+    let strafeMove = 0;
+    if (input.isDown('KeyW') || input.isDown('ArrowUp')) forwardMove += 1;
+    if (input.isDown('KeyS') || input.isDown('ArrowDown')) forwardMove -= 1;
+    if (input.isDown('KeyA') || input.isDown('ArrowLeft')) strafeMove -= 1;
+    if (input.isDown('KeyD') || input.isDown('ArrowRight')) strafeMove += 1;
 
-  async _loadFirstPersonArms() {
-    if (!this.player?.loadout?.characterId) return;
-    const characterId = this.player.loadout.characterId;
-    if (this.fpCharacterId === characterId && this.fpCharacterModel) return;
-    if (this._fpArmsLoading) return;
-    this._fpArmsLoading = true;
-
-    const character = getKayKitCharacter(characterId);
-    if (!character) {
-      this._fpArmsLoading = false;
-      return;
-    }
-
-    try {
-      await assetLoader.loadGLTF(character.model);
-      const cloned = assetLoader.cloneModel(character.model);
-      if (!cloned?.scene) {
-        this._fpArmsLoading = false;
-        return;
-      }
-
-      // Remove old model
-      if (this.fpCharacterModel) {
-        this.fpViewmodel.remove(this.fpCharacterModel);
-        this.fpCharacterModel.traverse((c) => {
-          if (c.isMesh || c.isSkinnedMesh) {
-            const mats = Array.isArray(c.material) ? c.material : [c.material];
-            mats.forEach((m) => m?.dispose?.());
-          }
-        });
-        this.fpCharacterModel = null;
-      }
-      if (this.fpMixer) {
-        this.fpMixer.stopAllAction();
-        this.fpMixer = null;
-      }
-
-      this.fpCharacterModel = cloned.scene;
-      this.fpCharacterId = characterId;
-
-      // Hide everything except arm meshes
-      this.fpCharacterModel.traverse((child) => {
-        if (child.isMesh || child.isSkinnedMesh) {
-          const name = child.name.toLowerCase();
-          const isArm = name.includes('armleft') || name.includes('armright');
-          child.visible = isArm;
-          if (isArm) {
-            child.renderOrder = 1000;
-            child.frustumCulled = false;
-            child.castShadow = false;
-            child.receiveShadow = false;
-            const mats = Array.isArray(child.material) ? child.material : [child.material];
-            for (const mat of mats) {
-              if (!mat) continue;
-              mat.depthTest = false;
-              mat.depthWrite = false;
-              mat.roughness = Math.min(0.9, mat.roughness ?? 0.8);
-            }
-          }
-        }
-      });
-
-      // Match player's scale
-      const scale = this.player.meshBaseScale || 1;
-      this.fpCharacterModel.scale.setScalar(scale);
-
-      // Position arms in view (tune these values for your screen)
-      this.fpCharacterModel.position.set(0, -1.15, -0.8);
-      this.fpCharacterModel.rotation.set(0, 0, 0);
-
-      this.fpViewmodel.add(this.fpCharacterModel);
-
-      // Create animation mixer
-      this.fpMixer = new THREE.AnimationMixer(this.fpCharacterModel);
-
-      // Sync current animation immediately
-      this.fpCurrentAnim = null;
-      this._syncFpAnimation();
-
-      console.log('[FP Arms] Loaded character arms:', characterId, 'scale:', scale);
-    } catch (e) {
-      console.error('[FP Arms] Failed to load character arms:', e);
-    } finally {
-      this._fpArmsLoading = false;
-    }
-  }
-
-  _syncFpAnimation() {
-    if (!this.fpMixer || !this.player) return;
-    const logicalName = this.player.currentAnim;
-    if (!logicalName || this.fpCurrentAnim === logicalName) return;
-    this.fpCurrentAnim = logicalName;
-
-    const fpMappedName = KAYKIT_FP_ANIMATIONS[logicalName];
-    const tpMappedName = KAYKIT_ANIMATIONS[logicalName] || logicalName;
-    const clipName = fpMappedName || tpMappedName;
-
-    const clip = this.player.animations.find((a) => a.name === clipName);
-    if (!clip) {
-      console.warn(`[FP Arms] Animation clip not found: ${clipName} (logical: ${logicalName})`);
-      return;
-    }
-
-    const isLoop = logicalName === 'Idle' || logicalName === 'Walk' || logicalName === 'Run' || logicalName === 'Block';
-    const action = this.fpMixer.clipAction(clip);
-    action.reset().fadeIn(0.12);
-    action.loop = isLoop ? THREE.LoopRepeat : THREE.LoopOnce;
-    action.clampWhenFinished = !isLoop;
-    action.play();
-
-    // Fade out other actions
-    this.player.animations.forEach((a) => {
-      if (a !== clip) this.fpMixer.clipAction(a).fadeOut(0.12);
-    });
-  }
-
-  _prepareFirstPersonObject(object) {
-    object.traverse?.((child) => {
-      if (!child.isMesh) return;
-      child.castShadow = false;
-      child.receiveShadow = false;
-      child.frustumCulled = false;
-      child.renderOrder = 1001;
-      if (Array.isArray(child.material)) {
-        child.material = child.material.map((mat) => mat.clone());
-      } else if (child.material) {
-        child.material = child.material.clone();
-      }
-      const mats = Array.isArray(child.material) ? child.material : [child.material];
-      for (const mat of mats) {
-        if (!mat) continue;
-        mat.depthTest = false;
-        mat.depthWrite = false;
-        mat.roughness = Math.min(0.9, mat.roughness ?? 0.8);
-      }
-    });
-  }
-
-  _applyFirstPersonToolTransform(itemId) {
-    if (!this.fpViewmodelTool) return;
-    const transform = FIRST_PERSON_ITEM_TRANSFORMS[itemId] || FIRST_PERSON_ITEM_TRANSFORMS.default;
-    this.fpViewmodelTool.position.fromArray(transform.position);
-    this.fpViewmodelTool.rotation.set(...transform.rotation);
-    this.fpViewmodelTool.scale.setScalar(transform.scale);
-    this.fpViewmodelTool.userData.basePosition = this.fpViewmodelTool.position.clone();
-    this.fpViewmodelTool.userData.baseRotation = this.fpViewmodelTool.rotation.clone();
-  }
-
-  _refreshFirstPersonTool() {
-    if (!this.fpViewmodel) return;
-    const itemId = this.player?.loadout?.rightHand || 'pickaxe';
-    const item = getKayKitItem(itemId);
-    if (this.fpViewmodelItemId === itemId && this.fpViewmodelTool && !this.fpViewmodelTool.userData.isFallback) return;
-    const cloned = item?.model ? assetLoader.cloneModel(item.model) : null;
-    if (this.fpViewmodelItemId === itemId && this.fpViewmodelTool && !cloned?.scene) return;
-
-    if (this.fpViewmodelTool) {
-      this.fpViewmodel.remove(this.fpViewmodelTool);
-      this.fpViewmodelTool.traverse?.((c) => {
-        if (!c.isMesh) return;
-        if (Array.isArray(c.material)) {
-          c.material.forEach((mat) => mat.dispose?.());
-        } else {
-          c.material?.dispose?.();
-        }
-      });
-      this.fpViewmodelTool = null;
-    }
-
-    if (cloned?.scene) {
-      this.fpViewmodelTool = cloned.scene;
-      this._prepareFirstPersonObject(this.fpViewmodelTool);
-      this.fpViewmodelTool.userData.isFallback = false;
-    } else {
-      const group = new THREE.Group();
-      const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x6b4324, roughness: 0.85, flatShading: true });
-      const headMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.7, flatShading: true });
-      fallbackMat.depthTest = false;
-      fallbackMat.depthWrite = false;
-      headMat.depthTest = false;
-      headMat.depthWrite = false;
-      const handle = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, 0.5, 0.06),
-        fallbackMat
+    if (forwardMove !== 0 || strafeMove !== 0) {
+      const moveYaw = Math.atan2(
+        Math.sin(this.camYaw) * forwardMove - Math.cos(this.camYaw) * strafeMove,
+        Math.cos(this.camYaw) * forwardMove + Math.sin(this.camYaw) * strafeMove
       );
-      const head = new THREE.Mesh(
-        new THREE.BoxGeometry(0.38, 0.08, 0.1),
-        headMat
-      );
-      head.position.y = 0.25;
-      group.add(handle, head);
-      group.traverse((child) => {
-        child.renderOrder = 1001;
-        child.castShadow = false;
-        child.receiveShadow = false;
-      });
-      group.userData.isFallback = true;
-      this.fpViewmodelTool = group;
+      let yawDiff = moveYaw - this.camYaw;
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+      this.camYaw += yawDiff * 2.5 * dt;
     }
 
-    this._applyFirstPersonToolTransform(itemId);
-    this.fpViewmodelItemId = itemId;
-    this.fpViewmodel.add(this.fpViewmodelTool);
-  }
+    // Compute desired camera position based on yaw, pitch, distance and shoulder offset
+    const cosYaw = Math.cos(this.camYaw);
+    const sinYaw = Math.sin(this.camYaw);
+    const cosPitch = Math.cos(this.camPitch);
+    const sinPitch = Math.sin(this.camPitch);
 
-  _startFirstPersonSwing() {
-    this.fpSwingTimer = this.fpSwingDuration;
-    this._refreshFirstPersonTool();
-  }
-
-  _updateFirstPersonViewmodel(dt) {
-    if (!this.fpViewmodel) return;
-    this._refreshFirstPersonTool();
-    this.fpViewmodel.visible = true;
-
-    // Ensure arms are loaded for current character
-    if (this.player?.loadout?.characterId && this.player.loadout.characterId !== this.fpCharacterId && !this._fpArmsLoading) {
-      this._loadFirstPersonArms();
-    }
-
-    // Update animation mixer and sync animation state
-    if (this.fpMixer) {
-      this.fpMixer.update(dt);
-      this._syncFpAnimation();
-    }
-
-    if (this.fpSwingTimer > 0) this.fpSwingTimer = Math.max(0, this.fpSwingTimer - dt);
-    const t = this.fpSwingTimer > 0 ? 1 - (this.fpSwingTimer / this.fpSwingDuration) : 1;
-    const swing = this.fpSwingTimer > 0 ? Math.sin(t * Math.PI) : 0;
-    const strike = this.fpSwingTimer > 0
-      ? (t < 0.58 ? easeOutCubic(t / 0.58) : 1 - easeInOutSine((t - 0.58) / 0.42) * 0.7)
-      : 0;
-
-    const moving = input.isDown('KeyW') || input.isDown('KeyA') || input.isDown('KeyS') || input.isDown('KeyD') ||
-      input.isDown('ArrowUp') || input.isDown('ArrowLeft') || input.isDown('ArrowDown') || input.isDown('ArrowRight');
-    const sprinting = moving && input.isDown('ShiftLeft') && this.player?.stamina > 0;
-    const bobSpeed = moving ? (sprinting ? 11.5 : 8.2) : 2.1;
-    const bobAmount = moving ? (sprinting ? 1.15 : 0.82) : 0.22;
-    this.fpMoveCycle += dt * bobSpeed;
-
-    const swayTargetX = THREE.MathUtils.clamp(-input.mouse.dx * 0.0016, -0.055, 0.055);
-    const swayTargetY = THREE.MathUtils.clamp(-input.mouse.dy * 0.0012, -0.045, 0.045);
-    const swayT = 1 - Math.exp(-18 * dt);
-    this.fpSway.x += (swayTargetX - this.fpSway.x) * swayT;
-    this.fpSway.y += (swayTargetY - this.fpSway.y) * swayT;
-
-    const bobX = Math.sin(this.fpMoveCycle) * 0.012 * bobAmount;
-    const bobY = Math.abs(Math.cos(this.fpMoveCycle)) * 0.018 * bobAmount;
-    const bobRoll = Math.sin(this.fpMoveCycle) * 0.015 * bobAmount;
-
-    this.fpViewmodel.position.set(
-      0.015 + this.fpSway.x * 0.55 + bobX,
-      -0.035 + this.fpSway.y * 0.55 - bobY - swing * 0.022,
-      -0.025 - swing * 0.055
-    );
-    this.fpViewmodel.rotation.set(
-      this.fpSway.y * 0.5 - swing * 0.08,
-      -this.fpSway.x * 0.65,
-      bobRoll - this.fpSway.x * 0.28 - swing * 0.06
+    // Base offset: behind player
+    const offset = new THREE.Vector3(
+      -sinYaw * TP_DISTANCE * cosPitch,
+      sinPitch * TP_DISTANCE,
+      -cosYaw * TP_DISTANCE * cosPitch
     );
 
-    // Tool swing (arms are now animated via skeleton, tool stays camera-attached)
-    if (this.fpViewmodelTool) {
-      const basePos = this.fpViewmodelTool.userData.basePosition;
-      const base = this.fpViewmodelTool.userData.baseRotation;
-      if (basePos) {
-        this.fpViewmodelTool.position.copy(basePos);
-        this.fpViewmodelTool.position.y -= swing * 0.05;
-        this.fpViewmodelTool.position.z -= strike * 0.12;
-        this.fpViewmodelTool.position.x += swing * 0.025;
-      }
-      if (base) {
-        this.fpViewmodelTool.rotation.set(
-          base.x - strike * 0.72,
-          base.y + swing * 0.06,
-          base.z + swing * 0.34
-        );
+    // Shoulder offset (right shoulder)
+    offset.x += cosYaw * TP_SHOULDER_X;
+    offset.z += -sinYaw * TP_SHOULDER_X;
+    offset.y += TP_SHOULDER_Y;
+
+    const desired = pivot.clone().add(offset);
+
+    // Collision avoidance: raycast from pivot to desired camera position
+    const direction = desired.clone().sub(pivot).normalize();
+    const rayDist = pivot.distanceTo(desired);
+    let actualDist = rayDist;
+
+    if (this.world?.terrainMesh) {
+      const raycaster = new THREE.Raycaster(pivot, direction, 0.05, rayDist + 0.5);
+      const hit = this.world.terrainMesh.raycast(raycaster);
+      if (hit?.point) {
+        actualDist = Math.max(0.6, pivot.distanceTo(hit.point) - 0.3);
       }
     }
+
+    if (actualDist < rayDist) {
+      desired.copy(pivot).add(direction.multiplyScalar(actualDist));
+    }
+
+    // Apply shake
+    desired.x += shakeX * 0.2;
+    desired.y += shakeY * 0.2;
+    desired.z += shakeZ * 0.2;
+
+    // Smooth position with spring-like feel
+    const t = 1 - Math.exp(-TP_SMOOTH_SPEED * dt);
+    this.camPos.x += (desired.x - this.camPos.x) * t;
+    this.camPos.y += (desired.y - this.camPos.y) * t;
+    this.camPos.z += (desired.z - this.camPos.z) * t;
+
+    this.thirdPersonCamera.position.copy(this.camPos);
+    this.thirdPersonCamera.lookAt(pivot.x, pivot.y, pivot.z);
   }
 
   _findNearestEnemy(range) {
@@ -1458,7 +1194,7 @@ export class Game {
     // ── 2. Terrain blocks — raycast against unified mesh ──
     if (isPickaxe) {
       const rayOrigin = aim.origin;
-      const rayDirs = this.cameraMode === 'firstPerson'
+      const rayDirs = this.cameraMode === 'thirdPerson'
         ? [aim.direction.clone()]
         : [
           aim.direction.clone(),
@@ -1784,7 +1520,7 @@ export class Game {
     const aim = this._getMiningAim();
     const terrain = this.world?.terrainMesh;
     if (terrain?.raycast) {
-      const dirs = this.cameraMode === 'firstPerson'
+      const dirs = this.cameraMode === 'thirdPerson'
         ? [aim.direction.clone()]
         : [
           aim.direction.clone().normalize(),
@@ -2222,45 +1958,43 @@ export class Game {
     this.isoCamera.top = d;
     this.isoCamera.bottom = -d;
     this.isoCamera.updateProjectionMatrix();
-    this.firstPersonCamera.aspect = aspect;
-    this.firstPersonCamera.updateProjectionMatrix();
+    this.thirdPersonCamera.aspect = aspect;
+    this.thirdPersonCamera.updateProjectionMatrix();
   }
 
   _toggleCameraMode() {
-    this._setCameraMode(this.cameraMode === 'firstPerson' ? 'iso' : 'firstPerson');
+    this._setCameraMode(this.cameraMode === 'thirdPerson' ? 'iso' : 'thirdPerson');
   }
 
   _setCameraMode(mode, showToast = true) {
-    if (mode === this.cameraMode && this.camera === (mode === 'firstPerson' ? this.firstPersonCamera : this.isoCamera)) return;
+    if (mode === this.cameraMode && this.camera === (mode === 'thirdPerson' ? this.thirdPersonCamera : this.isoCamera)) return;
 
     this.cameraMode = mode;
-    if (mode === 'firstPerson') {
-      this.camera = this.firstPersonCamera;
-      this.fpYaw = this.player.rotation;
-      this.fpPitch = -0.12;
+    if (mode === 'thirdPerson') {
+      this.camera = this.thirdPersonCamera;
+      this.camYaw = this.player.rotation;
+      this.camPitch = -0.12;
+      this.camPos.set(this.player.position.x, this.player.position.y + TP_HEIGHT, this.player.position.z);
       this.renderer.domElement.requestPointerLock?.();
-      if (this.player.mesh) this.player.mesh.visible = false;
-      if (this.fpViewmodel) this.fpViewmodel.visible = true;
       if (this.aimReticle) this.aimReticle.style.display = 'block';
-      if (showToast) this.ui.showFloatingText('First-person mining', 0x7dd3fc);
+      if (showToast) this.ui.showFloatingText('Third-person view', 0x7dd3fc);
     } else {
       this.camera = this.isoCamera;
       if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock?.();
       this.player.controlYaw = null;
       this._cameraTargetReady = false;
       if (this.player.mesh) this.player.mesh.visible = true;
-      if (this.fpViewmodel) this.fpViewmodel.visible = false;
       if (this.aimReticle) this.aimReticle.style.display = 'none';
       if (showToast) this.ui.showFloatingText('Isometric view', 0x7dd3fc);
     }
   }
 
   _getMiningAim() {
-    if (this.cameraMode === 'firstPerson') {
+    if (this.cameraMode === 'thirdPerson') {
       const direction = new THREE.Vector3();
-      this.firstPersonCamera.getWorldDirection(direction);
+      this.thirdPersonCamera.getWorldDirection(direction);
       return {
-        origin: this.firstPersonCamera.position.clone(),
+        origin: this.thirdPersonCamera.position.clone(),
         direction: direction.normalize(),
       };
     }
@@ -2610,8 +2344,8 @@ export class Game {
     this.isoCamera.top = d;
     this.isoCamera.bottom = -d;
     this.isoCamera.updateProjectionMatrix();
-    this.firstPersonCamera.aspect = aspect;
-    this.firstPersonCamera.updateProjectionMatrix();
+    this.thirdPersonCamera.aspect = aspect;
+    this.thirdPersonCamera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.ui.preview?.resize();
   }

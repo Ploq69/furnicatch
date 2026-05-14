@@ -558,8 +558,8 @@ export class Player {
         groundY = -999;
         fallingIntoVoid = true;
       } else {
-        // Procedural mode: hard floor at -50
-        groundY = -50;
+        // Procedural mode: hard floor at -160 (below bedrock)
+        groundY = -160;
       }
     }
 
@@ -629,8 +629,8 @@ export class Player {
       if (input.isDown('ArrowDown') || input.isDown('KeyS')) forwardMove -= 1;
       if (input.isDown('ArrowLeft') || input.isDown('KeyA')) strafeMove -= 1;
       if (input.isDown('ArrowRight') || input.isDown('KeyD')) strafeMove += 1;
-      dx = -Math.sin(this.controlYaw) * forwardMove + Math.cos(this.controlYaw) * strafeMove;
-      dz = -Math.cos(this.controlYaw) * forwardMove - Math.sin(this.controlYaw) * strafeMove;
+      dx = Math.sin(this.controlYaw) * forwardMove - Math.cos(this.controlYaw) * strafeMove;
+      dz = Math.cos(this.controlYaw) * forwardMove + Math.sin(this.controlYaw) * strafeMove;
     } else {
       if (input.isDown('ArrowUp') || input.isDown('KeyW')) dz -= 1;
       if (input.isDown('ArrowDown') || input.isDown('KeyS')) dz += 1;
@@ -691,14 +691,10 @@ export class Player {
 
     if (dx !== 0 || dz !== 0) {
       this.targetRotation = Math.atan2(dx, dz);
-      if (this.controlYaw != null) {
-        this.rotation = this.controlYaw;
-      } else {
-        let diff = this.targetRotation - this.rotation;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        this.rotation += diff * Math.min(1, 10 * dt);
-      }
+      let diff = this.targetRotation - this.rotation;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      this.rotation += diff * Math.min(1, 10 * dt);
 
       if (this.animLockTimer <= 0 && !this.isBlocking) {
         const isRunning = input.isDown('ShiftLeft') && this.stamina > 0;
@@ -826,13 +822,13 @@ export class Player {
     if (this.world.hasSdfTerrain?.()) {
       return this.world.getGroundHeightAt(px, pz, this.position.y);
     }
-    // Check a 2×2 area around the player's position for the highest ground.
-    // This prevents falling through narrow gaps between tiles.
+    // Check a 3×3 area around the player's position for the highest ground.
+    // This prevents falling through narrow gaps between tiles or edges.
     let maxY = -999;
     const x0 = Math.floor(px);
     const z0 = Math.floor(pz);
-    for (let dx = 0; dx <= 1; dx++) {
-      for (let dz = 0; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
         const y = this.world.getGroundHeightAt
           ? this.world.getGroundHeightAt(x0 + dx, z0 + dz, this.position.y)
           : this.world.getColumnTop(x0 + dx, z0 + dz);
