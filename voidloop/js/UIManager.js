@@ -1392,7 +1392,11 @@ export class UIManager {
       this.elFps.textContent = fps + ' FPS';
       return;
     }
-    this.elFps.textContent = `${fps} FPS | calls ${perfStats.calls} | tris ${perfStats.triangles} | terrain ${perfStats.visibleChunks}/${perfStats.liveChunks} | dirty ${perfStats.dirtyChunks} | rebuild ${perfStats.rebuildMs.toFixed(1)}ms`;
+    const water = perfStats.waterMeshes ? ` | water ${perfStats.waterMeshes}/${perfStats.waterRipples}` : '';
+    const timings = ` | ms w:${perfStats.worldMs.toFixed(1)} vis:${perfStats.terrainVisibilityMs.toFixed(1)} cam:${perfStats.cameraCollisionMs.toFixed(1)} water:${perfStats.waterMs.toFixed(1)} render:${perfStats.renderMs.toFixed(1)}`;
+    const ray = ` | rays ${perfStats.raycasts}/${perfStats.raycastMs.toFixed(1)} recompute ${perfStats.visibilityRecomputed}`;
+    const scale = perfStats.renderScale && perfStats.renderScale < 0.99 ? ` | scale ${perfStats.renderScale.toFixed(2)}` : '';
+    this.elFps.textContent = `${fps} FPS | calls ${perfStats.calls} | tris ${perfStats.triangles} | terrain ${perfStats.visibleChunks}/${perfStats.liveChunks} | dirty ${perfStats.dirtyChunks} | rebuild ${perfStats.terrainRebuildMs.toFixed(1)}ms${timings}${ray}${scale}${water}`;
   }
 
   // ===== Pet Den UI =====

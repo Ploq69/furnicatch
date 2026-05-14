@@ -86,6 +86,7 @@ export const BLOCK_TYPES = {
   grass: { hp: 1, color: 0x4a8f29, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt_with_grass.gltf' },
   stone: { hp: 2, color: 0x777777, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone.gltf' },
   brick: { hp: 2, color: 0xa0522d, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_A.gltf' },
+  bricks_A: { hp: 2, color: 0xa0522d, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_A.gltf' },
   bricks_B: { hp: 2, color: 0x8a4525, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_B.gltf' },
   coal: { hp: 2, color: 0x222222, drop: 'coal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf' },
   metal: { hp: 2, color: 0x8899aa, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/metal.gltf' },

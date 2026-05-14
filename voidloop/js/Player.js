@@ -119,6 +119,11 @@ export class Player {
     this.maxStamina = GAME.MAX_STAMINA;
     this.hazardSpeedMultiplier = 1.0;
     this.stunTimer = 0;
+    this.isSwimming = false;
+    this.isWading = false;
+    this.waterSurfaceY = 0;
+    this.waterBottomY = -999;
+    this.waterDepth = 0;
 
     this.mesh = null;
     this.mixer = null;
@@ -516,14 +521,19 @@ export class Player {
       this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
     }
 
-    if (this.isGrounded) {
+    if (this.isSwimming) {
+      this._updateSwimmingVertical(dt, input);
+      this.coyoteTimer = 0;
+      this.jumpsRemaining = 1;
+      this.jumpBufferTimer = 0;
+    } else if (this.isGrounded) {
       this.coyoteTimer = GAME.COYOTE_TIME;
       this.jumpsRemaining = 1;
     } else if (this.coyoteTimer > 0) {
       this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
     }
 
-    if (this.jumpBufferTimer > 0) {
+    if (!this.isSwimming && this.jumpBufferTimer > 0) {
       if (this.isGrounded || this.coyoteTimer > 0) {
         this._startJump(GAME.JUMP_FORCE, false);
       } else if (this.jumpsRemaining > 0) {
@@ -541,8 +551,8 @@ export class Player {
     }
 
     // SDF terrain owns vertical collision, but only against local floor under the feet.
-    let terrainResolved = false;
-    if (this.world?.hasSdfTerrain?.() && this.world.resolvePlayerTerrain) {
+    let terrainResolved = this.isSwimming;
+    if (!this.isSwimming && this.world?.hasSdfTerrain?.() && this.world.resolvePlayerTerrain) {
       terrainResolved = this.world.resolvePlayerTerrain(this, dt, { gravityMultiplier });
     }
 
@@ -586,7 +596,10 @@ export class Player {
       this.isGrounded = !fallingIntoVoid;
     }
 
-    if (this.isGrounded) {
+    if (this.isSwimming) {
+      this.isGrounded = false;
+      this.landedThisFrame = false;
+    } else if (this.isGrounded) {
       this.coyoteTimer = GAME.COYOTE_TIME;
       this.jumpsRemaining = 1;
       if (!wasGrounded) {
@@ -654,7 +667,8 @@ export class Player {
     const baseSpeed = input.isDown('ShiftLeft') && this.stamina > 0
       ? GAME.PLAYER_SPRINT_SPEED
       : GAME.PLAYER_SPEED;
-    const speed = baseSpeed * this.hazardSpeedMultiplier;
+    const swimMultiplier = this.isSwimming ? 0.62 : 1;
+    const speed = baseSpeed * this.hazardSpeedMultiplier * swimMultiplier;
 
     if (input.isDown('ShiftLeft')) {
       this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
@@ -716,6 +730,75 @@ export class Player {
     this.jumpSquashTimer = isDoubleJump ? 0.18 : 0.12;
     this.jumpStartedThisFrame = true;
     this.playAnim('Jump', { lock: 0.18, loop: false, timeScale: isDoubleJump ? 1.25 : 1.05 });
+  }
+
+  setWaterState(volume) {
+    if (!volume) {
+      this.isSwimming = false;
+      this.isWading = false;
+      this.waterSurfaceY = 0;
+      this.waterBottomY = -999;
+      this.waterDepth = 0;
+      return;
+    }
+    const surfaceY = volume.surfaceY ?? 1.15;
+    const bottomY = volume.bottomY ?? -1.8;
+    // Check both terrain and placed blocks so we know if the player is standing on solid ground
+    let groundY = -999;
+    if (this.world) {
+      const terrainY = this.world.hasSdfTerrain?.()
+        ? this.world.getGroundHeightAt(this.position.x, this.position.z, this.position.y)
+        : -999;
+      const blockY = this.world.getColumnTop
+        ? this.world.getColumnTop(Math.floor(this.position.x), Math.floor(this.position.z))
+        : -999;
+      groundY = Math.max(terrainY, blockY);
+    }
+    const onGround = groundY > -999 && Math.abs(this.position.y - groundY) < 0.15;
+    const onBlockAtSurface = onGround && groundY >= surfaceY - 0.35;
+
+    const inVolume = this.position.y <= surfaceY + 0.35 && this.position.y >= bottomY - 0.75;
+    this.isWading = inVolume && onBlockAtSurface;
+    this.isSwimming = inVolume && !this.isWading && this.position.y < surfaceY - 0.10;
+    this.waterSurfaceY = surfaceY;
+    this.waterBottomY = bottomY;
+    this.waterDepth = Math.max(0, surfaceY - Math.max(this.position.y, bottomY));
+  }
+
+  _updateSwimmingVertical(dt, input) {
+    const surfaceY = this.waterSurfaceY || 0;
+    const bottomY = Number.isFinite(this.waterBottomY) ? this.waterBottomY : -999;
+    const wantsRise = input.isDown('Space') || input.isDown('KeyE');
+    const wantsDive = input.isDown('ControlLeft') || input.isDown('ControlRight');
+
+    this.isGrounded = false;
+    if (wantsRise) {
+      this.velocity.y += 14 * dt;
+    } else if (wantsDive) {
+      this.velocity.y -= 10 * dt;
+    } else {
+      // Floaty sink: gravity always wins slightly, high drag keeps it gentle
+      const depth = surfaceY - this.position.y;
+      const submersion = Math.max(0.0, Math.min(1.0, (depth + 0.2) / 0.7));
+      const sinkAccel = GAME.GRAVITY * 0.10;          // -2.5  (slow downward pull)
+      const tinyBuoyancy = submersion * 0.9;          // +0.0 to +0.9  (barely fights gravity)
+      const drag = 3.0 * submersion + 0.5;            // strong water resistance
+      this.velocity.y += (sinkAccel + tinyBuoyancy) * dt;
+      this.velocity.y *= Math.max(0.0, 1.0 - drag * dt);
+    }
+
+    this.velocity.y = Math.max(-2.5, Math.min(3.0, this.velocity.y));
+    this.position.y += this.velocity.y * dt;
+
+    // Soft surface — let the player bob a little, just dampen upward exit
+    if (this.position.y > surfaceY + 0.15) {
+      this.position.y = surfaceY + 0.15;
+      if (this.velocity.y > 0.0) this.velocity.y *= 0.35;
+    }
+    if (this.position.y < bottomY + 0.3) {
+      this.position.y = bottomY + 0.3;
+      this.velocity.y = Math.max(this.velocity.y, 0);
+    }
   }
 
   takeDamage(amount) {

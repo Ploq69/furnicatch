@@ -23,6 +23,21 @@ export const ZONES = [
     pickaxeId: 'forest_pickaxe',
     suitId: null,
     staffId: null,
+    waterVolumes: [
+      {
+        id: 'forest_pond',
+        type: 'pond',
+        x: -42,
+        z: 14,
+        radiusX: 8,
+        radiusZ: 6,
+        surfaceY: 1.15,
+        bottomY: -1.8,
+        safe: true,
+        tint: 0x2bb8a6,
+        foamColor: 0xd8fff7,
+      },
+    ],
   },
   {
     id: 'fire',

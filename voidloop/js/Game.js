@@ -29,6 +29,7 @@ import { RemotePlayer } from './RemotePlayer.js';
 import { Enemy } from './Enemy.js';
 import { settings } from './SettingsManager.js';
 import { ResourceInventory, RESOURCE_META } from './ResourceInventory.js';
+import { WaterSurfaceSystem } from './WaterSurfaceSystem.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -66,6 +67,9 @@ const TP_SHOULDER_Y = 0.05;
 const TP_PITCH_MIN = -1.0;
 const TP_PITCH_MAX = 1.0;
 const TP_SMOOTH_SPEED = 8.0;
+const TP_COLLISION_REFRESH_MS = 125;
+const TP_COLLISION_MOVE_EPS = 0.35;
+const MIN_RENDER_SCALE = 0.75;
 
 export class Game {
   constructor(container) {
@@ -106,6 +110,20 @@ export class Game {
     this.camYaw = 0;
     this.camPitch = -0.12;
     this.camPos = new THREE.Vector3();
+    this._renderScaleMax = Math.min(window.devicePixelRatio || 1, 1.25);
+    this._renderScale = Math.min(1, this._renderScaleMax);
+    this._renderScaleLowTime = 0;
+    this._renderScaleHighTime = 0;
+    this._perfFrame = {};
+    this._tpCollision = {
+      lastAt: -Infinity,
+      lastDesired: new THREE.Vector3(),
+      lastPivot: new THREE.Vector3(),
+      actualDist: TP_DISTANCE,
+      rayDist: TP_DISTANCE,
+      nearHit: false,
+      initialized: false,
+    };
 
     // Lighting
     this.ambient = new THREE.AmbientLight(0x8888aa, 0.6);
@@ -140,6 +158,7 @@ export class Game {
     this.particles = new ParticleSystem(this.scene);
     this.flipbooks = new FlipbookVFX(this.scene);
     this.world = new World(this.scene);
+    this.water = new WaterSurfaceSystem(this.scene);
     this.player = new Player(this.scene);
     this.player.world = this.world;
     this.ui = new UIManager(this);
@@ -408,6 +427,7 @@ export class Game {
 
     // Build unified terrain mesh once after all zones are generated
     await this.world.buildTerrainMesh();
+    this.water.setVolumes(ZONES);
 
     // Spawn player at current zone's spawn point
     const currentZone = this.zoneManager.getCurrentZone();
@@ -466,6 +486,7 @@ export class Game {
     }
 
     await this.world.loadAuthoredLevel(levelDoc, { scene: this.scene, letterDrop: this.letterDrops });
+    this.water.clear();
 
     // Spawn player at authored start position
     if (this.world.startPosition) {
@@ -538,6 +559,13 @@ export class Game {
 
   _loop() {
     const dt = Math.min(this.clock.getDelta(), 0.05);
+    this._perfFrame = {
+      worldMs: 0,
+      waterMs: 0,
+      renderMs: 0,
+      cameraCollisionMs: 0,
+    };
+    this.world?.terrainMesh?.resetPerfStats?.();
 
     if (this.state === STATES.PLAYING) {
       // Escape handling: pause takes priority, then loadout/petden close
@@ -594,12 +622,24 @@ export class Game {
       }
     }
 
+    const waterStart = performance.now();
+    this.water.update(dt, {
+      player: this.player,
+      camera: this.camera,
+      terrain: this.world?.terrainMesh,
+      particles: this.particles,
+      flipbooks: this.flipbooks,
+      sfx: SFXMapper,
+    });
+    this._perfFrame.waterMs = performance.now() - waterStart;
     this.particles.update(dt);
     this.flipbooks.update(dt, this.camera);
     updateWeaponEmitters(dt, this.camera);
     this.ui.update(dt);
     this.shopUI?.updatePreview(dt);
+    const renderStart = performance.now();
     this.renderer.render(this.scene, this.camera);
+    this._perfFrame.renderMs = performance.now() - renderStart;
     input.update();
   }
 
@@ -651,6 +691,7 @@ export class Game {
     this._updateCamera(dt, offset, shakeX, shakeY, shakeZ, isoDepthFactor);
 
     // Player update
+    this.player.setWaterState(this.water.getVolumeAt(this.player.position));
     this.player.update(dt, input);
     if (this.player.jumpStartedThisFrame) {
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.08, 0));
@@ -772,6 +813,21 @@ export class Game {
           }
 
           if (destroyed) {
+            // Underwater bubble burst when digging underwater terrain
+            if (miningTarget.isTerrain) {
+              const waterVol = this.water.getVolumeAt(blockPos);
+              if (waterVol && blockPos.y < waterVol.surfaceY - 0.15) {
+                this.particles.spawn({
+                  pos: blockPos.clone().setY(waterVol.surfaceY - 0.1),
+                  count: 4,
+                  color: 0xcffff5,
+                  speed: 0.6,
+                  life: 0.7,
+                  size: 0.09,
+                  texture: 'circle',
+                });
+              }
+            }
             // Sync block destruction in multiplayer
             if (this.isMultiplayer && this.net) {
               this.net.syncEvent('block_broken', {
@@ -871,11 +927,13 @@ export class Game {
     this._updateActiveMissiles(dt);
 
     // World update (enemies + blocks)
+    const worldStart = performance.now();
     this.world.update(dt, this.player.position, this.particles, audio, this.player, {
       cameraMode: this.cameraMode,
       camera: this.camera,
       currentZoneId: this.zoneManager.currentZoneId,
     });
+    this._perfFrame.worldMs = performance.now() - worldStart;
 
     // Loot update (hoover, magnet, collect)
     this.loot.update(dt, this.player.position, (type, value, color) => {
@@ -944,6 +1002,7 @@ export class Game {
     const now = performance.now();
     if (now - (this.lastFpsTime || 0) >= 1000) {
       this.ui.setFPS(this.frameCount, this._getPerfDebugStats());
+      this._updateDynamicRenderScale(this.frameCount);
       this.frameCount = 0;
       this.lastFpsTime = now;
     }
@@ -954,6 +1013,8 @@ export class Game {
       || window.localStorage?.getItem('voidloopPerfDebug') === '1';
     if (!enabled) return null;
     const terrain = this.world?.terrainMesh?.getStats?.() || {};
+    const terrainPerf = this.world?.terrainMesh?.perfStats || {};
+    const water = this.water?.getStats?.() || {};
     return {
       calls: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
@@ -961,7 +1022,54 @@ export class Game {
       liveChunks: terrain.liveChunks || terrain.chunks || 0,
       dirtyChunks: terrain.dirtyChunks || 0,
       rebuildMs: terrain.rebuildMs || 0,
+      worldMs: this._perfFrame.worldMs || 0,
+      terrainVisibilityMs: terrainPerf.visibilityMs || 0,
+      terrainRebuildMs: terrainPerf.rebuildMs || 0,
+      cameraCollisionMs: this._perfFrame.cameraCollisionMs || 0,
+      waterMs: this._perfFrame.waterMs || 0,
+      renderMs: this._perfFrame.renderMs || 0,
+      raycasts: terrainPerf.raycasts || 0,
+      raycastMs: terrainPerf.raycastMs || 0,
+      visibilityRecomputed: terrainPerf.visibilityRecomputed || 0,
+      renderScale: this._renderScale || 1,
+      waterMeshes: water.waterMeshes || 0,
+      waterRipples: water.waterRipples || 0,
     };
+  }
+
+  _updateDynamicRenderScale(fps) {
+    if (this.cameraMode !== 'thirdPerson') {
+      this._renderScaleLowTime = 0;
+      this._renderScaleHighTime = 0;
+      if (this._renderScale < Math.min(1, this._renderScaleMax)) {
+        this._setRenderScale(Math.min(1, this._renderScaleMax));
+      }
+      return;
+    }
+
+    if (fps < 58) {
+      this._renderScaleLowTime += 1;
+      this._renderScaleHighTime = 0;
+    } else if (fps >= 59.5) {
+      this._renderScaleHighTime += 1;
+      this._renderScaleLowTime = 0;
+    } else {
+      this._renderScaleLowTime = 0;
+      this._renderScaleHighTime = 0;
+    }
+
+    if (this._renderScaleLowTime >= 1 && this._renderScale > MIN_RENDER_SCALE) {
+      this._setRenderScale(Math.max(MIN_RENDER_SCALE, this._renderScale - 0.1));
+      this._renderScaleLowTime = 0;
+    } else if (this._renderScaleHighTime >= 4 && this._renderScale < Math.min(1, this._renderScaleMax)) {
+      this._setRenderScale(Math.min(Math.min(1, this._renderScaleMax), this._renderScale + 0.05));
+      this._renderScaleHighTime = 0;
+    }
+  }
+
+  _setRenderScale(scale) {
+    this._renderScale = Math.max(MIN_RENDER_SCALE, Math.min(Math.min(1, this._renderScaleMax), scale));
+    this.renderer.setPixelRatio(this._renderScale);
   }
 
   _getIsoUndergroundFactor() {
@@ -1013,6 +1121,7 @@ export class Game {
   }
 
   _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0, isoDepthFactor = 0) {
+    this.world?.terrainMesh?.setRenderMode?.(this.cameraMode, this._renderScale || 1);
     if (this.cameraMode === 'thirdPerson') {
       this._updateThirdPersonAim(dt);
       this._updateThirdPersonCamera(dt, shakeX, shakeY, shakeZ);
@@ -1105,15 +1214,7 @@ export class Game {
     // Collision avoidance: raycast from pivot to desired camera position
     const direction = desired.clone().sub(pivot).normalize();
     const rayDist = pivot.distanceTo(desired);
-    let actualDist = rayDist;
-
-    if (this.world?.terrainMesh) {
-      const raycaster = new THREE.Raycaster(pivot, direction, 0.05, rayDist + 0.5);
-      const hit = this.world.terrainMesh.raycast(raycaster);
-      if (hit?.point) {
-        actualDist = Math.max(0.6, pivot.distanceTo(hit.point) - 0.3);
-      }
-    }
+    let actualDist = this._getThirdPersonCameraDistance(pivot, desired, direction, rayDist);
 
     if (actualDist < rayDist) {
       desired.copy(pivot).add(direction.multiplyScalar(actualDist));
@@ -1132,6 +1233,48 @@ export class Game {
 
     this.thirdPersonCamera.position.copy(this.camPos);
     this.thirdPersonCamera.lookAt(pivot.x, pivot.y, pivot.z);
+  }
+
+  _getThirdPersonCameraDistance(pivot, desired, direction, rayDist) {
+    const start = performance.now();
+    const terrain = this.world?.terrainMesh;
+    let actualDist = rayDist;
+
+    if (!terrain) {
+      this._perfFrame.cameraCollisionMs = performance.now() - start;
+      return actualDist;
+    }
+
+    const now = performance.now();
+    const cache = this._tpCollision;
+    const desiredMoved = !cache.initialized || cache.lastDesired.distanceToSquared(desired) > TP_COLLISION_MOVE_EPS * TP_COLLISION_MOVE_EPS;
+    const pivotMoved = !cache.initialized || cache.lastPivot.distanceToSquared(pivot) > 0.25 * 0.25;
+    const desiredBlocked = terrain.isSolidAt?.(desired.x, desired.y, desired.z);
+    const shouldRefresh = desiredMoved
+      || pivotMoved
+      || desiredBlocked
+      || cache.nearHit
+      || now - cache.lastAt >= TP_COLLISION_REFRESH_MS;
+
+    if (shouldRefresh) {
+      const raycaster = new THREE.Raycaster(pivot, direction, 0.05, rayDist + 0.35);
+      const hit = terrain.raycast(raycaster, pivot, TP_DISTANCE + 3);
+      actualDist = hit?.point ? Math.max(0.6, pivot.distanceTo(hit.point) - 0.3) : rayDist;
+      if (!hit?.point && desiredBlocked) actualDist = Math.min(actualDist, 1.1);
+      cache.lastAt = now;
+      cache.lastDesired.copy(desired);
+      cache.lastPivot.copy(pivot);
+      cache.actualDist = actualDist;
+      cache.rayDist = rayDist;
+      cache.nearHit = actualDist < rayDist - 0.2;
+      cache.initialized = true;
+    } else {
+      const cachedRatio = cache.rayDist > 0.001 ? cache.actualDist / cache.rayDist : 1;
+      actualDist = Math.min(rayDist, rayDist * cachedRatio);
+    }
+
+    this._perfFrame.cameraCollisionMs = performance.now() - start;
+    return actualDist;
   }
 
   _findNearestEnemy(range) {
@@ -1975,6 +2118,8 @@ export class Game {
       this.camYaw = this.player.rotation;
       this.camPitch = -0.12;
       this.camPos.set(this.player.position.x, this.player.position.y + TP_HEIGHT, this.player.position.z);
+      this._tpCollision.initialized = false;
+      this._tpCollision.nearHit = false;
       this.renderer.domElement.requestPointerLock?.();
       if (this.aimReticle) this.aimReticle.style.display = 'block';
       if (showToast) this.ui.showFloatingText('Third-person view', 0x7dd3fc);
@@ -2328,7 +2473,7 @@ export class Game {
 
   _applyGraphicsSettings() {
     const size = Math.min(settings.getShadowMapSize(), 512);
-    this.renderer.setPixelRatio(1);
+    this.renderer.setPixelRatio(this._renderScale || 1);
     this.sun.shadow.mapSize.set(size, size);
     this.sun.shadow.mapSize.needsUpdate = true;
   }

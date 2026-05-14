@@ -48,6 +48,7 @@ export class World {
     this.instancer = new BlockInstancer(scene);
     this.occupancyGrid = new OccupancyGrid();
     this.terrainMesh = new TerrainMesh(scene);
+    this.waterVolumes = [];
     this.floatingBlocks = new Set();
     this.hiddenLetterNodes = [];
     this._cutawayActive = false;
@@ -82,6 +83,9 @@ export class World {
     await this.instancer.preloadTypes([...new Set([...allTypes, 'stone_dark'])]);
     await this.terrainMesh.preloadTypes(allTypes);
     this.terrainMesh.addZone(zone, seed || 1);
+    for (const water of zone.waterVolumes || []) {
+      this.waterVolumes.push({ ...water, zoneId: zone.id, zoneName: zone.name });
+    }
     this._generateHiddenLetters(zone, rng);
 
     const gridW = b.maxX - b.minX;
@@ -636,6 +640,23 @@ export class World {
     return Math.max(0, 1 - position.y);
   }
 
+  getWaterVolumeAt(position, options = {}) {
+    if (!position) return null;
+    const surfaceMargin = options.surfaceMargin ?? 0.45;
+    const bottomMargin = options.bottomMargin ?? 1.25;
+    for (const water of this.waterVolumes) {
+      const radiusX = Math.max(0.1, water.radiusX || 1);
+      const radiusZ = Math.max(0.1, water.radiusZ || 1);
+      const nx = (position.x - water.x) / radiusX;
+      const nz = (position.z - water.z) / radiusZ;
+      if (nx * nx + nz * nz > 1) continue;
+      if (position.y > (water.surfaceY ?? 1.15) + surfaceMargin) continue;
+      if (position.y < (water.bottomY ?? -1.8) - bottomMargin) continue;
+      return water;
+    }
+    return null;
+  }
+
   resolvePlayerTerrain(player, dt, options = {}) {
     if (!this.terrainMesh) return false;
 
@@ -899,6 +920,7 @@ export class World {
     this.instancer.clear();
     this.terrainMesh.clear();
     this.occupancyGrid.clear();
+    this.waterVolumes = [];
     for (const block of this.blocks.values()) {
       if (block.mesh) this.scene.remove(block.mesh);
     }

@@ -50,6 +50,13 @@ export const SFXMapper = {
     playVariant('DSGNMisc', 'MOVEMENT-Mecha Medium Jump', { volume: 0.3 });
   },
 
+  waterSplash(strength = 1) {
+    playVariant('MAGSpel', 'CAST-Underwater', {
+      volume: 0.16 + Math.min(1, Math.max(0, strength)) * 0.16,
+      pitch: 0.92 + Math.random() * 0.16,
+    });
+  },
+
   sprint() {
     playVariant('WHSH', 'MOVEMENT-Phase Sweeps', { volume: 0.2 });
   },
