@@ -19,6 +19,7 @@ export class UIManager {
     this.upgradeLevels = {};
     this.loadoutState = cloneLoadout(DEFAULT_LOADOUT);
     this.loadoutOpen = false;
+    this.progressionOpen = false;
     this.loadoutBusy = false;
     this.preview = null;
     this.calibrationEnabled = false;
@@ -202,6 +203,7 @@ export class UIManager {
     if (!this.elSpellingOverlay) return;
     this._setTouchControlsVisible(false);
     this.elSpellingOverlay.classList.add('active');
+    this.elSpellingOverlay.classList.remove('sound-match');
     this.elSpellingBigLetter.textContent = letter.toUpperCase();
     this.elSpellingProgress.innerHTML = progressText;
     this.elSpellingHintCount.textContent = '';
@@ -212,6 +214,10 @@ export class UIManager {
     this.elSpellingRevealBtn.style.display = 'none';
     this.elSpellingInput.disabled = true;
     this.elSpellingInput.focus();
+    const inputRow = this.elSpellingInput?.closest('.spelling-input-row');
+    if (inputRow) inputRow.style.display = 'flex';
+    const wordListBox = this.elSpellingWordlistGrid?.closest('.spelling-wordlist');
+    if (wordListBox) wordListBox.style.display = 'block';
 
     // Render word list chips
     if (this.elSpellingWordlistGrid) {
@@ -228,9 +234,40 @@ export class UIManager {
     }
   }
 
+  showSoundQuiz(letter, choices, progressText, subtitle) {
+    if (!this.elSpellingOverlay) return;
+    this._setTouchControlsVisible(false);
+    this.elSpellingOverlay.classList.add('active', 'sound-match');
+    this.elSpellingBigLetter.textContent = '?';
+    this.elSpellingProgress.innerHTML = progressText || '';
+    this.elSpellingHintCount.textContent = subtitle || '';
+    this.elSpellingHintArea.textContent = 'Pick the letter you hear.';
+    this.elSpellingFeedback.textContent = '';
+    this.elSpellingFeedback.className = 'spelling-feedback';
+    const inputRow = this.elSpellingInput?.closest('.spelling-input-row');
+    if (inputRow) inputRow.style.display = 'none';
+    const wordListBox = this.elSpellingWordlistGrid?.closest('.spelling-wordlist');
+    if (wordListBox) wordListBox.style.display = 'block';
+
+    if (this.elSpellingWordlistGrid) {
+      this.elSpellingWordlistGrid.innerHTML = '';
+      for (const choice of choices || []) {
+        const btn = document.createElement('button');
+        btn.className = 'spelling-word-chip sound-choice';
+        btn.type = 'button';
+        btn.textContent = choice;
+        btn.addEventListener('click', () => {
+          if (this.game?._resolveLetterSoundQuiz) this.game._resolveLetterSoundQuiz(choice);
+        });
+        this.elSpellingWordlistGrid.appendChild(btn);
+      }
+    }
+  }
+
   hideSpellingChallenge() {
     if (!this.elSpellingOverlay) return;
     this.elSpellingOverlay.classList.remove('active');
+    this.elSpellingOverlay.classList.remove('sound-match');
     this._setTouchControlsVisible(true);
   }
 
@@ -291,23 +328,9 @@ export class UIManager {
       });
     }
 
-    // Legacy inline upgrades (also accessible via shop)
-    const containers = {
-      pickaxe: document.getElementById('blacksmith-upgrades'),
-      combat: document.getElementById('combat-upgrades'),
-      spirit: document.getElementById('spirit-upgrades'),
-    };
-    for (const [cat, ups] of Object.entries(UPGRADES)) {
-      const container = containers[cat];
-      if (!container) continue;
-      for (const u of ups) {
-        const btn = document.createElement('button');
-        btn.className = 'upgrade-btn';
-        btn.dataset.id = u.id;
-        btn.innerHTML = `<strong>${u.name}</strong><br><small style="opacity:0.7">${u.desc}</small><br><small style="color:#fbbf24">💰 ${u.cost(0)}</small>`;
-        btn.addEventListener('click', () => this._buyUpgrade(cat, u, btn));
-        container.appendChild(btn);
-      }
+    for (const id of ['blacksmith-upgrades', 'combat-upgrades', 'spirit-upgrades']) {
+      const container = document.getElementById(id);
+      if (container) container.innerHTML = '<div class="camp-empty-note">Use the Progression console for upgrades.</div>';
     }
   }
 
@@ -1268,6 +1291,7 @@ export class UIManager {
     this._campFromDeath = fromDeath;
     if (document.pointerLockElement) document.exitPointerLock();
     this._setTouchControlsVisible(false);
+    this._setZoneLetterHudVisible(false);
     this.elCamp.classList.add('active');
     this.elHud.style.display = 'none';
     this.elCrosshair.style.display = 'none';
@@ -1280,23 +1304,13 @@ export class UIManager {
     if (this.elDescendBtn) {
       this.elDescendBtn.textContent = fromDeath ? 'TRY AGAIN' : 'DESCEND';
     }
-    document.querySelectorAll('.upgrade-btn').forEach(btn => {
-      const id = btn.dataset.id;
-      for (const cat of Object.values(UPGRADES)) {
-        const u = cat.find(x => x.id === id);
-        if (u) this._updateUpgradeButton(u, btn);
-      }
-    });
     this._renderPetDen();
-    // Update shop coins if shop UI exists
-    if (this.game.shopUI) {
-      this.game.shopUI.setCoins(this.game.player.coins);
-    }
   }
 
   hideCamp() {
     this.elCamp.classList.remove('active');
     this._setTouchControlsVisible(true);
+    this._setZoneLetterHudVisible(true);
     this.elHud.style.display = 'block';
     this.elCrosshair.style.display = 'block';
     this.elHotbar.style.display = 'flex';
@@ -1308,16 +1322,169 @@ export class UIManager {
   }
 
   showShop() {
-    if (this.game.shopUI) {
-      this.game.shopUI.setCoins(this.game.player.coins);
-      this.game.shopUI.show();
-    }
+    this._ensureProgressionOverlay();
+    this.progressionOpen = true;
+    this._progressionOverlay.classList.add('active');
+    this._renderProgressionOverlay();
   }
 
   hideShop() {
-    if (this.game.shopUI) {
-      this.game.shopUI.hide();
+    this.progressionOpen = false;
+    if (this._progressionOverlay) this._progressionOverlay.classList.remove('active');
+  }
+
+  _ensureProgressionOverlay() {
+    if (this._progressionOverlay) return;
+    const el = document.createElement('div');
+    el.id = 'progression-overlay';
+    el.className = 'shop-overlay progression-overlay';
+    el.innerHTML = `
+      <div class="shop-panel progression-panel">
+        <div class="shop-header">
+          <h2>Progression</h2>
+          <div class="shop-header-actions">
+            <button class="shop-appearance-btn" id="progression-appearance-btn" title="Customize appearance">Appearance</button>
+            <div class="shop-coins">Coins <span id="progression-coin-display">0</span></div>
+          </div>
+          <button class="shop-close" id="progression-close-btn" title="Close">x</button>
+        </div>
+        <div class="progression-summary" id="progression-summary"></div>
+        <div class="shop-content progression-content" id="progression-content"></div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    el.querySelector('#progression-close-btn')?.addEventListener('click', () => {
+      SFXMapper.uiClick();
+      this.hideShop();
+    });
+    el.querySelector('#progression-appearance-btn')?.addEventListener('click', () => {
+      SFXMapper.uiClick();
+      this.hideShop();
+      this.showLoadout();
+    });
+    this._progressionOverlay = el;
+  }
+
+  _renderProgressionOverlay() {
+    const progression = this.game.progression;
+    const coinEl = this._progressionOverlay.querySelector('#progression-coin-display');
+    if (coinEl) coinEl.textContent = this.game.player.coins;
+
+    const zone = this.game.zoneManager.getCurrentZone();
+    const mined = progression.getZoneMined(zone?.id);
+    const target = progression.getZoneMiningTarget(zone);
+    const summary = this._progressionOverlay.querySelector('#progression-summary');
+    if (summary) {
+      summary.innerHTML = `
+        <div><strong>${zone?.name || 'Zone'}</strong><span>Mining ${Math.min(mined, target)} / ${target}</span></div>
+        <div><strong>Pickaxe</strong><span>${progression.getPickaxeWidth()} block swing</span></div>
+        <div><strong>Grenades</strong><span>${progression.state.grenade.unlocked ? `${progression.state.grenade.charges}/${progression.getGrenadeChargeCap()} charges` : 'Locked'}</span></div>
+        <div><strong>Strike</strong><span>${progression.state.missile.unlocked ? `${progression.state.missile.charges}/2 beacons` : 'Locked'}</span></div>
+      `;
     }
+
+    const content = this._progressionOverlay.querySelector('#progression-content');
+    if (!content) return;
+    content.innerHTML = '';
+    const groups = new Map();
+    for (const card of progression.getCards()) {
+      if (!groups.has(card.category)) groups.set(card.category, []);
+      groups.get(card.category).push(card);
+    }
+
+    for (const [category, cards] of groups) {
+      const section = document.createElement('section');
+      section.className = 'progression-section';
+      section.innerHTML = `<h3>${category}</h3>`;
+      const grid = document.createElement('div');
+      grid.className = 'shop-grid progression-grid';
+      for (const card of cards) {
+        const cost = card.cost;
+        const item = document.createElement('article');
+        item.className = 'shop-card progression-card' + (cost == null ? ' maxed' : '');
+        item.innerHTML = `
+          <div class="shop-card-name">${card.name}</div>
+          <div class="shop-card-desc">${card.desc}</div>
+          <div class="shop-card-level">${card.value}</div>
+          <button class="shop-buy-btn" data-id="${card.id}" ${cost == null || this.game.player.coins < cost ? 'disabled' : ''}>
+            ${cost == null ? 'Done' : `Buy ${cost}`}
+          </button>
+        `;
+        item.querySelector('button')?.addEventListener('click', () => {
+          const result = this.game.buyProgressionUpgrade(card.id);
+          if (result.success) {
+            SFXMapper.upgradeBuy();
+            this.updateStats();
+            this._renderProgressionOverlay();
+          } else {
+            SFXMapper.uiDenied();
+          }
+        });
+        grid.appendChild(item);
+      }
+      section.appendChild(grid);
+      content.appendChild(section);
+    }
+
+    this._renderResourceSeller(content);
+  }
+
+  _renderResourceSeller(content) {
+    const resources = this.game.resources?.getAll?.() || [];
+    const section = document.createElement('section');
+    section.className = 'progression-section';
+    section.innerHTML = '<h3>Resources</h3>';
+
+    if (resources.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'camp-empty-note';
+      empty.textContent = 'No dirt, gravel, scrap, or other mined junk to sell yet.';
+      section.appendChild(empty);
+      content.appendChild(section);
+      return;
+    }
+
+    const totalValue = resources.reduce((sum, res) => sum + res.count * res.value, 0);
+    const header = document.createElement('div');
+    header.className = 'progression-resource-total';
+    header.textContent = `Sell value in bag: ${totalValue} coins`;
+    section.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'shop-grid progression-grid resource-sell-grid';
+
+    for (const res of resources) {
+      const card = document.createElement('article');
+      card.className = 'shop-card progression-card resource-sell-card';
+      card.innerHTML = `
+        <div class="shop-card-name">${res.name}</div>
+        <div class="shop-card-desc">Owned ${res.count} · ${res.value} coin${res.value === 1 ? '' : 's'} each</div>
+        <div class="resource-sell-row">
+          <button class="shop-buy-btn" data-type="${res.type}" data-amount="1">Sell 1</button>
+          <button class="shop-buy-btn" data-type="${res.type}" data-amount="${res.count}">Sell All</button>
+        </div>
+      `;
+
+      card.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const amount = Number(btn.dataset.amount || 1);
+          const result = this.game.sellResource(btn.dataset.type, amount);
+          if (result.success) {
+            SFXMapper.upgradeBuy();
+            this.showFloatingText(`+${result.coins} coins`, 0xfbbf24);
+            this.updateStats();
+            this._renderProgressionOverlay();
+          } else {
+            SFXMapper.uiDenied();
+          }
+        });
+      });
+
+      grid.appendChild(card);
+    }
+
+    section.appendChild(grid);
+    content.appendChild(section);
   }
 
   // Gateway indicator UI
@@ -1376,14 +1543,153 @@ export class UIManager {
     }
     const lettersDone = state.letters?.done || 0;
     const lettersTotal = state.letters?.total || 0;
-    const enemiesDone = state.enemies?.done ? '✓' : state.enemies?.remaining ?? 0;
-    const pips = Array.from({ length: 4 }, (_, i) => i < (state.pickaxeTier || 0) ? '●' : '○').join('');
+    const miningCurrent = state.mining?.current || 0;
+    const miningTarget = state.mining?.target || 0;
+    const pips = Array.from({ length: 6 }, (_, i) => i < (state.pickaxeTier || 0) ? '●' : '○').join('');
+    const grenadeText = state.grenade?.unlocked
+      ? `G ${state.grenade.charges}/${state.grenade.cap}${state.grenade.cooldown > 0 ? ` ${state.grenade.cooldown.toFixed(0)}s` : ''}`
+      : 'G locked';
+    const missileText = state.missile?.unlocked
+      ? `Q ${state.missile.charges}/2${state.missile.cooldown > 0 ? ` ${state.missile.cooldown.toFixed(0)}s` : ''}`
+      : 'Q locked';
     this._objectiveHud.innerHTML = `
       <span title="Letters">🔤 ${lettersDone}/${lettersTotal}</span>
-      <span title="Enemies">⚔ ${enemiesDone}</span>
+      <span title="Mining">⛏ ${Math.min(miningCurrent, miningTarget)}/${miningTarget}</span>
       <span class="pickaxe-tier" title="Pickaxe">⛏ ${pips}</span>
+      <span title="Grenades">${grenadeText}</span>
+      <span title="Missile Strike">${missileText}</span>
       <span title="Gate">${state.completed ? '🔓' : '🔒'}</span>
     `;
+    this.updateZoneLetterHud(state.zoneId);
+  }
+
+  updateZoneLetterHud(zoneId = this.game?.zoneManager?.currentZoneId) {
+    const progression = this.game?.progression;
+    if (!progression || !zoneId) return;
+    const letters = progression.getZoneLetterProgress(zoneId);
+    if (!letters.length) return;
+    this._ensureZoneLetterHud();
+
+    const signature = letters
+      .map(item => [
+        item.letter,
+        item.level,
+        Math.round(item.percent),
+        item.dropsTowardQuiz,
+        item.quizThreshold,
+        item.quizReady ? 1 : 0,
+        item.passed ? 1 : 0,
+        item.maxed ? 1 : 0,
+      ].join(':'))
+      .join('|');
+    if (signature === this._zoneLetterHudSignature) return;
+    this._zoneLetterHudSignature = signature;
+
+    this._zoneLetterHud.innerHTML = '';
+    for (const item of letters) {
+      const card = document.createElement('div');
+      card.className = [
+        'zone-letter-card',
+        item.quizReady ? 'ready' : '',
+        item.passed ? 'passed' : '',
+        item.maxed ? 'maxed' : '',
+      ].filter(Boolean).join(' ');
+      card.dataset.letter = item.letter;
+
+      const levelText = item.maxed ? 'MAX' : `Lv.${item.level}`;
+      const quizText = item.maxed
+        ? 'MASTERED'
+        : `${item.dropsTowardQuiz}/${Number.isFinite(item.quizThreshold) ? item.quizThreshold : '-'}`;
+      const xpText = item.maxed ? '' : `${Math.round(item.percent)}%`;
+
+      card.innerHTML = `
+        <div class="zone-letter-top">
+          <span class="zone-letter-symbol">${item.letter}</span>
+          <span class="zone-letter-level">${levelText}</span>
+        </div>
+        <div class="zone-letter-bar"><div class="zone-letter-fill" style="width:${item.percent.toFixed(1)}%"></div></div>
+        <div class="zone-letter-meta">
+          <span>${quizText}</span>
+          <span>${xpText}</span>
+        </div>
+      `;
+      card.title = item.maxed
+        ? `${item.letter} mastered at level ${item.level}`
+        : `${item.letter} level ${item.level}: ${item.xp}/${item.nextXp} XP, quiz ${item.dropsTowardQuiz}/${item.quizThreshold}`;
+      this._zoneLetterHud.appendChild(card);
+    }
+  }
+
+  animateLetterPickup(letter, worldPosition, zoneId = this.game?.zoneManager?.currentZoneId) {
+    const targetLetter = String(letter || '').toUpperCase()[0];
+    if (!targetLetter) return 0;
+    this.updateZoneLetterHud(zoneId);
+    const card = this._zoneLetterHud?.querySelector(`.zone-letter-card[data-letter="${targetLetter}"]`);
+    if (!card) return 0;
+
+    const endRect = card.getBoundingClientRect();
+    const endX = endRect.left + endRect.width / 2;
+    const endY = endRect.top + endRect.height / 2;
+    const start = this._worldToScreen(worldPosition);
+    const startX = Number.isFinite(start?.x) ? start.x : window.innerWidth / 2;
+    const startY = Number.isFinite(start?.y) ? start.y : window.innerHeight * 0.58;
+    const midX = startX + (endX - startX) * 0.44;
+    const midY = Math.min(startY, endY) - 82;
+
+    const flyer = document.createElement('div');
+    flyer.className = 'letter-pickup-flyer';
+    flyer.textContent = targetLetter;
+    flyer.style.left = `${startX - 17}px`;
+    flyer.style.top = `${startY - 17}px`;
+    document.body.appendChild(flyer);
+
+    const duration = 720;
+    const animation = flyer.animate([
+      { left: `${startX - 17}px`, top: `${startY - 17}px`, transform: 'scale(1) rotate(-6deg)', opacity: 1, offset: 0 },
+      { left: `${midX - 17}px`, top: `${midY - 17}px`, transform: 'scale(1.18) rotate(8deg)', opacity: 1, offset: 0.48 },
+      { left: `${endX - 17}px`, top: `${endY - 17}px`, transform: 'scale(0.42) rotate(0deg)', opacity: 0.28, offset: 1 },
+    ], {
+      duration,
+      easing: 'cubic-bezier(.18,.82,.22,1)',
+      fill: 'forwards',
+    });
+
+    animation.onfinish = () => {
+      flyer.remove();
+      const freshCard = this._zoneLetterHud?.querySelector(`.zone-letter-card[data-letter="${targetLetter}"]`);
+      if (freshCard) {
+        freshCard.classList.remove('letter-fill-pop');
+        freshCard.offsetHeight;
+        freshCard.classList.add('letter-fill-pop');
+        setTimeout(() => freshCard.classList.remove('letter-fill-pop'), 520);
+      }
+    };
+
+    return duration;
+  }
+
+  _worldToScreen(worldPosition) {
+    if (!worldPosition || !this.game?.camera) return null;
+    const projected = worldPosition.clone();
+    projected.y += 0.65;
+    projected.project(this.game.camera);
+    if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y) || projected.z > 1) return null;
+    return {
+      x: (projected.x * 0.5 + 0.5) * window.innerWidth,
+      y: (-projected.y * 0.5 + 0.5) * window.innerHeight,
+    };
+  }
+
+  _ensureZoneLetterHud() {
+    if (this._zoneLetterHud) return;
+    this._zoneLetterHud = document.createElement('div');
+    this._zoneLetterHud.className = 'zone-letter-hud';
+    document.body.appendChild(this._zoneLetterHud);
+  }
+
+  _setZoneLetterHudVisible(visible) {
+    if (!this._zoneLetterHud) return;
+    this._zoneLetterHud.style.display = visible ? 'flex' : 'none';
   }
 
   setFPS(fps, perfStats = null) {

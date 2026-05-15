@@ -31,8 +31,9 @@ const ISO_UNDERGROUND_CUTAWAY = {
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 
 export class World {
-  constructor(scene) {
+  constructor(scene, renderer = null) {
     this.scene = scene;
+    this.renderer = renderer;
     this.blocks = new Map();
     this.columnHeights = new Map(); // key: "x,z" → topY (highest y+1)
     this.enemies = [];
@@ -47,7 +48,7 @@ export class World {
     this._nextEnemyId = 1;
     this.instancer = new BlockInstancer(scene);
     this.occupancyGrid = new OccupancyGrid();
-    this.terrainMesh = new TerrainMesh(scene);
+    this.terrainMesh = new TerrainMesh(scene, renderer);
     this.waterVolumes = [];
     this.floatingBlocks = new Set();
     this.hiddenLetterNodes = [];

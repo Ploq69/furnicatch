@@ -125,7 +125,10 @@ export class LetterDrop {
 
       // Collect
       if (dist < COLLECT_DIST) {
-        collected = d.letter;
+        collected = {
+          letter: d.letter,
+          position: d.mesh.position.clone(),
+        };
         this._remove(i);
       }
     }

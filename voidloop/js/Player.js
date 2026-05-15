@@ -835,9 +835,9 @@ export class Player {
     SFXMapper.playerHeal();
   }
 
-  // Hazard interaction — burn damage handled by HazardSystem
+  // Hazard gear gates were removed with the progression redesign.
   isInHazard() {
-    return false; // Game.js HazardSystem handles this externally
+    return false;
   }
 
   addItem(type, count = 1) {

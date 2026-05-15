@@ -18,6 +18,12 @@ function playVariant(prefix, baseName, opts = {}) {
   audio.playPath(path, opts);
 }
 
+function playCatalogVariant(prefix, baseName, opts = {}, variants = 6) {
+  const n = Math.floor(Math.random() * variants) + 1;
+  const path = `../Helton Yan's Pixel Combat - Single Files/${prefix}_${baseName}_HY_PC-00${n}.wav`;
+  audio.playPath(path, opts);
+}
+
 // Helper: pick random from array
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -105,6 +111,10 @@ export const SFXMapper = {
 
   collectRare() {
     playVariant('MAGAngl', 'BUFF-Buff Drop', { volume: 0.6, pitch: 1.1 });
+  },
+
+  letterPickup() {
+    playCatalogVariant('MAGAngl', 'BUFF-Buff Pickup', { volume: 0.5, pitch: 1.02 + Math.random() * 0.08 });
   },
 
   // === MELEE COMBAT ===

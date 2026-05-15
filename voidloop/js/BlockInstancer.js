@@ -8,10 +8,16 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { assetLoader } from './AssetLoader.js';
 import { BLOCK_TYPES, GAME } from './constants.js';
+import { getBlockFaceTileIndex, TILES } from './KenneyAtlas.js';
 
 const BLOCK_VISUAL_SCALE = 0.5;
 const BLOCK_VISUAL_OFFSET = 0.5;
 const CHUNK_SIZE = 16;
+const FACE_KIND = {
+  top: 0,
+  side: 1,
+  bottom: 2,
+};
 
 export class BlockInstancer {
   constructor(scene) {
@@ -22,6 +28,47 @@ export class BlockInstancer {
     this._fallbackGeo = new THREE.BoxGeometry(GAME.BLOCK_SIZE, GAME.BLOCK_SIZE, GAME.BLOCK_SIZE);
     this._dummy = new THREE.Object3D();
     this._zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+    this._atlasTexture = null;
+    this._atlasMaterial = null;
+    this._atlasGeoCache = new Map();
+  }
+
+  _ensureAtlas() {
+    if (this._atlasTexture) return;
+    this._atlasTexture = new THREE.TextureLoader().load('assets/textures/kenney_tiles.png', (tex) => {
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestMipmapNearestFilter;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.generateMipmaps = true;
+    });
+    this._atlasMaterial = new THREE.MeshStandardMaterial({
+      map: this._atlasTexture,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+  }
+
+  _getAtlasGeometry(typeKey, overrideTileIdx = null) {
+    const topTileIdx = overrideTileIdx ?? getBlockFaceTileIndex(typeKey, FACE_KIND.top);
+    const sideTileIdx = overrideTileIdx ?? getBlockFaceTileIndex(typeKey, FACE_KIND.side);
+    const bottomTileIdx = overrideTileIdx ?? getBlockFaceTileIndex(typeKey, FACE_KIND.bottom);
+    const cacheKey = `${topTileIdx}:${sideTileIdx}:${bottomTileIdx}`;
+    if (this._atlasGeoCache.has(cacheKey)) return this._atlasGeoCache.get(cacheKey);
+
+    const geo = new THREE.BoxGeometry(GAME.BLOCK_SIZE, GAME.BLOCK_SIZE, GAME.BLOCK_SIZE);
+    const uv = geo.attributes.uv;
+    const normal = geo.attributes.normal;
+    for (let i = 0; i < uv.count; i++) {
+      const ny = normal.getY(i);
+      const tileIdx = ny > 0.5 ? topTileIdx : ny < -0.5 ? bottomTileIdx : sideTileIdx;
+      const rect = TILES[tileIdx] || TILES[sideTileIdx];
+      const u = uv.getX(i);
+      const v = uv.getY(i);
+      uv.setXY(i, u * rect.w + rect.x, v * rect.h + rect.y);
+    }
+    geo.scale(BLOCK_VISUAL_SCALE, BLOCK_VISUAL_SCALE, BLOCK_VISUAL_SCALE);
+    this._atlasGeoCache.set(cacheKey, geo);
+    return geo;
   }
 
   async preloadTypes(typeKeys) {
@@ -40,6 +87,17 @@ export class BlockInstancer {
     const def = BLOCK_TYPES[typeKey] || BLOCK_TYPES.stone;
     let geometry = null;
     let material = null;
+
+    // Use Kenney atlas cube if a tile mapping exists
+    const tileIdx = def.kenneyTile != null ? def.kenneyTile : getBlockFaceTileIndex(typeKey, FACE_KIND.side);
+    if (tileIdx >= 0 && TILES[tileIdx]) {
+      this._ensureAtlas();
+      geometry = this._getAtlasGeometry(typeKey, def.kenneyTile ?? null);
+      material = this._atlasMaterial;
+      const result = { geometry, material };
+      this._typeCache.set(typeKey, result);
+      return result;
+    }
 
     if (def.model) {
       try {
@@ -230,11 +288,16 @@ export class BlockInstancer {
   clear() {
     for (const chunk of this.chunks.values()) {
       for (const batch of chunk.batches.values()) {
-        batch.mesh.geometry.dispose();
-        if (Array.isArray(batch.mesh.material)) {
-          batch.mesh.material.forEach(m => m.dispose());
-        } else {
-          batch.mesh.material.dispose();
+        const geo = batch.mesh.geometry;
+        const mat = batch.mesh.material;
+        // Skip disposal for shared atlas geometries
+        const isSharedGeo = Array.from(this._atlasGeoCache.values()).includes(geo);
+        if (!isSharedGeo) geo.dispose();
+        // Skip disposal for shared atlas material
+        if (Array.isArray(mat)) {
+          mat.forEach(m => { if (m !== this._atlasMaterial) m.dispose(); });
+        } else if (mat !== this._atlasMaterial) {
+          mat.dispose();
         }
       }
       this.scene.remove(chunk.group);

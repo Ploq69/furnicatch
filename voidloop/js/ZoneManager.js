@@ -72,16 +72,7 @@ export class ZoneManager {
     const previousZoneId = this.getPreviousZoneId(zoneId);
 
     if (previousZoneId && !this.isZoneCompleted(previousZoneId)) {
-      missing.push({ type: 'complete', item: previousZoneId, label: '✅' });
-    }
-    if (zone.pickaxeId && !inventory.isEquipped(zone.pickaxeId)) {
-      missing.push({ type: 'pickaxe', item: zone.pickaxeId, label: '⛏️' });
-    }
-    if (zone.suitId && !inventory.isEquipped(zone.suitId)) {
-      missing.push({ type: 'suit', item: zone.suitId, label: '🛡️' });
-    }
-    if (zone.staffId && !inventory.isEquipped(zone.staffId)) {
-      missing.push({ type: 'weapon', item: zone.staffId, label: '🔱' });
+      missing.push({ type: 'complete', item: previousZoneId, label: 'ABC' });
     }
 
     return { allowed: missing.length === 0, missing };

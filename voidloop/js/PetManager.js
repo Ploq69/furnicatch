@@ -96,6 +96,31 @@ export class PetManager {
     };
   }
 
+  recordMastery(letter, masteryState) {
+    const pet = this.getPet(letter);
+    if (!pet || !masteryState) {
+      return { unlocked: false, wasUnlocked: false, levelUp: false, oldLevel: 1, newLevel: 1 };
+    }
+
+    const wasUnlocked = pet.unlocked;
+    const oldLevel = pet.level;
+    pet.unlocked = (masteryState.correctAnswers || 0) > 0;
+    pet.level = masteryState.level || 1;
+    pet.captures = masteryState.xp || 0;
+    pet.spellingsCorrect = masteryState.correctAnswers || 0;
+    pet.spellingsAttempted = masteryState.attempts || 0;
+    this._save();
+
+    return {
+      unlocked: pet.unlocked,
+      wasUnlocked,
+      levelUp: pet.level > oldLevel,
+      oldLevel,
+      newLevel: pet.level,
+      letter: pet.letter,
+    };
+  }
+
   /**
    * Get unlock progress for a letter.
    * @param {string} letter

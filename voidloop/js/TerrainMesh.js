@@ -7,9 +7,8 @@
  */
 
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BLOCK_TYPES } from './constants.js';
-import { assetLoader } from './AssetLoader.js';
+import { getTerrainTileIndex, buildAtlasRectArray } from './KenneyAtlas.js';
+import { UnifiedTerrainRenderer } from './UnifiedTerrainRenderer.js';
 
 const ISO_LEVEL = 0;
 const CHUNK_SIZE = 8;
@@ -17,19 +16,21 @@ const TERRAIN_MIN_Y = -150;
 const TERRAIN_MAX_Y = 10;
 const SURFACE_Y = 2;
 const CELL_SIZE = 1;
-const MAX_REBUILDS_PER_FRAME = 2;
+const MAX_REBUILDS_PER_FRAME = 4;
 const REBUILD_TIME_BUDGET_MS = 2.5;
-const STREAM_BUILD_LIMIT_PER_FRAME = 2;
-const LIVE_CHUNK_CAP = 220;
-const CHUNK_UNLOAD_IDLE_MS = 4500;
-const ISO_VISIBLE_CHUNK_BUDGET = 72;
-const FP_VISIBLE_CHUNK_BUDGET = 42;
-const FP_HOT_CHUNK_BUDGET = 64;
+const STREAM_BUILD_LIMIT_PER_FRAME = 6;
+const LIVE_CHUNK_CAP = 520;
+const CHUNK_UNLOAD_IDLE_MS = 6000;
+const ISO_VISIBLE_CHUNK_BUDGET = 80;
+const FP_VISIBLE_CHUNK_BUDGET = 260;
+const FP_HOT_CHUNK_BUDGET = 320;
+const TP_CHUNK_RADIUS = 7;
 const VISIBILITY_MIN_INTERVAL_MS = 180;
 const TP_VISIBILITY_MIN_INTERVAL_MS = 260;
 const MAX_TEXTURE_TILE_SPAN = 8;
 const CHUNK_RADIUS = Math.sqrt(3) * CHUNK_SIZE * 0.5;
 const FACE_KEY_MULTIPLIER = 4;
+const UNIFIED_VERTEX_STRIDE_FLOATS = 14;
 const FACE_KIND = {
   top: 0,
   side: 1,
@@ -75,15 +76,6 @@ const ZONE_SURFACE_PROFILES = {
 
 // Atlas UV regions extracted from KayKit BlockBits gltf models
 // x=u, y=v, z=width, w=height
-
-const FACE_NORMALS = {
-  px: [1, 0, 0],
-  nx: [-1, 0, 0],
-  py: [0, 1, 0],
-  ny: [0, -1, 0],
-  pz: [0, 0, 1],
-  nz: [0, 0, -1],
-};
 
 function zoneContains(zone, x, z) {
   const b = zone.bounds;
@@ -133,9 +125,13 @@ function fbmNoise(x, z, seed, octaves = 4) {
 }
 
 export class TerrainMesh {
-  constructor(scene) {
+  constructor(scene, renderer = null) {
     this.scene = scene;
-    this.material = null;
+    this.renderer = renderer;
+    this.unifiedRenderer = null;
+    this.tileAtlas = null;
+    this.atlasRects = null;
+    this.collisionMaterial = new THREE.MeshBasicMaterial({ visible: false });
     this.zones = new Map();
     this.chunks = new Map();
     this.emptyChunkKeys = new Set();
@@ -169,19 +165,36 @@ export class TerrainMesh {
       ceilingY: 2,
       amount: 0,
     };
-    this._blockGeoCache = new Map();
-    this._blockMatCache = new Map();
-    this._blockLoadPromises = new Map();
-    this._dummy = new THREE.Object3D();
+    this._columnBounds = new Map(); // key -> { minY, maxY }
   }
 
   async preloadTypes() {
-    if (!this.material) {
-      this.material = this._createKayKitStyleMaterial();
+    if (this.unifiedRenderer) return;
+    const loader = new THREE.TextureLoader();
+    this.tileAtlas = loader.load('assets/textures/kenney_tiles.png', (tex) => {
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestMipmapNearestFilter;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.generateMipmaps = true;
+      if (this.unifiedRenderer) {
+        this.unifiedRenderer.setAtlasTexture(tex);
+      }
+    });
+    this.atlasRects = buildAtlasRectArray();
+
+    if (!this.renderer) {
+      throw new Error('[TerrainMesh] Unified terrain renderer requires the THREE.WebGLRenderer instance.');
     }
-    // Preload all terrain block geometries for instanced rendering
-    const terrainTypeKeys = Object.keys(TERRAIN_MATERIAL_IDS);
-    await Promise.all(terrainTypeKeys.map(t => this._getBlockGeoMat(t)));
+
+    const gl = this.renderer.getContext();
+    if (!gl || typeof WebGL2RenderingContext === 'undefined' || !(gl instanceof WebGL2RenderingContext)) {
+      throw new Error('[TerrainMesh] Unified terrain renderer requires WebGL2.');
+    }
+
+    this.unifiedRenderer = new UnifiedTerrainRenderer(this.renderer);
+    this.unifiedRenderer.setAtlasTexture(this.tileAtlas);
+    this.unifiedRenderer.setAtlasRects(this.atlasRects);
+    this.unifiedRenderer.setLightDir(0.35, 0.85, 0.32);
   }
 
   addZone(zone, seed = 1) {
@@ -226,7 +239,6 @@ export class TerrainMesh {
   update(options = {}) {
     const now = this._nowMs();
     const start = now;
-    // Shader time update removed — instanced blocks use MeshStandardMaterial
     const playerPos = options.playerPos || this._lastPlayerPos;
     let rebuilt = 0;
     if (this.dirtyChunks.length > 1) {
@@ -278,42 +290,36 @@ export class TerrainMesh {
   }
 
   setRenderMode(cameraMode = 'iso', quality = 1) {
-    // Instanced blocks use MeshStandardMaterial which handles both modes naturally
-    if (!this.material?.uniforms) return;
-    this.material.uniforms.renderMode.value = cameraMode === 'thirdPerson' ? 1 : 0;
-    this.material.uniforms.shaderQuality.value = clamp(quality, 0.5, 1);
+    if (!this.unifiedRenderer) return;
+    this.unifiedRenderer.setRenderMode(cameraMode);
+    this.unifiedRenderer.setShaderQuality(clamp(quality, 0.5, 1));
+  }
+
+  setFog(options = {}) {
+    this.unifiedRenderer?.setFog(options);
+  }
+
+  render(camera) {
+    if (!this.unifiedRenderer) return;
+    this.unifiedRenderer.setTime(performance.now() * 0.001);
+    this.unifiedRenderer.render(camera, this.visibleChunkKeys);
   }
 
   getNearbyMeshes(position, radius = 42) {
     const out = [];
     const r2 = radius * radius;
     for (const chunk of this.chunks.values()) {
-      if (!chunk.mesh) continue;
+      if (!chunk.raycastMesh) continue;
       const dx = chunk.centerX - position.x;
       const dy = chunk.centerY - position.y;
       const dz = chunk.centerZ - position.z;
       const distSq = dx * dx + dy * dy + dz * dz;
-      const visible = (chunk.mesh.visible || chunk.hot || distSq < 12 * 12);
+      const visible = chunk.hot || distSq < 12 * 12 || this.visibleChunkKeys.has(this._chunkKey(chunk.cx, chunk.cy, chunk.cz));
       if (distSq <= r2 && visible) {
-        if (chunk.mesh.isGroup) {
-          chunk.mesh.traverse((c) => { if (c.isMesh) out.push(c); });
-        } else {
-          out.push(chunk.mesh);
-        }
+        out.push(chunk.raycastMesh);
       }
     }
     return out;
-  }
-
-  setVisibleAround(position, radius = 58) {
-    const r2 = radius * radius;
-    for (const chunk of this.chunks.values()) {
-      if (!chunk.mesh) continue;
-      const dx = chunk.centerX - position.x;
-      const dy = chunk.centerY - position.y;
-      const dz = chunk.centerZ - position.z;
-      chunk.mesh.visible = dx * dx + dy * dy + dz * dz <= r2;
-    }
   }
 
   updateVisibility(position, options = {}) {
@@ -349,17 +355,15 @@ export class TerrainMesh {
     let visibleLive = 0;
     for (const key of this.visibleChunkKeys) {
       const chunk = this.ensureChunkMesh(key, now);
-      if (!chunk?.mesh) continue;
-      chunk.mesh.visible = true;
+      if (!chunk?.raycastMesh) continue;
       chunk.lastVisibleAt = now;
       chunk.hot = this.hotChunkKeys.has(key);
       visibleLive++;
     }
 
     for (const [key, chunk] of this.chunks) {
-      if (!chunk.mesh) continue;
+      if (!chunk.raycastMesh) continue;
       if (this.visibleChunkKeys.has(key)) continue;
-      chunk.mesh.visible = false;
       chunk.hot = this.hotChunkKeys.has(key);
     }
 
@@ -376,7 +380,8 @@ export class TerrainMesh {
 
   ensureChunkMesh(key, now = this._nowMs()) {
     const existing = this.chunks.get(key);
-    if (existing?.mesh) {
+    if (existing?.raycastMesh) {
+      this._ensureUnifiedSlotForChunk(existing);
       existing.lastTouchedAt = now;
       return existing;
     }
@@ -394,11 +399,6 @@ export class TerrainMesh {
     return chunk || null;
   }
 
-  hideChunkMesh(key) {
-    const chunk = this.chunks.get(key);
-    if (chunk?.mesh) chunk.mesh.visible = false;
-  }
-
   getChunkKeyForPoint(position) {
     return this._chunkKeyForPoint(position);
   }
@@ -406,7 +406,7 @@ export class TerrainMesh {
   unloadColdChunks(now = this._nowMs()) {
     const removable = [];
     for (const [key, chunk] of this.chunks) {
-      if (!chunk?.mesh || chunk.mesh.visible || chunk.hot) continue;
+      if (!chunk?.raycastMesh || this.visibleChunkKeys.has(key) || chunk.hot) continue;
       const idleMs = now - (chunk.lastVisibleAt || 0);
       if (idleMs >= CHUNK_UNLOAD_IDLE_MS || this.chunks.size > LIVE_CHUNK_CAP) {
         removable.push({ key, idleMs, distSq: this._chunkDistanceSqToPoint(key, this._lastPlayerPos) });
@@ -435,23 +435,16 @@ export class TerrainMesh {
         this.cutaway.forward.set(Math.SQRT1_2, Math.SQRT1_2);
       }
     }
-    // Update shared block materials (instanced rendering)
-    for (const mat of this._blockMatCache.values()) {
-      mat.cutawayCenter.copy(this.cutaway.center);
-      mat.cutawayForward.copy(this.cutaway.forward);
-      mat.cutawayAmount = this.cutaway.amount;
-      mat.cutawayRadius = this.cutaway.radius;
-      mat.cutawayReach = this.cutaway.reach;
-      mat.cutawayCeilingY = this.cutaway.ceilingY;
+    if (this.unifiedRenderer) {
+      this.unifiedRenderer.setCutaway(
+        this.cutaway.center,
+        this.cutaway.forward,
+        this.cutaway.radius,
+        this.cutaway.reach,
+        this.cutaway.ceilingY,
+        this.cutaway.amount
+      );
     }
-    // Update legacy shader material
-    if (!this.material?.uniforms) return;
-    this.material.uniforms.cutawayCenter.value.copy(this.cutaway.center);
-    this.material.uniforms.cutawayForward.value.copy(this.cutaway.forward);
-    this.material.uniforms.cutawayAmount.value = this.cutaway.amount;
-    this.material.uniforms.cutawayRadius.value = this.cutaway.radius;
-    this.material.uniforms.cutawayReach.value = this.cutaway.reach;
-    this.material.uniforms.cutawayCeilingY.value = this.cutaway.ceilingY;
   }
 
   _computeVisibleChunkKeys(position, cameraMode, budget) {
@@ -467,7 +460,7 @@ export class TerrainMesh {
     const visibleKeys = new Set();
     const hotKeys = new Set();
     const candidates = [];
-    const radiusChunks = 4;
+    const radiusChunks = TP_CHUNK_RADIUS;
 
     for (let dx = -radiusChunks; dx <= radiusChunks; dx++) {
       for (let dy = -2; dy <= 1; dy++) {
@@ -778,6 +771,11 @@ export class TerrainMesh {
     if (removedCells > 0) {
       this.revision++;
       this.queueDirtyChunks(touched);
+      // Invalidate column bounds for touched chunks
+      for (const key of touched) {
+        const c = this._parseChunkKey(key);
+        if (c) this._columnBounds.delete(this._columnBoundsKey(c.cx, c.cz));
+      }
     }
 
     return {
@@ -919,6 +917,7 @@ export class TerrainMesh {
   }
 
   getStats() {
+    const ustats = this.unifiedRenderer ? this.unifiedRenderer.stats : null;
     return {
       blocks: this.modifiedDensities.size,
       chunks: this.stats.chunks,
@@ -930,6 +929,9 @@ export class TerrainMesh {
       liveChunks: this.visibilityStats.live || this.chunks.size,
       rebuildMs: this.visibilityStats.rebuildMs || 0,
       streamedChunks: this.visibilityStats.streamed || 0,
+      unifiedDrawCalls: ustats?.drawCalls ?? 0,
+      unifiedVisibleChunks: ustats?.visibleChunks ?? 0,
+      unifiedSlotUtilization: ustats?.slotUtilization ?? 0,
     };
   }
 
@@ -1027,6 +1029,10 @@ export class TerrainMesh {
     return `${cx},${cy},${cz}`;
   }
 
+  _columnBoundsKey(cx, cz) {
+    return `${cx},${cz}`;
+  }
+
   _nowMs() {
     return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
   }
@@ -1074,19 +1080,10 @@ export class TerrainMesh {
 
   _rebuildChunk(cx, cy, cz) {
     const key = this._chunkKey(cx, cy, cz);
-    const existing = this.chunks.get(key);
-    if (existing?.mesh) {
-      this.scene.remove(existing.mesh);
-      if (existing.mesh.geometry) {
-        existing.mesh.geometry.dispose();
-      } else if (existing.mesh.traverse) {
-        existing.mesh.traverse((c) => { if (c.isMesh && c.geometry) c.geometry.dispose(); });
-      }
-      this.chunks.delete(key);
-    }
+    this._disposeChunkMesh(key);
 
-    const group = this._buildChunkInstances(cx, cy, cz);
-    if (!group) {
+    const geometry = this._buildChunkGeometry(cx, cy, cz);
+    if (!geometry) {
       this.emptyChunkKeys.add(key);
       return;
     }
@@ -1096,10 +1093,17 @@ export class TerrainMesh {
     const y0 = cy * CHUNK_SIZE;
     const z0 = cz * CHUNK_SIZE;
     const now = this._nowMs();
-    group.visible = this.visibleChunkKeys.size === 0 || this.visibleChunkKeys.has(key);
-    this.scene.add(group);
+
+    this._uploadChunkGeometryToUnifiedRenderer(cx, cy, cz, geometry);
+
+    const raycastMesh = new THREE.Mesh(geometry, this.collisionMaterial);
+    raycastMesh.name = `terrain_chunk_${key}`;
+    raycastMesh.castShadow = false;
+    raycastMesh.receiveShadow = false;
+    raycastMesh.visible = true;
+    this.scene.add(raycastMesh);
+
     this.chunks.set(key, {
-      mesh: group,
       cx,
       cy,
       cz,
@@ -1109,138 +1113,54 @@ export class TerrainMesh {
       lastVisibleAt: now,
       lastTouchedAt: now,
       hot: false,
+      raycastMesh,
     });
   }
 
-  async _getBlockGeoMat(typeKey) {
-    if (this._blockGeoCache.has(typeKey)) {
-      return { geometry: this._blockGeoCache.get(typeKey), material: this._blockMatCache.get(typeKey) };
-    }
-    if (this._blockLoadPromises.has(typeKey)) {
-      return this._blockLoadPromises.get(typeKey);
-    }
-    const promise = this._loadBlockGeoMat(typeKey);
-    this._blockLoadPromises.set(typeKey, promise);
-    return promise;
+  _ensureUnifiedSlotForChunk(chunk) {
+    if (!this.unifiedRenderer || !chunk?.raycastMesh?.geometry) return;
+    if (this.unifiedRenderer.hasReadySlot(chunk.cx, chunk.cy, chunk.cz)) return;
+    this._uploadChunkGeometryToUnifiedRenderer(chunk.cx, chunk.cy, chunk.cz, chunk.raycastMesh.geometry);
   }
 
-  async _loadBlockGeoMat(typeKey) {
-    const def = BLOCK_TYPES[typeKey] || BLOCK_TYPES.stone;
-    let geometry = null;
-    let material = null;
-    if (def?.model) {
-      try {
-        const gltf = await assetLoader.loadGLTF(def.model);
-        const geometries = [];
-        gltf.scene.updateMatrixWorld(true);
-        gltf.scene.traverse((c) => {
-          if (c.isMesh && c.geometry) {
-            const clone = c.geometry.clone();
-            clone.applyMatrix4(c.matrixWorld);
-            geometries.push(clone);
-            if (!material) {
-              material = Array.isArray(c.material) ? c.material[0] : c.material;
-            }
-          }
-        });
-        if (geometries.length === 1) {
-          geometry = geometries[0];
-        } else if (geometries.length > 1) {
-          geometry = mergeGeometries(geometries);
-          for (const g of geometries) g.dispose();
-        }
-        if (geometry) {
-          geometry.scale(0.5, 0.5, 0.5);
-        }
-        if (material) {
-          material = material.clone();
-          this._injectCutawayShader(material);
-        }
-      } catch (e) {
-        console.warn('[TerrainMesh] Failed to load block geo/mat for', typeKey, e);
-      }
+  _uploadChunkGeometryToUnifiedRenderer(cx, cy, cz, geometry) {
+    if (!this.unifiedRenderer || !geometry) return false;
+    const slotIndex = this.unifiedRenderer.acquireSlot(cx, cy, cz);
+    if (slotIndex < 0) return false;
+
+    const indices = geometry.index ? geometry.index.array : null;
+    const pos = geometry.attributes.position.array;
+    const col = geometry.attributes.color.array;
+    const norm = geometry.attributes.normal.array;
+    const uv = geometry.attributes.uv.array;
+    const matId = geometry.attributes.materialId.array;
+    const face = geometry.attributes.faceKind.array;
+    const tile = geometry.attributes.tileIndex.array;
+    const triCount = indices ? indices.length : pos.length / 3;
+    const packed = new Float32Array(triCount * UNIFIED_VERTEX_STRIDE_FLOATS);
+    for (let i = 0; i < triCount; i++) {
+      const vi = indices ? indices[i] : i;
+      const dst = i * UNIFIED_VERTEX_STRIDE_FLOATS;
+      packed[dst + 0] = pos[vi * 3 + 0];
+      packed[dst + 1] = pos[vi * 3 + 1];
+      packed[dst + 2] = pos[vi * 3 + 2];
+      packed[dst + 3] = col[vi * 3 + 0];
+      packed[dst + 4] = col[vi * 3 + 1];
+      packed[dst + 5] = col[vi * 3 + 2];
+      packed[dst + 6] = norm[vi * 3 + 0];
+      packed[dst + 7] = norm[vi * 3 + 1];
+      packed[dst + 8] = norm[vi * 3 + 2];
+      packed[dst + 9] = uv[vi * 2 + 0];
+      packed[dst + 10] = uv[vi * 2 + 1];
+      packed[dst + 11] = matId[vi];
+      packed[dst + 12] = face[vi];
+      packed[dst + 13] = tile[vi];
     }
-    if (!material) {
-      material = new THREE.MeshStandardMaterial({ color: def.color || 0x888888, roughness: 0.8, metalness: 0.1 });
-      this._injectCutawayShader(material);
-    }
-    this._blockGeoCache.set(typeKey, geometry);
-    this._blockMatCache.set(typeKey, material);
-    return { geometry, material };
+    this.unifiedRenderer.uploadSlot(slotIndex, packed);
+    return true;
   }
 
-  _injectCutawayShader(material) {
-    material.cutawayCenter = new THREE.Vector3();
-    material.cutawayForward = new THREE.Vector2(Math.SQRT1_2, Math.SQRT1_2);
-    material.cutawayRadius = 9;
-    material.cutawayReach = 0;
-    material.cutawayCeilingY = 2;
-    material.cutawayAmount = 0;
-
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.cutawayCenter = { value: material.cutawayCenter };
-      shader.uniforms.cutawayForward = { value: material.cutawayForward };
-      shader.uniforms.cutawayRadius = { value: material.cutawayRadius };
-      shader.uniforms.cutawayReach = { value: material.cutawayReach };
-      shader.uniforms.cutawayCeilingY = { value: material.cutawayCeilingY };
-      shader.uniforms.cutawayAmount = { value: material.cutawayAmount };
-
-      shader.vertexShader = shader.vertexShader.replace(
-        '#include <common>',
-        `#include <common>\nvarying vec3 vWorldPos;`
-      );
-      shader.vertexShader = shader.vertexShader.replace(
-        '#include <worldpos_vertex>',
-        `#include <worldpos_vertex>\nvWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
-      );
-
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <common>',
-        `#include <common>\nvarying vec3 vWorldPos;\nuniform vec3 cutawayCenter;\nuniform vec2 cutawayForward;\nuniform float cutawayRadius;\nuniform float cutawayReach;\nuniform float cutawayCeilingY;\nuniform float cutawayAmount;`
-      );
-
-      const cutawayCode = `
-        vec2 toPoint = vWorldPos.xz - cutawayCenter.xz;
-        float corridorT = clamp(dot(toPoint, normalize(cutawayForward)), 0.0, cutawayReach);
-        vec2 nearest = cutawayCenter.xz + normalize(cutawayForward) * corridorT;
-        float horizontalDist = distance(vWorldPos.xz, nearest);
-        float corridorBoost = smoothstep(0.0, max(0.001, cutawayReach), corridorT) * 1.5;
-        float localRadius = cutawayRadius + corridorBoost;
-        float radialMask = 1.0 - smoothstep(localRadius * 0.82, localRadius, horizontalDist);
-        float heightMask = smoothstep(cutawayCeilingY - 0.10, cutawayCeilingY + 0.30, vWorldPos.y);
-        float cutMask = clamp(radialMask * heightMask * cutawayAmount, 0.0, 1.0);
-        if (cutMask > 0.42) discard;
-      `;
-
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <output_fragment>',
-        `${cutawayCode}\n#include <output_fragment>`
-      );
-    };
-  }
-
-  _typeKeyForCell(x, y, z) {
-    const zoneEntry = this._findZoneEntry(x + 0.5, z + 0.5);
-    if (!zoneEntry) return 'stone';
-
-    const { zone } = zoneEntry;
-    const types = zone.blockTypes || [];
-    const surface = this._surfaceHeightAt(x + 0.5, z + 0.5, zoneEntry);
-    const depth = Math.max(0, surface - (y + 0.5));
-    const isTopmost = !this.isCellSolid(x, y + 1, z);
-
-    if (isTopmost) {
-      return types[0] || 'grass';
-    } else if (depth < 4.5) {
-      return types[1] || types[0] || 'dirt';
-    } else if (depth < 14) {
-      return types[2] || 'stone';
-    } else {
-      return types[3] || 'stone_dark';
-    }
-  }
-
-  _buildChunkInstances(cx, cy, cz) {
+  _buildChunkGeometry(cx, cy, cz) {
     const x0 = cx * CHUNK_SIZE;
     const y0 = cy * CHUNK_SIZE;
     const z0 = cz * CHUNK_SIZE;
@@ -1248,282 +1168,229 @@ export class TerrainMesh {
     const y1 = y0 + CHUNK_SIZE;
     const z1 = z0 + CHUNK_SIZE;
 
-    const cellsByType = new Map();
-
-    for (let x = x0; x < x1; x++) {
-      for (let y = y0; y < y1; y++) {
+    // Column bounds: skip empty vertical slices without assuming the first
+    // rebuilt y-slice represents the whole column.
+    const boundsKey = this._columnBoundsKey(cx, cz);
+    let bounds = this._columnBounds.get(boundsKey);
+    if (!bounds) {
+      let minY = TERRAIN_MAX_Y;
+      let maxY = TERRAIN_MIN_Y;
+      for (let x = x0; x < x1; x++) {
         for (let z = z0; z < z1; z++) {
-          if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
-          if (!this.isCellSolid(x, y, z)) continue;
-
-          const exposed = !this.isCellSolid(x + 1, y, z) ||
-                          !this.isCellSolid(x - 1, y, z) ||
-                          !this.isCellSolid(x, y + 1, z) ||
-                          !this.isCellSolid(x, y - 1, z) ||
-                          !this.isCellSolid(x, y, z + 1) ||
-                          !this.isCellSolid(x, y, z - 1);
-          if (!exposed) continue;
-
-          const typeKey = this._typeKeyForCell(x, y, z);
-          if (!cellsByType.has(typeKey)) cellsByType.set(typeKey, []);
-          cellsByType.get(typeKey).push({ x, y, z });
-        }
-      }
-    }
-
-    if (cellsByType.size === 0) return null;
-
-    const group = new THREE.Group();
-    group.name = `terrain_chunk_${cx},${cy},${cz}`;
-
-    for (const [typeKey, cells] of cellsByType) {
-      const cachedGeo = this._blockGeoCache.get(typeKey);
-      const cachedMat = this._blockMatCache.get(typeKey);
-      if (!cachedGeo) continue;
-
-      const mesh = new THREE.InstancedMesh(cachedGeo, cachedMat, cells.length);
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      mesh.name = `terrain_${typeKey}`;
-
-      for (let i = 0; i < cells.length; i++) {
-        const c = cells[i];
-        this._dummy.position.set(c.x + 0.5, c.y + 0.5, c.z + 0.5);
-        this._dummy.rotation.set(0, 0, 0);
-        this._dummy.scale.set(1, 1, 1);
-        this._dummy.updateMatrix();
-        mesh.setMatrixAt(i, this._dummy.matrix);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-      group.add(mesh);
-    }
-
-    return group;
-  }
-
-  _createKayKitStyleMaterial() {
-    return new THREE.ShaderMaterial({
-      vertexColors: true,
-      side: THREE.FrontSide,
-      transparent: false,
-      depthWrite: true,
-      uniforms: {
-        time: { value: 0 },
-        renderMode: { value: 0 },
-        shaderQuality: { value: 1 },
-        lightDir: { value: new THREE.Vector3(0.35, 0.85, 0.32).normalize() },
-        cutawayCenter: { value: this.cutaway.center.clone() },
-        cutawayForward: { value: this.cutaway.forward.clone() },
-        cutawayRadius: { value: this.cutaway.radius },
-        cutawayReach: { value: this.cutaway.reach },
-        cutawayCeilingY: { value: this.cutaway.ceilingY },
-        cutawayAmount: { value: this.cutaway.amount },
-      },
-      vertexShader: `
-        attribute float materialId;
-        attribute float faceKind;
-        varying vec3 vNormal;
-        varying vec2 vUv;
-        varying float vMaterialId;
-        varying float vFaceKind;
-        varying vec3 vWorldPos;
-
-        void main() {
-          vMaterialId = materialId;
-          vFaceKind = faceKind;
-          vNormal = normalize(normalMatrix * normal);
-          vUv = uv;
-          vec4 worldPos = modelMatrix * vec4(position, 1.0);
-          vWorldPos = worldPos.xyz;
-          gl_Position = projectionMatrix * viewMatrix * worldPos;
-        }
-      `,
-      fragmentShader: `
-        uniform float time;
-        uniform float renderMode;
-        uniform float shaderQuality;
-        uniform vec3 lightDir;
-        uniform vec3 cutawayCenter;
-        uniform vec2 cutawayForward;
-        uniform float cutawayRadius;
-        uniform float cutawayReach;
-        uniform float cutawayCeilingY;
-        uniform float cutawayAmount;
-
-        varying vec3 vNormal;
-        varying vec2 vUv;
-        varying float vMaterialId;
-        varying float vFaceKind;
-        varying vec3 vWorldPos;
-
-        float hash(vec2 p) {
-          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-        }
-
-        float noise(vec2 p) {
-          vec2 i = floor(p);
-          vec2 f = fract(p);
-          float a = hash(i);
-          float b = hash(i + vec2(1.0, 0.0));
-          float c = hash(i + vec2(0.0, 1.0));
-          float d = hash(i + vec2(1.0, 1.0));
-          vec2 u = f * f * (3.0 - 2.0 * f);
-          return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-        }
-
-        vec3 getBaseColor(float materialId, vec3 n, vec2 uv) {
-          float m = floor(materialId + 0.5);
-          if (m < 0.5) return n.y > 0.9 ? vec3(0.000, 0.600, 0.349) : vec3(0.667, 0.408, 0.298);
-          if (m < 1.5) return vec3(0.667, 0.408, 0.298);
-          if (m < 2.5) return vec3(0.612, 0.659, 0.682);
-          if (m < 3.5) return vec3(0.290, 0.314, 0.329);
-          if (m < 4.5) return vec3(0.950, 0.210, 0.060);
-          if (m < 5.5) return vec3(0.095, 0.085, 0.080);
-          if (m < 6.5) return vec3(0.580, 0.255, 0.170);
-          if (m < 7.5) return vec3(0.640, 0.890, 1.000);
-          if (m < 8.5) return vec3(0.930, 0.970, 1.000);
-          if (m < 9.5) return vec3(0.180, 0.520, 0.940);
-          if (m < 10.5) return vec3(0.820, 0.635, 0.365);
-          if (m < 11.5) return vec3(0.705, 0.475, 0.245);
-          if (m < 12.5) return vec3(0.760, 0.760, 0.720);
-          if (m < 13.5) return vec3(0.445, 0.535, 0.585);
-          if (m < 14.5) return vec3(0.395, 0.380, 0.360);
-          if (m < 15.5) return vec3(0.475, 0.280, 0.145);
-          if (m < 16.5) return vec3(0.640, 0.310, 0.275);
-          return vec3(0.500, 0.230, 0.185);
-        }
-
-        void main() {
-          vec3 n = normalize(vNormal);
-          vec3 color = getBaseColor(vMaterialId, n, vUv);
-          float materialId = floor(vMaterialId + 0.5);
-          float faceKind = floor(vFaceKind + 0.5);
-          float isTop = 1.0 - step(0.5, abs(faceKind - 0.0));
-          float isIso = 1.0 - step(0.5, renderMode);
-          float viewDist = distance(cameraPosition, vWorldPos);
-          float detailFade = mix(smoothstep(58.0, 18.0, viewDist), 1.0, isIso) * shaderQuality;
-          vec3 viewDir = normalize(cameraPosition - vWorldPos);
-
-          vec2 uv = vUv;
-          vec2 cell = fract(uv);
-          float cellEdge = min(min(cell.x, 1.0 - cell.x), min(cell.y, 1.0 - cell.y));
-          float isoEdgeAccent = isIso * isTop * (1.0 - smoothstep(0.045, 0.115, cellEdge));
-          vec2 macroUv = vWorldPos.xz * 0.36;
-          float macroA = noise(macroUv);
-          float macroB = noise(macroUv * 1.9 + vec2(17.2, -3.1));
-
-          // Procedural texture based on material type
-          if (materialId < 0.5 && isTop > 0.5) {
-            float clump = smoothstep(0.30, 0.72, macroA) - smoothstep(0.78, 0.98, macroB) * 0.45;
-            float stripe = sin((vWorldPos.x + vWorldPos.z) * 2.35 + macroB * 2.0) * 0.5 + 0.5;
-            color = mix(color * 0.78, vec3(0.040, 0.760, 0.405), clamp(clump * 0.75, 0.0, 1.0));
-            color += (stripe - 0.5) * 0.08 * mix(0.45, 1.0, isIso);
-            // Wind micro-wobble on grass tops
-            float wind = sin(vWorldPos.x * 8.0 + time * 1.2) * 0.008 * detailFade;
-            color.g += wind;
-            // Fake subsurface scattering (grass looks softer/backlit)
-            float sss = (1.0 - max(dot(n, normalize(lightDir)), 0.0)) * 0.25;
-            color += vec3(0.04, 0.18, 0.06) * sss * detailFade;
-            // Mossy edge tint
-            float mossTint = isoEdgeAccent * 0.35 * isIso;
-            color = mix(color, vec3(0.22, 0.62, 0.28), mossTint);
-            color *= 1.0 - isoEdgeAccent * 0.18;
-          } else if (materialId < 1.5) {
-            // Dirt: stratified sediment layers + pebble dots
-            float layer = sin(vWorldPos.y * 14.0 + noise(vWorldPos.xz * 3.0) * 2.0);
-            color *= 1.0 + smoothstep(0.35, 0.55, layer) * 0.10 * detailFade;
-            float pebble = smoothstep(0.18, 0.0, length(fract(uv * 5.0) - vec2(0.5))) * step(0.75, hash(floor(uv * 5.0))) * detailFade;
-            float grain = (hash(floor(uv * 10.0)) - 0.5) * 0.05 * detailFade;
-            color += pebble * 0.10 + grain;
-          } else if (materialId < 3.5 || materialId == 5.0 || materialId == 14.0) {
-            // Stone: subtle cracks + spots
-            float crack = abs(noise(uv * 5.0) - noise(uv * 5.0 + vec2(0.05))) * 2.2 * detailFade;
-            float spot = step(0.88, hash(floor(uv * 5.0))) * 0.06 * detailFade;
-            color -= crack * 0.06;
-            color += spot;
-          } else if (materialId == 4.0) {
-            float lavaFlow = noise(vWorldPos.xz * 0.58 + vec2(time * 0.45, -time * 0.18));
-            float plate = sin(vWorldPos.x * 1.45) * sin(vWorldPos.z * 1.35);
-            float vein = smoothstep(0.48, 0.78, lavaFlow + plate * 0.12);
-            color = mix(color, vec3(1.0, 0.65, 0.08), vein * 0.55);
-            color *= 1.0 - isoEdgeAccent * 0.18;
-          } else if (materialId == 6.0 || materialId == 16.0 || materialId == 17.0) {
-            vec2 brick = fract(vec2(uv.x * 2.0 + floor(uv.y) * 0.5, uv.y));
-            float mortar = 1.0 - smoothstep(0.035, 0.055, min(min(brick.x, 1.0 - brick.x), min(brick.y, 1.0 - brick.y)));
-            color = mix(color, color * 0.45, mortar * 0.75 * mix(detailFade, 1.0, isIso * isTop));
-          } else if (materialId == 7.0 || materialId == 8.0) {
-            float crack = abs(noise(vWorldPos.xz * 1.25) - noise(vWorldPos.xz * 1.25 + vec2(0.08))) * 2.4;
-            float sparkle = step(0.965, hash(floor(uv * 8.0))) * 0.10 * detailFade;
-            color += sparkle;
-            color -= crack * (materialId == 7.0 ? 0.070 : 0.035) * mix(detailFade, 1.0, isIso * isTop);
-            color *= 1.0 - isoEdgeAccent * 0.12;
-          } else if (materialId == 10.0 || materialId == 11.0) {
-            float dune = sin((vWorldPos.x + vWorldPos.z * 0.45) * 2.2) * 0.055;
-            float grain = (hash(floor(uv * 12.0)) - 0.5) * 0.045 * detailFade;
-            color += dune + grain;
-            color *= 1.0 - isoEdgeAccent * 0.13;
-          } else if (materialId == 12.0 || materialId == 13.0) {
-            vec2 panel = fract(uv * 0.5);
-            float seam = 1.0 - smoothstep(0.025, 0.05, min(min(panel.x, 1.0 - panel.x), min(panel.y, 1.0 - panel.y)));
-            color = mix(color, color * 0.52, seam * 0.6 * mix(detailFade, 1.0, isIso * isTop));
-            color += step(0.94, hash(floor(uv * 4.0))) * 0.08 * detailFade;
-          } else if (materialId == 15.0) {
-            float ring = sin(uv.y * 7.0 + noise(uv * 2.0) * 2.0) * 0.05 * detailFade;
-            color += ring;
-          } else if (materialId == 9.0) {
-            color = mix(color, vec3(0.45, 0.92, 0.98), noise(uv * 4.0 + time * 0.08) * 0.35 * detailFade);
-          } else {
-            // Deep: very subtle variation
-            float grain = (hash(floor(uv * 6.0)) - 0.5) * 0.04 * detailFade;
-            color += grain;
+          for (let y = TERRAIN_MIN_Y; y <= TERRAIN_MAX_Y; y++) {
+            if (this.isCellSolid(x, y, z)) {
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
           }
-
-          // Hemisphere lighting + diffuse + rim
-          float diff = max(dot(n, normalize(lightDir)), 0.0);
-          float hemi = 0.5 + 0.5 * n.y;
-          vec3 skyColor = vec3(0.32, 0.52, 0.68);
-          vec3 groundColor = vec3(0.10, 0.07, 0.04);
-          vec3 ambient = mix(groundColor, skyColor, hemi);
-          float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.5) * 0.12;
-          vec3 rimColor = vec3(0.55, 0.75, 0.95);
-
-          float sideShade = 1.0 - (1.0 - max(n.y, 0.0)) * 0.15;
-          float topBoost = smoothstep(0.45, 0.95, n.y) * 0.10;
-
-          color = color * (ambient + diff * 0.42) * (sideShade + topBoost) + rimColor * rim;
-
-          // Subtle bevel edge
-          float edgeDist = cellEdge;
-          float bevel = smoothstep(0.0, 0.06, edgeDist);
-          color *= 0.94 + 0.06 * bevel;
-
-          vec2 toPoint = vWorldPos.xz - cutawayCenter.xz;
-          float corridorT = clamp(dot(toPoint, normalize(cutawayForward)), 0.0, cutawayReach);
-          vec2 nearest = cutawayCenter.xz + normalize(cutawayForward) * corridorT;
-          float horizontalDist = distance(vWorldPos.xz, nearest);
-          float corridorBoost = smoothstep(0.0, max(0.001, cutawayReach), corridorT) * 1.5;
-          float localRadius = cutawayRadius + corridorBoost;
-          float radialMask = 1.0 - smoothstep(localRadius * 0.82, localRadius, horizontalDist);
-          float heightMask = smoothstep(cutawayCeilingY - 0.10, cutawayCeilingY + 0.30, vWorldPos.y);
-          float cutMask = clamp(radialMask * heightMask * cutawayAmount, 0.0, 1.0);
-          if (cutMask > 0.42) discard;
-          color = mix(color, color * 0.62, smoothstep(0.10, 0.42, cutMask) * 0.35);
-
-          gl_FragColor = vec4(color, 1.0);
         }
-      `,
-    });
+      }
+      bounds = { minY, maxY };
+      this._columnBounds.set(boundsKey, bounds);
+    }
+    const effectiveY0 = Math.max(y0, bounds.minY);
+    const effectiveY1 = Math.min(y1, bounds.maxY + 1);
+    if (effectiveY0 >= effectiveY1) return null;
+
+    const positions = [];
+    const colors = [];
+    const normals = [];
+    const uvs = [];
+    const materialIds = [];
+    const faceKinds = [];
+    const tileIndices = [];
+    const indices = [];
+
+    this._buildGreedyFaces('px', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('nx', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('py', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('ny', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('pz', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('nz', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+
+    if (positions.length === 0) return null;
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('materialId', new THREE.Float32BufferAttribute(materialIds, 1));
+    geometry.setAttribute('faceKind', new THREE.Float32BufferAttribute(faceKinds, 1));
+    geometry.setAttribute('tileIndex', new THREE.Float32BufferAttribute(tileIndices, 1));
+    geometry.setIndex(indices);
+    geometry.computeBoundingSphere();
+    return geometry;
   }
 
-  _colorForDepth(depth) {
-    return this._colorForBand(this._depthBand(depth));
+  _buildGreedyFaces(dir, x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices) {
+    if (dir === 'px' || dir === 'nx') {
+      const width = z1 - z0;
+      const height = y1 - y0;
+      const mask = new Int16Array(width * height);
+      for (let x = x0; x < x1; x++) {
+        mask.fill(-1);
+        for (let y = y0; y < y1; y++) {
+          if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
+          for (let z = z0; z < z1; z++) {
+            const solid = this.isCellSolid(x, y, z);
+            if (!solid) continue;
+            const neighborSolid = dir === 'px' ? this.isCellSolid(x + 1, y, z) : this.isCellSolid(x - 1, y, z);
+            if (!neighborSolid) mask[(y - y0) * width + (z - z0)] = this._faceKeyForCell(x, y, z, dir);
+          }
+        }
+        this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
+          const zA = z0 + u;
+          const zB = zA + w;
+          const yA = y0 + v;
+          const yB = yA + h;
+          this._pushGreedyQuad(dir, dir === 'px' ? x + 1 : x, yA, zA, dir === 'px' ? x + 1 : x, yB, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+        });
+      }
+      return;
+    }
+
+    if (dir === 'py' || dir === 'ny') {
+      const width = x1 - x0;
+      const height = z1 - z0;
+      const mask = new Int16Array(width * height);
+      for (let y = y0; y < y1; y++) {
+        if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
+        mask.fill(-1);
+        for (let z = z0; z < z1; z++) {
+          for (let x = x0; x < x1; x++) {
+            const solid = this.isCellSolid(x, y, z);
+            if (!solid) continue;
+            const neighborSolid = dir === 'py' ? this.isCellSolid(x, y + 1, z) : this.isCellSolid(x, y - 1, z);
+            if (!neighborSolid) mask[(z - z0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
+          }
+        }
+        this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
+          const xA = x0 + u;
+          const xB = xA + w;
+          const zA = z0 + v;
+          const zB = zA + h;
+          this._pushGreedyQuad(dir, xA, dir === 'py' ? y + 1 : y, zA, xB, dir === 'py' ? y + 1 : y, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+        });
+      }
+      return;
+    }
+
+    const width = x1 - x0;
+    const height = y1 - y0;
+    const mask = new Int16Array(width * height);
+    for (let z = z0; z < z1; z++) {
+      mask.fill(-1);
+      for (let y = y0; y < y1; y++) {
+        if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
+        for (let x = x0; x < x1; x++) {
+          const solid = this.isCellSolid(x, y, z);
+          if (!solid) continue;
+          const neighborSolid = dir === 'pz' ? this.isCellSolid(x, y, z + 1) : this.isCellSolid(x, y, z - 1);
+          if (!neighborSolid) mask[(y - y0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
+        }
+      }
+      this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
+        const xA = x0 + u;
+        const xB = xA + w;
+        const yA = y0 + v;
+        const yB = yA + h;
+        this._pushGreedyQuad(dir, xA, yA, dir === 'pz' ? z + 1 : z, xB, yB, dir === 'pz' ? z + 1 : z, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+      });
+    }
   }
 
-  _depthBand(depth) {
-    if (depth < 1) return 0;
-    if (depth < 5) return 1;
-    if (depth < 14) return 2;
-    return 3;
+  _greedyMask(mask, width, height, emit) {
+    for (let v = 0; v < height; v++) {
+      for (let u = 0; u < width; u++) {
+        const band = mask[v * width + u];
+        if (band < 0) continue;
+
+        let w = 1;
+        while (u + w < width && w < MAX_TEXTURE_TILE_SPAN && mask[v * width + u + w] === band) w++;
+
+        let h = 1;
+        outer:
+        while (v + h < height && h < MAX_TEXTURE_TILE_SPAN) {
+          for (let i = 0; i < w; i++) {
+            if (mask[(v + h) * width + u + i] !== band) break outer;
+          }
+          h++;
+        }
+
+        emit(u, v, w, h, band);
+        for (let yy = 0; yy < h; yy++) {
+          for (let xx = 0; xx < w; xx++) {
+            mask[(v + yy) * width + u + xx] = -1;
+          }
+        }
+      }
+    }
+  }
+
+  _pushGreedyQuad(dir, x0, y0, z0, x1, y1, z1, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices) {
+    const base = positions.length / 3;
+    const materialId = Math.floor(faceKey / FACE_KEY_MULTIPLIER);
+    const faceKind = faceKey % FACE_KEY_MULTIPLIER;
+    const tileIndex = getTerrainTileIndex(materialId, faceKind);
+    const color = this._colorForMaterialId(materialId);
+    let normal;
+    let corners;
+    switch (dir) {
+      case 'px':
+        normal = [1, 0, 0];
+        corners = [[x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1]];
+        break;
+      case 'nx':
+        normal = [-1, 0, 0];
+        corners = [[x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0]];
+        break;
+      case 'py':
+        normal = [0, 1, 0];
+        corners = [[x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x0, y0, z0]];
+        break;
+      case 'ny':
+        normal = [0, -1, 0];
+        corners = [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]];
+        break;
+      case 'pz':
+        normal = [0, 0, 1];
+        corners = [[x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z0]];
+        break;
+      default:
+        normal = [0, 0, -1];
+        corners = [[x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]];
+        break;
+    }
+
+    for (const c of corners) {
+      positions.push(c[0] * CELL_SIZE, c[1] * CELL_SIZE, c[2] * CELL_SIZE);
+      colors.push(color.r, color.g, color.b);
+      normals.push(normal[0], normal[1], normal[2]);
+      let u, v;
+      switch (dir) {
+        case 'px':
+        case 'nx':
+          u = c[2];
+          v = c[1];
+          break;
+        case 'py':
+        case 'ny':
+          u = c[0];
+          v = c[2];
+          break;
+        case 'pz':
+        case 'nz':
+          u = c[0];
+          v = c[1];
+          break;
+      }
+      uvs.push(u, v);
+      materialIds.push(materialId);
+      faceKinds.push(faceKind);
+      tileIndices.push(tileIndex);
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
 
   _faceKeyForCell(x, y, z, dir) {
@@ -1544,7 +1411,7 @@ export class TerrainMesh {
     const depth = Math.max(0, surface - (y + 0.5));
     let typeKey;
 
-    if (dir === 'py') {
+    if (dir === 'py' || depth < 1.25) {
       typeKey = types[0] || 'grass';
     } else if (depth < 4.5) {
       typeKey = types[1] || types[0] || 'dirt';
@@ -1555,13 +1422,6 @@ export class TerrainMesh {
     }
 
     return TERRAIN_MATERIAL_IDS[typeKey] ?? TERRAIN_MATERIAL_IDS.dirt;
-  }
-
-  _colorForBand(band) {
-    if (band === 0) return TERRAIN_COLORS.surface;
-    if (band === 1) return TERRAIN_COLORS.dirt;
-    if (band === 2) return TERRAIN_COLORS.stone;
-    return TERRAIN_COLORS.deep;
   }
 
   _colorForMaterialId(materialId) {
@@ -1582,42 +1442,38 @@ export class TerrainMesh {
 
   _clearChunks() {
     for (const chunk of this.chunks.values()) {
-      if (chunk.mesh) {
-        this.scene.remove(chunk.mesh);
-        if (chunk.mesh.geometry) {
-          // Old format only: dispose per-chunk geometry
-          chunk.mesh.geometry.dispose();
-        }
-        // New format: geometries/materials are shared from cache — do NOT dispose
+      if (chunk.raycastMesh) {
+        this.scene.remove(chunk.raycastMesh);
+        if (chunk.raycastMesh.geometry) chunk.raycastMesh.geometry.dispose();
       }
     }
     this.chunks.clear();
     this.emptyChunkKeys.clear();
+    this._columnBounds.clear();
+    if (this.unifiedRenderer) {
+      this.unifiedRenderer.clear();
+    }
   }
 
   _disposeChunkMesh(key) {
     const chunk = this.chunks.get(key);
-    if (!chunk?.mesh) return;
-    this.scene.remove(chunk.mesh);
-    if (chunk.mesh.geometry) {
-      // Old format only: dispose per-chunk geometry
-      chunk.mesh.geometry.dispose();
+    if (!chunk) return;
+    if (chunk.raycastMesh) {
+      this.scene.remove(chunk.raycastMesh);
+      if (chunk.raycastMesh.geometry) chunk.raycastMesh.geometry.dispose();
     }
-    // New format: geometries/materials are shared from cache — do NOT dispose
+    if (this.unifiedRenderer) {
+      const c = this._parseChunkKey(key);
+      if (c) this.unifiedRenderer.releaseSlotByChunk(c.cx, c.cy, c.cz);
+    }
     this.chunks.delete(key);
   }
 
   _refreshStats() {
     let triangles = 0;
     for (const chunk of this.chunks.values()) {
-      if (chunk.mesh?.isGroup) {
-        chunk.mesh.traverse((c) => {
-          if (c.isMesh && c.geometry) {
-            triangles += c.geometry.index ? Math.floor(c.geometry.index.count / 3) : Math.floor(c.geometry.attributes.position.count / 3);
-          }
-        });
-      } else if (chunk.geometry?.index) {
-        triangles += Math.floor(chunk.geometry.index.count / 3);
+      if (chunk.raycastMesh?.geometry?.index) {
+        triangles += Math.floor(chunk.raycastMesh.geometry.index.count / 3);
       }
     }
     this.stats = {
@@ -1626,4 +1482,5 @@ export class TerrainMesh {
       samples: this.modifiedDensities.size,
     };
   }
+
 }

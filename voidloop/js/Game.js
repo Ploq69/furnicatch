@@ -4,6 +4,7 @@ import { input } from './InputManager.js';
 import { audio } from './AudioManager.js';
 import { ParticleSystem } from './ParticleSystem.js';
 import { FlipbookVFX, FLIPBOOK_EFFECTS } from './FlipbookVFX.js';
+import { ShaderParticleFX } from './ShaderParticleFX.js';
 import { preloadAllTextures, updateWeaponEmitters, playWeaponBurst } from './ElementalVFX.js';
 import { Player } from './Player.js';
 import { World } from './World.js';
@@ -15,9 +16,7 @@ import { GAME, BIOMES, BLOCK_TYPES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES, ZONE_B
 import { ZoneManager } from './ZoneManager.js';
 import { ZONES, getZoneById, getZoneAtPosition } from './ZoneData.js';
 import { Inventory } from './Inventory.js';
-import { ShopManager, SHOP_ITEMS } from './ShopManager.js';
-import { ShopUI } from './ShopUI.js';
-import { HazardSystem } from './HazardSystem.js';
+import { ProgressionManager } from './ProgressionManager.js';
 import { getKayKitItem, getKayKitPaths, getKayKitCharacter, KAYKIT_ANIMATIONS } from './KayKitLoadout.js';
 import { LetterPool, SPELLING_WORDS } from './SpellingData.js';
 import { SpellingChallenge } from './SpellingEngine.js';
@@ -52,6 +51,14 @@ const ISO_UNDERGROUND_VIEW = {
   FOG_FAR: 56,
 };
 
+const VOXEL_SKY = {
+  TOP: 0x63b8ff,
+  HORIZON: 0xd7f4ff,
+  CLOUD: 0xffffff,
+  FOG_NEAR: 64,
+  FOG_FAR: 260,
+};
+
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const smoothstep = (edge0, edge1, value) => {
   const t = clamp01((value - edge0) / Math.max(0.0001, edge1 - edge0));
@@ -59,17 +66,35 @@ const smoothstep = (edge0, edge1, value) => {
 };
 const easeOutCubic = (value) => 1 - Math.pow(1 - clamp01(value), 3);
 const easeInOutSine = (value) => -(Math.cos(Math.PI * clamp01(value)) - 1) / 2;
+const smoothFactor = (dt, halfLife) => 1 - Math.pow(2, -dt / Math.max(0.0001, halfLife));
+const shortestAngle = (from, to) => {
+  let diff = to - from;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return diff;
+};
+const dampAngle = (from, to, dt, halfLife) => from + shortestAngle(from, to) * smoothFactor(dt, halfLife);
 
-const TP_DISTANCE = 2.4;
-const TP_HEIGHT = 1.55;
-const TP_SHOULDER_X = 0.45;
+const TP_FOV = 65;
+const TP_DISTANCE = 4.8;
+const TP_HEIGHT = 1.25;
+const TP_SHOULDER_X = 0.2;
 const TP_SHOULDER_Y = 0.05;
-const TP_PITCH_MIN = -1.0;
-const TP_PITCH_MAX = 1.0;
-const TP_SMOOTH_SPEED = 8.0;
+const TP_PITCH_DEFAULT = 0.22;
+const TP_PITCH_MIN = -0.55;
+const TP_PITCH_MAX = 0.75;
+const TP_LOOKAHEAD = 0.9;
+const TP_VERTICAL_DEAD_ZONE = 0.15;
+const TP_HORIZONTAL_HALF_LIFE = 0.1;
+const TP_VERTICAL_HALF_LIFE = 0.35;
+const TP_LOOKAHEAD_HALF_LIFE = 0.16;
+const TP_POSITION_HALF_LIFE = 0.14;
+const TP_YAW_HALF_LIFE = 0.09;
+const TP_COLLISION_EXTEND_HALF_LIFE = 0.24;
+const TP_RECENTER_DELAY = 1.25;
 const TP_COLLISION_REFRESH_MS = 125;
 const TP_COLLISION_MOVE_EPS = 0.35;
-const MIN_RENDER_SCALE = 0.75;
+const MIN_RENDER_SCALE = 0.9;
 
 export class Game {
   constructor(container) {
@@ -92,6 +117,10 @@ export class Game {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0a0a);
+    this.renderer.setClearColor(this.scene.background);
+    this.skyMesh = null;
+    this.skyMaterial = null;
+    this._createSky();
 
     // Camera — Orthographic isometric by default, with a toggleable third-person mining view
     this.cameraZoom = 3.0;
@@ -101,15 +130,48 @@ export class Game {
     this.isoCamera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 200);
     this.isoCamera.position.set(20, 20, 20);
     this.isoCamera.lookAt(0, 0, 0);
-    this.thirdPersonCamera = new THREE.PerspectiveCamera(72, aspect, 0.05, 180);
+    this.thirdPersonCamera = new THREE.PerspectiveCamera(TP_FOV, aspect, 0.05, 450);
     this.scene.add(this.thirdPersonCamera);
     this.camera = this.isoCamera;
     this.cameraMode = 'iso';
     this.cameraTarget = new THREE.Vector3();
     this._cameraTargetReady = false;
     this.camYaw = 0;
-    this.camPitch = -0.12;
+    this.camPitch = TP_PITCH_DEFAULT;
     this.camPos = new THREE.Vector3();
+    this.tpCamera = {
+      subjectTarget: new THREE.Vector3(),
+      lookTarget: new THREE.Vector3(),
+      lookahead: new THREE.Vector3(),
+      previousPlayerPos: new THREE.Vector3(),
+      desiredYaw: 0,
+      displayYaw: 0,
+      pitch: TP_PITCH_DEFAULT,
+      distance: TP_DISTANCE,
+      collisionDistance: TP_DISTANCE,
+      manualRecenteringTimer: 0,
+      initialized: false,
+    };
+    this.tpCameraTuning = {
+      fov: TP_FOV,
+      distance: TP_DISTANCE,
+      height: TP_HEIGHT,
+      shoulderX: TP_SHOULDER_X,
+      shoulderY: TP_SHOULDER_Y,
+      pitchDefault: TP_PITCH_DEFAULT,
+      pitchMin: TP_PITCH_MIN,
+      pitchMax: TP_PITCH_MAX,
+      lookahead: TP_LOOKAHEAD,
+      verticalDeadZone: TP_VERTICAL_DEAD_ZONE,
+      horizontalHalfLife: TP_HORIZONTAL_HALF_LIFE,
+      verticalHalfLife: TP_VERTICAL_HALF_LIFE,
+      lookaheadHalfLife: TP_LOOKAHEAD_HALF_LIFE,
+      positionHalfLife: TP_POSITION_HALF_LIFE,
+      yawHalfLife: TP_YAW_HALF_LIFE,
+      collisionExtendHalfLife: TP_COLLISION_EXTEND_HALF_LIFE,
+      recenterDelay: TP_RECENTER_DELAY,
+    };
+    this.tpCameraDebug = false;
     this._renderScaleMax = Math.min(window.devicePixelRatio || 1, 1.25);
     this._renderScale = Math.min(1, this._renderScaleMax);
     this._renderScaleLowTime = 0;
@@ -154,10 +216,14 @@ export class Game {
     this.floorPlane.receiveShadow = false;
     this.scene.add(this.floorPlane);
 
+    // Progression (needed before timer init)
+    this.progression = new ProgressionManager();
+
     // Systems
     this.particles = new ParticleSystem(this.scene);
     this.flipbooks = new FlipbookVFX(this.scene);
-    this.world = new World(this.scene);
+    this.shaderFX = new ShaderParticleFX(this.scene);
+    this.world = new World(this.scene, this.renderer);
     this.water = new WaterSurfaceSystem(this.scene);
     this.player = new Player(this.scene);
     this.player.world = this.world;
@@ -181,7 +247,7 @@ export class Game {
     this.ui.onSpellingPlayWord = (word) => this._onSpellingPlayWord(word);
 
     // Timer — countdown
-    this.floorTimer = GAME.COUNTDOWN_BASE;
+    this.floorTimer = this.progression.getRoundStartTime(GAME.COUNTDOWN_BASE);
     this.totalTime = 0;
     this.killCount = 0;
     this.level = 1;
@@ -195,6 +261,7 @@ export class Game {
     this.letterDrops = new LetterDrop(this.scene);
     this.spellingChallenge = null;
     this.spellingGlyphMesh = null;
+    this.spellingReturnCameraMode = null;
 
     // Pet system
     this.petManager = new PetManager();
@@ -224,6 +291,7 @@ export class Game {
     const params = new URLSearchParams(location.search);
     this.playtestKey = params.get('playtest');
     this.isTimedMode = !!this.playtestKey;
+    this.tpCameraDebug = params.has('camdebug') || params.has('cameraDebug');
 
     // Score tracking for timed mode
     this.lettersCollected = 0;
@@ -242,10 +310,10 @@ export class Game {
     // Zone progression systems
     this.zoneManager = new ZoneManager();
     this.inventory = new Inventory();
-    this.shop = new ShopManager(this.inventory);
     this.resources = new ResourceInventory();
     this.hazards = null;
-    this.shopUI = null;
+    this.currentLetterQuiz = null;
+    this.pendingLetterLevelUp = null;
     this._gatewayMeshes = [];
     this._gatewayLabels = [];
 
@@ -300,7 +368,7 @@ export class Game {
 
     this._initAudioOnInteraction();
     await this.player.spawn();
-    await this.player.equipWeapon(1); // Sync functional weapon with sword visual
+    await this.player.equipWeapon(0);
 
     // Multiplayer: host generates and shares world seed, guest waits for it
     if (this.isMultiplayer && this.net) {
@@ -330,66 +398,7 @@ export class Game {
       this._createRemotePlayer();
     }
 
-    // Create Shop UI
-    this.shopUI = new ShopUI(
-      this.shop,
-      (itemId, isEquip) => {
-        if (isEquip) {
-          const item = SHOP_ITEMS.find(i => i.id === itemId);
-          if (item) {
-            this.inventory.equip(itemId, item.type);
-            this._syncFunctionalEquipment();
-          }
-          return { success: true };
-        } else {
-          const result = this.shop.buyItem(itemId);
-          if (result.success) {
-            const item = SHOP_ITEMS.find(i => i.id === itemId);
-            if (item) {
-              this.inventory.equip(itemId, item.type);
-              this._syncFunctionalEquipment();
-            }
-          }
-          return result;
-        }
-      },
-      (upgradeId) => {
-        const result = this.shop.buyUpgrade(upgradeId);
-        if (result.success) {
-          this.player.applyUpgrades(this.shop.upgradeLevels);
-        }
-        return result;
-      },
-      () => {
-        // Close shop callback
-        this.shop.setCoins(this.player.coins);
-        this.player.applyUpgrades(this.shop.upgradeLevels);
-      },
-      // getResources callback
-      () => this.resources.getAll(),
-      // onSellResource callback
-      (type, amount) => {
-        const coins = this.resources.sell(type, amount);
-        if (coins > 0) {
-          this.player.coins += coins;
-          this.shop.setCoins(this.player.coins);
-          return { success: true, coins };
-        }
-        return { success: false };
-      },
-      // getLoadout callback
-      () => this.player.loadout,
-      // onOpenLoadout callback
-      () => {
-        this.ui.hideShop();
-        this.ui.showLoadout();
-      },
-      // onBuyPickaxeTier callback
-      (zoneId) => this.shop.upgradePickaxeTier(zoneId)
-    );
-
-    // Apply saved upgrades to player on game start
-    this.player.applyUpgrades(this.shop.upgradeLevels);
+    // Progression replaces the old zone-specific shop; loadout stays cosmetic.
     this._syncFunctionalEquipment();
 
     this.ui.hideLoading();
@@ -412,6 +421,44 @@ export class Game {
     this.player.equipTool(this.inventory.getEquippedTool());
     this.player.equipArmor(this.inventory.getEquippedArmor());
     this.player.equipFunctionalWeapon(this.inventory.getEquippedWeapon());
+  }
+
+  buyProgressionUpgrade(upgradeId) {
+    const result = this.progression.purchase(upgradeId, this.player.coins);
+    if (result.success) {
+      this.player.coins = result.coins;
+      this.ui.updateStats();
+      this.ui.updateObjectiveHud?.(this._getObjectiveState());
+    }
+    return result;
+  }
+
+  sellResource(resourceType, amount = 1) {
+    const earned = this.resources.sell(resourceType, amount);
+    if (earned <= 0) return { success: false, coins: 0 };
+    this.player.coins += earned;
+    this.ui.updateStats();
+    return { success: true, coins: earned };
+  }
+
+  _canUseWeapon(weapon) {
+    if (!weapon) return false;
+    if (weapon.cooldown <= 0) return true;
+    return weapon.data?.type === 'thrown' && this.progression.state.grenade.unlocked && this.progression.state.grenade.charges > 0;
+  }
+
+  _prepareGrenadeThrow(weapon) {
+    if (!this.progression.state.grenade.unlocked) {
+      return { allowed: false, message: 'Unlock grenades first' };
+    }
+    if (weapon.cooldown > 0) {
+      if (!this.progression.spendGrenadeCharge()) {
+        return { allowed: false, message: `${weapon.cooldown.toFixed(1)}s` };
+      }
+      weapon.cooldown = 0;
+      return { allowed: true, charged: true };
+    }
+    return { allowed: true, charged: false };
   }
 
   async _generateZones(seed) {
@@ -442,6 +489,7 @@ export class Game {
     this.killCount = 0;
     this.loot.clear();
     this.letterDrops.clear();
+    this.shaderFX.clear();
     this._clearPet();
     this.letterPool.reset();
 
@@ -500,6 +548,7 @@ export class Game {
     this.killCount = 0;
     this.loot.clear();
     this.letterDrops.clear();
+    this.shaderFX.clear();
     this._clearPet();
 
     // Reset score tracking
@@ -570,7 +619,7 @@ export class Game {
     if (this.state === STATES.PLAYING) {
       // Escape handling: pause takes priority, then loadout/petden close
       if (input.pressed('Escape')) {
-        if (this.shopUI && this.shopUI.isOpen) {
+        if (this.ui.progressionOpen) {
           this.ui.hideShop();
         } else if (this.ui.loadoutOpen) {
           this.ui.hideLoadout();
@@ -581,11 +630,11 @@ export class Game {
         }
       }
 
-      if (input.pressed('KeyI') && !this.paused && !(this.shopUI && this.shopUI.isOpen)) {
+      if (input.pressed('KeyI') && !this.paused && !this.ui.progressionOpen) {
         this.ui.toggleLoadout();
       }
 
-      if (input.pressed('KeyP') && !this.paused && !(this.shopUI && this.shopUI.isOpen)) {
+      if (input.pressed('KeyP') && !this.paused && !this.ui.progressionOpen) {
         this.ui.togglePetDen();
       }
 
@@ -593,11 +642,11 @@ export class Game {
         this.ui.showShop();
       }
 
-      if (input.pressed('KeyV') && !this.paused && !this.ui.loadoutOpen && !this.ui.petDenOpen && !(this.shopUI && this.shopUI.isOpen)) {
+      if (input.pressed('KeyV') && !this.paused && !this.ui.loadoutOpen && !this.ui.petDenOpen && !this.ui.progressionOpen) {
         this._toggleCameraMode();
       }
 
-      if (!this.ui.loadoutOpen && !this.ui.petDenOpen && !this.paused && !(this.shopUI && this.shopUI.isOpen)) {
+      if (!this.ui.loadoutOpen && !this.ui.petDenOpen && !this.paused && !this.ui.progressionOpen) {
         this._updatePlaying(dt);
       }
     }
@@ -634,11 +683,20 @@ export class Game {
     this._perfFrame.waterMs = performance.now() - waterStart;
     this.particles.update(dt);
     this.flipbooks.update(dt, this.camera);
+    this.shaderFX.update(dt);
     updateWeaponEmitters(dt, this.camera);
     this.ui.update(dt);
-    this.shopUI?.updatePreview(dt);
     const renderStart = performance.now();
+    this._updateSkyPosition();
+    // Render terrain first (writes depth + color), then THREE.js scene on top
+    this.renderer.autoClear = false;
+    this.renderer.clear();
+    this.world.terrainMesh.render(this.camera);
+    // Prevent THREE.js from drawing a fullscreen background quad over terrain
+    const savedBg = this.scene.background;
+    this.scene.background = null;
     this.renderer.render(this.scene, this.camera);
+    this.scene.background = savedBg;
     this._perfFrame.renderMs = performance.now() - renderStart;
     input.update();
   }
@@ -676,19 +734,9 @@ export class Game {
       }
     }
 
-    // Camera hard follow with screen shake
-    const isoDepthFactor = this._getIsoUndergroundFactor();
-    const offset = 20 / this.cameraZoom;
-    let shakeX = 0, shakeY = 0, shakeZ = 0;
-    if (this.shakeDuration > 0) {
-      this.shakeDuration -= dt;
-      const decay = this.shakeDuration > 0 ? Math.max(0, this.shakeDuration / 0.3) : 0;
-      shakeX = (Math.random() - 0.5) * this.shakeIntensity * decay;
-      shakeY = (Math.random() - 0.5) * this.shakeIntensity * decay * 0.5;
-      shakeZ = (Math.random() - 0.5) * this.shakeIntensity * decay;
-      if (this.shakeDuration <= 0) this.shakeIntensity = 0;
+    if (this.cameraMode === 'thirdPerson') {
+      this._updateThirdPersonControls(dt);
     }
-    this._updateCamera(dt, offset, shakeX, shakeY, shakeZ, isoDepthFactor);
 
     // Player update
     this.player.setWaterState(this.water.getVolumeAt(this.player.position));
@@ -708,6 +756,20 @@ export class Game {
       this._remotePlayer.update(dt);
     }
 
+    // Camera solve happens after player movement so small terrain corrections are filtered from the current frame.
+    const isoDepthFactor = this._getIsoUndergroundFactor();
+    const offset = 20 / this.cameraZoom;
+    let shakeX = 0, shakeY = 0, shakeZ = 0;
+    if (this.shakeDuration > 0) {
+      this.shakeDuration -= dt;
+      const decay = this.shakeDuration > 0 ? Math.max(0, this.shakeDuration / 0.3) : 0;
+      shakeX = (Math.random() - 0.5) * this.shakeIntensity * decay;
+      shakeY = (Math.random() - 0.5) * this.shakeIntensity * decay * 0.5;
+      shakeZ = (Math.random() - 0.5) * this.shakeIntensity * decay;
+      if (this.shakeDuration <= 0) this.shakeIntensity = 0;
+    }
+    this._updateCamera(dt, offset, shakeX, shakeY, shakeZ, isoDepthFactor);
+
     // Update weapon cooldowns
     for (const w of this.player.weapons) w.update(dt);
     this.missileStrikeCooldown = Math.max(0, this.missileStrikeCooldown - dt);
@@ -718,12 +780,24 @@ export class Game {
 
     // Contextual J button — mine block or attack enemy
     const minePressed = input.pressed('KeyJ') || (this.cameraMode === 'thirdPerson' && input.buttonPressed?.('left'));
-    if (minePressed && this.player.weapons[this.player.currentSlot].cooldown <= 0) {
-      const weapon = this.player.weapons[this.player.currentSlot];
+    const activeWeapon = this.player.weapons[this.player.currentSlot];
+    if (minePressed && this._canUseWeapon(activeWeapon)) {
+      const weapon = activeWeapon;
       if (weapon.data.type === 'thrown') {
+        const prep = this._prepareGrenadeThrow(weapon);
+        if (!prep.allowed) {
+          this.ui.showFloatingText(prep.message, 0xffaa00);
+          SFXMapper.swingMiss();
+          return;
+        }
         const aim = this._getMiningAim();
         const thrown = this.player.attack(aim.origin, aim.direction, this.scene, audio, this.particles, this.world.enemies);
         if (thrown) {
+          const grenade = weapon.projectiles[weapon.projectiles.length - 1];
+          if (grenade?.explosive) {
+            grenade.radius = this.progression.getGrenadeRadius();
+          }
+          weapon.cooldown = this.progression.getGrenadeCooldown();
           this.player.playAttackAnim();
           // third-person uses full-body attack animation, no viewmodel swing needed
         } else {
@@ -734,19 +808,7 @@ export class Game {
       // Check for nearby enemy first (combat priority)
       const nearestEnemy = this._findNearestEnemy(2.5);
       if (nearestEnemy) {
-        // Check zone staff requirements for enemies beyond Forest
-        const enemyZone = nearestEnemy.zoneId ? getZoneById(nearestEnemy.zoneId) : null;
         const equippedWeapon = this.player.getEquippedWeapon();
-        if (enemyZone && enemyZone.staffId) {
-          const requiredWeapon = enemyZone.staffId;
-          if (equippedWeapon !== requiredWeapon) {
-            this.ui.showFloatingText(`🔱 ${enemyZone.name}`, 0xff4444);
-            this.player.playAttackAnim();
-            SFXMapper.swingMiss();
-            weapon.cooldown = GAME.ATTACK_COOLDOWN;
-            return;
-          }
-        }
         this.player.playAttackAnim();
         nearestEnemy.takeDamage(weapon.data.damage, equippedWeapon);
         // Attack VFX
@@ -845,6 +907,7 @@ export class Game {
             }
             this.mineComboTimer = 2.0;
             this.blocksMined++;
+            this.progression.recordMined(zoneId || this.zoneManager.currentZoneId, 1);
 
             // Block break VFX + screen shake (stronger for floating blocks)
             this.particles.dust(blockPos, isFloat ? 10 : 8);
@@ -865,7 +928,7 @@ export class Game {
               }
 
               // Floating blocks keep the strongest letter/resource rewards.
-              if (Math.random() < 0.25) {
+              if (Math.random() < this.progression.getLetterDropChance('floating')) {
                 const letter = this._pickLetterForZone(zoneId || this.zoneManager.currentZoneId);
                 if (letter) {
                   this.letterDrops.spawn(blockPos, letter);
@@ -894,6 +957,15 @@ export class Game {
 
             // timeBonus for mining (combo bonus)
             this.floorTimer += GAME.TIME_BONUS_MINING + (isFloat ? this.mineCombo : 0);
+            const extraBudget = this.progression.getPickaxeWidth() - 1;
+            if (extraBudget > 0) {
+              const extraMined = miningTarget.isTerrain
+                ? this._mineExtraTerrainBlocks(miningTarget, zoneId, extraBudget)
+                : this._mineExtraFloatingBlocks(nearestBlock, zoneId, extraBudget);
+              if (extraMined > 0) {
+                this.ui.showFloatingText(`+${extraMined} width`, 0x7dd3fc);
+              }
+            }
             SFXMapper.collectOre();
           }
         } else {
@@ -946,7 +1018,9 @@ export class Game {
     // Letter drops update
     const collectedLetter = this.letterDrops.update(dt, this.player.position);
     if (collectedLetter) {
-      this._enterSpellingChallenge(collectedLetter);
+      const letter = typeof collectedLetter === 'string' ? collectedLetter : collectedLetter.letter;
+      const pickupPosition = typeof collectedLetter === 'string' ? null : collectedLetter.position;
+      this._collectLetterForMastery(letter, pickupPosition);
     }
 
     // Pet update
@@ -988,14 +1062,13 @@ export class Game {
     if (this.player.hp <= 0) {
       SFXMapper.playerDeath();
       this.state = STATES.CAMP;
-      // Save coins and progress before showing camp
-      this.shop.setCoins(this.player.coins);
       this.ui.showCamp(true);
       return;
     }
 
     // Update UI
     this.ui.updateStats();
+    this.ui.updateObjectiveHud?.(this._getObjectiveState());
 
     // FPS counter
     this.frameCount = (this.frameCount || 0) + 1;
@@ -1047,10 +1120,10 @@ export class Game {
       return;
     }
 
-    if (fps < 58) {
+    if (fps < 55) {
       this._renderScaleLowTime += 1;
       this._renderScaleHighTime = 0;
-    } else if (fps >= 59.5) {
+    } else if (fps >= 59) {
       this._renderScaleHighTime += 1;
       this._renderScaleLowTime = 0;
     } else {
@@ -1058,11 +1131,11 @@ export class Game {
       this._renderScaleHighTime = 0;
     }
 
-    if (this._renderScaleLowTime >= 1 && this._renderScale > MIN_RENDER_SCALE) {
-      this._setRenderScale(Math.max(MIN_RENDER_SCALE, this._renderScale - 0.1));
+    if (this._renderScaleLowTime >= 2 && this._renderScale > MIN_RENDER_SCALE) {
+      this._setRenderScale(Math.max(MIN_RENDER_SCALE, this._renderScale - 0.05));
       this._renderScaleLowTime = 0;
-    } else if (this._renderScaleHighTime >= 4 && this._renderScale < Math.min(1, this._renderScaleMax)) {
-      this._setRenderScale(Math.min(Math.min(1, this._renderScaleMax), this._renderScale + 0.05));
+    } else if (this._renderScaleHighTime >= 3 && this._renderScale < Math.min(1, this._renderScaleMax)) {
+      this._setRenderScale(Math.min(Math.min(1, this._renderScaleMax), this._renderScale + 0.03));
       this._renderScaleHighTime = 0;
     }
   }
@@ -1070,6 +1143,95 @@ export class Game {
   _setRenderScale(scale) {
     this._renderScale = Math.max(MIN_RENDER_SCALE, Math.min(Math.min(1, this._renderScaleMax), scale));
     this.renderer.setPixelRatio(this._renderScale);
+  }
+
+  _createSky() {
+    const skyGeo = new THREE.SphereGeometry(180, 24, 12);
+    this.skyMaterial = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      depthTest: true,
+      fog: false,
+      uniforms: {
+        topColor: { value: new THREE.Color(VOXEL_SKY.TOP) },
+        horizonColor: { value: new THREE.Color(VOXEL_SKY.HORIZON) },
+        cloudColor: { value: new THREE.Color(VOXEL_SKY.CLOUD) },
+        cloudOpacity: { value: 0.32 },
+        darkness: { value: 0 },
+      },
+      vertexShader: `
+        varying vec3 vLocalPos;
+
+        void main() {
+          vLocalPos = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+
+        uniform vec3 topColor;
+        uniform vec3 horizonColor;
+        uniform vec3 cloudColor;
+        uniform float cloudOpacity;
+        uniform float darkness;
+        varying vec3 vLocalPos;
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+
+        void main() {
+          vec3 dir = normalize(vLocalPos);
+          float heightT = smoothstep(-0.08, 0.72, dir.y);
+          vec3 color = mix(horizonColor, topColor, heightT);
+
+          float cloudBand = smoothstep(0.08, 0.15, dir.y) * (1.0 - smoothstep(0.38, 0.50, dir.y));
+          float angle = atan(dir.x, dir.z);
+          vec2 cloudCell = floor(vec2(angle * 10.0, dir.y * 24.0 + abs(dir.x) * 3.0));
+          float blockCloud = step(0.69, hash(cloudCell));
+          float cloudEdge = step(0.76, hash(cloudCell + vec2(1.0, 0.0))) * 0.45;
+          float clouds = clamp((blockCloud + cloudEdge) * cloudBand * cloudOpacity, 0.0, 1.0);
+          color = mix(color, cloudColor, clouds);
+
+          color = mix(color, vec3(0.025, 0.035, 0.055), clamp(darkness, 0.0, 1.0));
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
+    });
+    this.skyMesh = new THREE.Mesh(skyGeo, this.skyMaterial);
+    this.skyMesh.name = 'voxel_sky';
+    this.skyMesh.frustumCulled = false;
+    this.skyMesh.renderOrder = -1000;
+    this.scene.add(this.skyMesh);
+  }
+
+  _updateSkyPosition() {
+    if (!this.skyMesh || !this.camera) return;
+    this.skyMesh.position.copy(this.camera.position);
+  }
+
+  _setSkyAtmosphere({ visible = true, topColor, horizonColor, cloudOpacity = 0.32, darkness = 0 }) {
+    if (!this.skyMesh || !this.skyMaterial) return;
+    this.skyMesh.visible = visible;
+    this.skyMaterial.uniforms.topColor.value.copy(topColor);
+    this.skyMaterial.uniforms.horizonColor.value.copy(horizonColor);
+    this.skyMaterial.uniforms.cloudOpacity.value = cloudOpacity;
+    this.skyMaterial.uniforms.darkness.value = darkness;
+  }
+
+  _syncTerrainFog() {
+    const fog = this.scene.fog;
+    if (fog) {
+      this.world?.terrainMesh?.setFog?.({
+        enabled: true,
+        color: fog.color,
+        near: fog.near,
+        far: fog.far,
+      });
+    } else {
+      this.world?.terrainMesh?.setFog?.({ enabled: false });
+    }
   }
 
   _getIsoUndergroundFactor() {
@@ -1081,6 +1243,9 @@ export class Game {
   _updateZoneAtmosphere(isoDepthFactor = 0) {
     const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
     const baseBackground = new THREE.Color(currentZone?.fogColor || 0x0a0a0a);
+    const skyTop = new THREE.Color(VOXEL_SKY.TOP).lerp(baseBackground, 0.18);
+    const skyHorizon = new THREE.Color(VOXEL_SKY.HORIZON).lerp(baseBackground, 0.34);
+    const surfaceFogColor = skyHorizon.clone().lerp(baseBackground, 0.18);
     const ambientColors = {
       forest: 0x88aa88,
       fire: 0xaa6644,
@@ -1102,6 +1267,7 @@ export class Game {
         Math.max(0.06, hsl.l * ISO_UNDERGROUND_VIEW.BACKDROP_DARKNESS)
       );
       this.scene.background = baseBackground.clone().lerp(caveBackground, undergroundT);
+      this.renderer.setClearColor(this.scene.background);
 
       const fogColor = this.scene.background.clone().lerp(new THREE.Color(0x111820), 0.22);
       const fogNear = currentZone?.fogNear || ISO_UNDERGROUND_VIEW.FOG_NEAR;
@@ -1112,18 +1278,46 @@ export class Game {
         fogFar + (ISO_UNDERGROUND_VIEW.FOG_FAR - fogFar) * undergroundT
       );
 
+      this._setSkyAtmosphere({
+        visible: undergroundT < 0.98,
+        topColor: skyTop,
+        horizonColor: skyHorizon,
+        cloudOpacity: 0.18 * (1 - undergroundT),
+        darkness: undergroundT,
+      });
       this.ambient.color.copy(baseAmbient).lerp(new THREE.Color(0xd9e4d0), ISO_UNDERGROUND_VIEW.AMBIENT_BOOST * undergroundT);
+    } else if (this.cameraMode === 'thirdPerson') {
+      this.scene.background = skyHorizon;
+      this.renderer.setClearColor(skyHorizon);
+      this.scene.fog = new THREE.Fog(surfaceFogColor, VOXEL_SKY.FOG_NEAR, VOXEL_SKY.FOG_FAR);
+      this._setSkyAtmosphere({
+        visible: true,
+        topColor: skyTop,
+        horizonColor: skyHorizon,
+        cloudOpacity: 0.34,
+        darkness: 0,
+      });
+      this.ambient.color.copy(baseAmbient);
     } else {
-      this.scene.background = baseBackground;
+      this.scene.background = skyHorizon;
+      this.renderer.setClearColor(skyHorizon);
       this.scene.fog = null;
+      this._setSkyAtmosphere({
+        visible: true,
+        topColor: skyTop,
+        horizonColor: skyHorizon,
+        cloudOpacity: 0.28,
+        darkness: 0,
+      });
       this.ambient.color.copy(baseAmbient);
     }
+
+    this._syncTerrainFog();
   }
 
   _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0, isoDepthFactor = 0) {
     this.world?.terrainMesh?.setRenderMode?.(this.cameraMode, this._renderScale || 1);
     if (this.cameraMode === 'thirdPerson') {
-      this._updateThirdPersonAim(dt);
       this._updateThirdPersonCamera(dt, shakeX, shakeY, shakeZ);
       if (this.player.mesh) this.player.mesh.visible = true;
       return;
@@ -1158,21 +1352,25 @@ export class Game {
     this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
   }
 
-  _updateThirdPersonAim(dt) {
+  _updateThirdPersonControls(dt) {
+    const rig = this.tpCamera;
+    const tune = this.tpCameraTuning;
     const sensitivity = 0.0022;
-    if (input.mouse.locked) {
-      this.camYaw -= input.mouse.dx * sensitivity;
-      this.camPitch += input.mouse.dy * sensitivity;
-      this.camPitch = Math.max(TP_PITCH_MIN, Math.min(TP_PITCH_MAX, this.camPitch));
+    const mouseMoved = input.mouse.locked && (Math.abs(input.mouse.dx) > 0.01 || Math.abs(input.mouse.dy) > 0.01);
+    if (mouseMoved) {
+      rig.desiredYaw -= input.mouse.dx * sensitivity;
+      rig.pitch += input.mouse.dy * sensitivity;
+      rig.pitch = Math.max(tune.pitchMin, Math.min(tune.pitchMax, rig.pitch));
+      rig.manualRecenteringTimer = tune.recenterDelay;
+    } else {
+      rig.manualRecenteringTimer = Math.max(0, rig.manualRecenteringTimer - dt);
     }
-    this.player.controlYaw = this.camYaw;
-  }
 
-  _updateThirdPersonCamera(dt, shakeX = 0, shakeY = 0, shakeZ = 0) {
-    const playerPos = this.player.position;
-    const pivot = new THREE.Vector3(playerPos.x, playerPos.y + TP_HEIGHT, playerPos.z);
+    if (input.pressed('KeyR')) {
+      rig.desiredYaw = this.player.rotation;
+      rig.manualRecenteringTimer = 0;
+    }
 
-    // Lazy follow / auto-recenter: when moving, camera gently swings behind player
     let forwardMove = 0;
     let strafeMove = 0;
     if (input.isDown('KeyW') || input.isDown('ArrowUp')) forwardMove += 1;
@@ -1180,59 +1378,130 @@ export class Game {
     if (input.isDown('KeyA') || input.isDown('ArrowLeft')) strafeMove -= 1;
     if (input.isDown('KeyD') || input.isDown('ArrowRight')) strafeMove += 1;
 
-    if (forwardMove !== 0 || strafeMove !== 0) {
+    if (rig.manualRecenteringTimer <= 0 && (forwardMove !== 0 || strafeMove !== 0)) {
       const moveYaw = Math.atan2(
-        Math.sin(this.camYaw) * forwardMove - Math.cos(this.camYaw) * strafeMove,
-        Math.cos(this.camYaw) * forwardMove + Math.sin(this.camYaw) * strafeMove
+        Math.sin(rig.desiredYaw) * forwardMove - Math.cos(rig.desiredYaw) * strafeMove,
+        Math.cos(rig.desiredYaw) * forwardMove + Math.sin(rig.desiredYaw) * strafeMove
       );
-      let yawDiff = moveYaw - this.camYaw;
-      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
-      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
-      this.camYaw += yawDiff * 2.5 * dt;
+      const recenterHalfLife = input.isDown('ShiftLeft') ? 0.42 : 0.75;
+      rig.desiredYaw = dampAngle(rig.desiredYaw, moveYaw, dt, recenterHalfLife);
     }
 
-    // Compute desired camera position based on yaw, pitch, distance and shoulder offset
-    const cosYaw = Math.cos(this.camYaw);
-    const sinYaw = Math.sin(this.camYaw);
-    const cosPitch = Math.cos(this.camPitch);
-    const sinPitch = Math.sin(this.camPitch);
+    this.camYaw = rig.desiredYaw;
+    this.camPitch = rig.pitch;
+    this.player.controlYaw = rig.desiredYaw;
+  }
 
-    // Base offset: behind player
-    const offset = new THREE.Vector3(
-      -sinYaw * TP_DISTANCE * cosPitch,
-      sinPitch * TP_DISTANCE,
-      -cosYaw * TP_DISTANCE * cosPitch
+  _updateThirdPersonCamera(dt, shakeX = 0, shakeY = 0, shakeZ = 0) {
+    const rig = this.tpCamera;
+    const tune = this.tpCameraTuning;
+    const playerPos = this.player.position;
+    const rawSubject = new THREE.Vector3(playerPos.x, playerPos.y + tune.height, playerPos.z);
+
+    if (!rig.initialized) {
+      rig.subjectTarget.copy(rawSubject);
+      rig.lookTarget.copy(rawSubject);
+      rig.lookahead.set(0, 0, 0);
+      rig.previousPlayerPos.copy(playerPos);
+      rig.desiredYaw = this.camYaw;
+      rig.displayYaw = this.camYaw;
+      rig.pitch = this.camPitch;
+      rig.distance = tune.distance;
+      rig.collisionDistance = tune.distance;
+      this.camPos.copy(this._getThirdPersonDesiredPosition(rawSubject, rig.displayYaw, rig.pitch, tune.distance));
+      rig.initialized = true;
+    }
+
+    rig.distance = tune.distance;
+    if (Math.abs(this.thirdPersonCamera.fov - tune.fov) > 0.01) {
+      this.thirdPersonCamera.fov = tune.fov;
+      this.thirdPersonCamera.updateProjectionMatrix();
+    }
+
+    const horizontalT = smoothFactor(dt, tune.horizontalHalfLife);
+    rig.subjectTarget.x += (rawSubject.x - rig.subjectTarget.x) * horizontalT;
+    rig.subjectTarget.z += (rawSubject.z - rig.subjectTarget.z) * horizontalT;
+
+    const verticalDelta = rawSubject.y - rig.subjectTarget.y;
+    if (Math.abs(verticalDelta) > tune.verticalDeadZone) {
+      const targetY = rawSubject.y - Math.sign(verticalDelta) * tune.verticalDeadZone;
+      rig.subjectTarget.y += (targetY - rig.subjectTarget.y) * smoothFactor(dt, tune.verticalHalfLife);
+    }
+
+    const planarDelta = new THREE.Vector3(
+      playerPos.x - rig.previousPlayerPos.x,
+      0,
+      playerPos.z - rig.previousPlayerPos.z
     );
+    const planarSpeed = dt > 0 ? planarDelta.length() / dt : 0;
+    let desiredLookahead = new THREE.Vector3();
+    if (planarSpeed > 0.08) {
+      desiredLookahead.copy(planarDelta).normalize();
+      const manualScale = rig.manualRecenteringTimer > 0 ? 0.45 : 1;
+      desiredLookahead.multiplyScalar(tune.lookahead * Math.min(1, planarSpeed / GAME.PLAYER_SPEED) * manualScale);
+    }
+    rig.lookahead.lerp(desiredLookahead, smoothFactor(dt, tune.lookaheadHalfLife));
 
-    // Shoulder offset (right shoulder)
-    offset.x += cosYaw * TP_SHOULDER_X;
-    offset.z += -sinYaw * TP_SHOULDER_X;
-    offset.y += TP_SHOULDER_Y;
+    const desiredLookTarget = rig.subjectTarget.clone().add(rig.lookahead);
+    const lookHorizontalT = smoothFactor(dt, tune.horizontalHalfLife);
+    rig.lookTarget.x += (desiredLookTarget.x - rig.lookTarget.x) * lookHorizontalT;
+    rig.lookTarget.z += (desiredLookTarget.z - rig.lookTarget.z) * lookHorizontalT;
+    rig.lookTarget.y += (desiredLookTarget.y - rig.lookTarget.y) * smoothFactor(dt, tune.verticalHalfLife);
 
-    const desired = pivot.clone().add(offset);
+    const yawHalfLife = rig.manualRecenteringTimer > 0 ? 0.04 : tune.yawHalfLife;
+    rig.displayYaw = dampAngle(rig.displayYaw, rig.desiredYaw, dt, yawHalfLife);
+    this.camYaw = rig.desiredYaw;
+    this.camPitch = rig.pitch;
 
-    // Collision avoidance: raycast from pivot to desired camera position
-    const direction = desired.clone().sub(pivot).normalize();
-    const rayDist = pivot.distanceTo(desired);
-    let actualDist = this._getThirdPersonCameraDistance(pivot, desired, direction, rayDist);
-
-    if (actualDist < rayDist) {
-      desired.copy(pivot).add(direction.multiplyScalar(actualDist));
+    const fullDistanceDesired = this._getThirdPersonDesiredPosition(rig.lookTarget, rig.displayYaw, rig.pitch, rig.distance);
+    const direction = fullDistanceDesired.clone().sub(rig.lookTarget).normalize();
+    const rayDist = rig.lookTarget.distanceTo(fullDistanceDesired);
+    const actualDist = this._getThirdPersonCameraDistance(rig.lookTarget, fullDistanceDesired, direction, rayDist);
+    if (actualDist < rig.collisionDistance) {
+      rig.collisionDistance = actualDist;
+    } else {
+      rig.collisionDistance += (actualDist - rig.collisionDistance) * smoothFactor(dt, tune.collisionExtendHalfLife);
     }
 
-    // Apply shake
-    desired.x += shakeX * 0.2;
-    desired.y += shakeY * 0.2;
-    desired.z += shakeZ * 0.2;
+    const resolvedDesired = rig.lookTarget.clone().add(direction.multiplyScalar(rig.collisionDistance));
+    const positionT = smoothFactor(dt, tune.positionHalfLife);
+    this.camPos.x += (resolvedDesired.x - this.camPos.x) * positionT;
+    this.camPos.y += (resolvedDesired.y - this.camPos.y) * positionT;
+    this.camPos.z += (resolvedDesired.z - this.camPos.z) * positionT;
 
-    // Smooth position with spring-like feel
-    const t = 1 - Math.exp(-TP_SMOOTH_SPEED * dt);
-    this.camPos.x += (desired.x - this.camPos.x) * t;
-    this.camPos.y += (desired.y - this.camPos.y) * t;
-    this.camPos.z += (desired.z - this.camPos.z) * t;
+    this.thirdPersonCamera.position.set(
+      this.camPos.x + shakeX * 0.2,
+      this.camPos.y + shakeY * 0.2,
+      this.camPos.z + shakeZ * 0.2
+    );
+    this.thirdPersonCamera.lookAt(rig.lookTarget.x, rig.lookTarget.y, rig.lookTarget.z);
+    rig.previousPlayerPos.copy(playerPos);
 
-    this.thirdPersonCamera.position.copy(this.camPos);
-    this.thirdPersonCamera.lookAt(pivot.x, pivot.y, pivot.z);
+    if (this.tpCameraDebug && typeof window !== 'undefined') {
+      window.__voidloopThirdPersonCameraTuning = tune;
+      window.__voidloopThirdPersonCamera = {
+        desiredYaw: rig.desiredYaw,
+        displayYaw: rig.displayYaw,
+        pitch: rig.pitch,
+        collisionDistance: rig.collisionDistance,
+        subjectTarget: rig.subjectTarget.toArray(),
+        lookTarget: rig.lookTarget.toArray(),
+        lookahead: rig.lookahead.toArray(),
+      };
+    }
+  }
+
+  _getThirdPersonDesiredPosition(target, yaw, pitch, distance) {
+    const tune = this.tpCameraTuning;
+    const cosYaw = Math.cos(yaw);
+    const sinYaw = Math.sin(yaw);
+    const cosPitch = Math.cos(pitch);
+    const sinPitch = Math.sin(pitch);
+    return target.clone().add(new THREE.Vector3(
+      -sinYaw * distance * cosPitch + cosYaw * tune.shoulderX,
+      sinPitch * distance + tune.shoulderY,
+      -cosYaw * distance * cosPitch - sinYaw * tune.shoulderX
+    ));
   }
 
   _getThirdPersonCameraDistance(pivot, desired, direction, rayDist) {
@@ -1336,97 +1605,259 @@ export class Game {
 
     // ── 2. Terrain blocks — raycast against unified mesh ──
     if (isPickaxe) {
-      const rayOrigin = aim.origin;
-      const rayDirs = this.cameraMode === 'thirdPerson'
-        ? [aim.direction.clone()]
-        : [
-          aim.direction.clone(),
-          aim.direction.clone().multiplyScalar(0.75).add(new THREE.Vector3(0, -0.65, 0)).normalize(),
-          new THREE.Vector3(0, -1, 0),
-        ];
-      let hit = null;
-      for (const dir of rayDirs) {
-        const raycaster = new THREE.Raycaster(rayOrigin, dir, 0.05, range);
-        hit = this.world.terrainMesh.raycast(raycaster);
-        if (hit) break;
-      }
-      if (hit) {
-        const zone = getZoneAtPosition(hit.point.x, hit.point.z);
-        if (!zone) return null;
-        const normal = hit.face?.normal?.clone() || new THREE.Vector3(0, 1, 0);
-        normal.transformDirection(hit.object.matrixWorld).normalize();
-        let brushCenter = hit.point.clone().addScaledVector(normal, -0.45);
-        if (!this.world.terrainMesh.isSolidAt(brushCenter.x, brushCenter.y, brushCenter.z)) {
-          brushCenter = hit.point.clone().addScaledVector(normal, 0.45);
-        }
-        const depth = Math.max(0, 1 - brushCenter.y);
-        const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
-        const proxy = {
-          typeKey,
-          position: hit.point.clone(),
-          zoneId: zone.id,
-          isFloating: false,
-          destroyed: false,
-          tier: 1,
-        };
-        const status = this._getMiningStatusForBlock(proxy, { isPickaxe });
-        status.isTerrain = true;
-        status.gridPos = { x: brushCenter.x, y: brushCenter.y, z: brushCenter.z };
-        status.hitPoint = hit.point.clone();
-        status.brushCenter = brushCenter;
-        status.terrainCell = { type: typeKey, zoneId: zone.id };
-        return status;
-      }
+      const terrainTarget = this._findTerrainMiningTarget(aim, forward, range, isPickaxe);
+      if (terrainTarget) return terrainTarget;
     }
 
     return null;
   }
 
+  _findTerrainMiningTarget(aim, forward, range, isPickaxe) {
+    if (!this.world?.terrainMesh?.raycast) return null;
+
+    const playerFocus = this.player.position.clone().add(new THREE.Vector3(0, 0.65, 0));
+    const attempts = [];
+
+    if (this.cameraMode === 'thirdPerson') {
+      // Precision pass: camera/crosshair aim, but long enough to travel from
+      // the camera to the player's reachable mining bubble.
+      const cameraToPlayer = Math.max(0, aim.origin.distanceTo(playerFocus));
+      attempts.push({
+        origin: aim.origin.clone(),
+        dirs: [aim.direction.clone().normalize()],
+        rayRange: cameraToPlayer + range + 2.5,
+        maxPlayerDistance: range + 1.0,
+      });
+
+      // Auto-target pass: swing straight from the player like isometric mode,
+      // with a little vertical fan so walls, ceilings, and floor lips all work.
+      attempts.push({
+        origin: playerFocus,
+        dirs: [
+          forward.clone().setY(0.05).normalize(),
+          forward.clone().setY(0.28).normalize(),
+          forward.clone().setY(-0.35).normalize(),
+          forward.clone().multiplyScalar(0.85).add(new THREE.Vector3(0, -0.65, 0)).normalize(),
+        ],
+        rayRange: range + 1.35,
+        maxPlayerDistance: range + 0.85,
+      });
+    } else {
+      attempts.push({
+        origin: aim.origin,
+        dirs: [
+          aim.direction.clone(),
+          aim.direction.clone().multiplyScalar(0.75).add(new THREE.Vector3(0, -0.65, 0)).normalize(),
+          new THREE.Vector3(0, -1, 0),
+        ],
+        rayRange: range,
+        maxPlayerDistance: range + 0.5,
+      });
+    }
+
+    for (const attempt of attempts) {
+      for (const dir of attempt.dirs) {
+        if (!dir || dir.lengthSq() < 0.001) continue;
+        const raycaster = new THREE.Raycaster(attempt.origin, dir.normalize(), 0.05, attempt.rayRange);
+        const hit = this.world.terrainMesh.raycast(raycaster, attempt.origin, attempt.rayRange + 2);
+        if (!hit?.point) continue;
+        if (hit.point.distanceTo(playerFocus) > attempt.maxPlayerDistance) continue;
+        const target = this._buildTerrainMiningStatusFromHit(hit, isPickaxe);
+        if (target) return target;
+      }
+    }
+
+    if (this.cameraMode === 'iso') {
+      const underfootTarget = this._findUnderfootTerrainMiningTarget(isPickaxe);
+      if (underfootTarget) return underfootTarget;
+    }
+
+    return null;
+  }
+
+  _findUnderfootTerrainMiningTarget(isPickaxe) {
+    if (!this.world?.terrainMesh) return null;
+    const base = this.player.position;
+    const offsets = [
+      [0, 0],
+      [0.34, 0],
+      [-0.34, 0],
+      [0, 0.34],
+      [0, -0.34],
+    ];
+
+    for (const [ox, oz] of offsets) {
+      const x = base.x + ox;
+      const z = base.z + oz;
+      const zone = getZoneAtPosition(x, z);
+      if (!zone) continue;
+
+      const groundY = this.world.getGroundHeightAt(x, z, base.y + 0.4);
+      if (!Number.isFinite(groundY) || groundY <= -998) continue;
+
+      const center = new THREE.Vector3(x, groundY - 0.45, z);
+      if (!this.world.terrainMesh.isSolidAt(center.x, center.y, center.z)) {
+        center.y = groundY - 0.85;
+      }
+      if (!this.world.terrainMesh.isSolidAt(center.x, center.y, center.z)) continue;
+
+      return this._buildTerrainMiningStatusFromCenter(center, zone.id, isPickaxe);
+    }
+
+    return null;
+  }
+
+  _buildTerrainMiningStatusFromHit(hit, isPickaxe) {
+    const zone = getZoneAtPosition(hit.point.x, hit.point.z);
+    if (!zone) return null;
+    const normal = hit.face?.normal?.clone() || new THREE.Vector3(0, 1, 0);
+    normal.transformDirection(hit.object.matrixWorld).normalize();
+    let brushCenter = hit.point.clone().addScaledVector(normal, -0.45);
+    if (!this.world.terrainMesh.isSolidAt(brushCenter.x, brushCenter.y, brushCenter.z)) {
+      brushCenter = hit.point.clone().addScaledVector(normal, 0.45);
+    }
+    return this._buildTerrainMiningStatusFromCenter(brushCenter, zone.id, isPickaxe, hit.point.clone());
+  }
+
+  _buildTerrainMiningStatusFromCenter(brushCenter, zoneId, isPickaxe, hitPoint = brushCenter.clone()) {
+    const depth = Math.max(0, 1 - brushCenter.y);
+    const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
+    const proxy = {
+      typeKey,
+      position: hitPoint.clone(),
+      zoneId,
+      isFloating: false,
+      destroyed: false,
+      tier: 1,
+    };
+    const status = this._getMiningStatusForBlock(proxy, { isPickaxe });
+    status.isTerrain = true;
+    status.gridPos = { x: brushCenter.x, y: brushCenter.y, z: brushCenter.z };
+    status.hitPoint = hitPoint.clone();
+    status.brushCenter = brushCenter;
+    status.terrainCell = { type: typeKey, zoneId };
+    return status;
+  }
+
   _getMiningStatusForBlock(block, options = {}) {
-    const blockDef = BLOCK_TYPES[block.typeKey] || {};
-    const blockZoneId = block.zoneId || blockDef.zone;
-    const blockZone = getZoneById(blockZoneId);
-    const equippedTool = this.player.getEquippedTool() || this.inventory.getEquippedTool();
-    const requiredPickaxe = blockZone?.pickaxeId;
-    const blockTier = blockDef.tier || block.tier || 1;
-    const zonePickaxeTier = this.shop.getPickaxeTier(blockZoneId);
     const isPickaxe = options.isPickaxe ?? (this.player.weapons[this.player.currentSlot]?.data?.id === 'pickaxe');
 
     if (block.isFloating && !isPickaxe) {
-      return { allowed: false, block, reason: 'wrong_weapon', icon: '⛏️', requiredTier: blockTier, currentTier: zonePickaxeTier };
-    }
-    if (requiredPickaxe && equippedTool !== requiredPickaxe) {
-      return { allowed: false, block, reason: 'wrong_pickaxe', icon: '⛏️', requiredItem: requiredPickaxe, requiredTier: blockTier, currentTier: zonePickaxeTier };
-    }
-    if (zonePickaxeTier < blockTier) {
-      return { allowed: false, block, reason: 'low_tier', icon: '🔒', requiredTier: blockTier, currentTier: zonePickaxeTier };
+      return {
+        allowed: false,
+        block,
+        reason: 'wrong_weapon',
+        icon: '⛏',
+        requiredTier: 1,
+        currentTier: this.progression.getPickaxeWidth(),
+      };
     }
 
-    return { allowed: true, block, reason: 'ok', requiredTier: blockTier, currentTier: zonePickaxeTier };
+    return {
+      allowed: true,
+      block,
+      reason: 'ok',
+      requiredTier: 1,
+      currentTier: this.progression.getPickaxeWidth(),
+    };
   }
 
   _getMiningDamage(block) {
-    const blockDef = BLOCK_TYPES[block.typeKey] || {};
-    const zonePickaxeTier = this.shop.getPickaxeTier(block.zoneId || blockDef.zone);
-    const tierDamage = { 1: 1, 2: 2, 3: 3, 4: 5 };
-    return tierDamage[zonePickaxeTier] || 1;
+    return 999;
   }
 
   _getTerrainBrushRadius(zoneId) {
-    const tier = this.shop.getPickaxeTier(zoneId || this.zoneManager.currentZoneId) || 1;
-    const radii = { 1: 0.95, 2: 1.25, 3: 1.65, 4: 2.15 };
-    return radii[Math.min(tier, 4)] || radii[1];
+    const width = this.progression.getPickaxeWidth();
+    return width >= 5 ? 1.15 : width >= 3 ? 1.05 : 0.95;
+  }
+
+  _mineExtraTerrainBlocks(miningTarget, zoneId, budget) {
+    if (!miningTarget?.brushCenter || budget <= 0) return 0;
+    let mined = 0;
+    const base = miningTarget.brushCenter;
+    for (let i = 0; i < budget; i++) {
+      const angle = (Math.PI * 2 * i) / Math.max(1, budget);
+      const ring = 0.85 + Math.floor(i / 6) * 0.45;
+      const center = base.clone().add(new THREE.Vector3(Math.cos(angle) * ring, 0, Math.sin(angle) * ring));
+      const result = this.world.mineTerrainBlock(center.x, center.y, center.z, 999, {
+        center,
+        zoneId,
+        type: miningTarget.terrainCell?.type || 'dirt',
+        radius: this._getTerrainBrushRadius(zoneId),
+      });
+      if (!result?.meaningful) continue;
+      mined++;
+      const hitPos = center.clone();
+      this.blocksMined++;
+      this.progression.recordMined(result.zoneId || zoneId || this.zoneManager.currentZoneId, 1);
+      this.particles.dust(hitPos, 4);
+      this._awardTerrainDigRewards(result, hitPos, result.zoneId || zoneId);
+    }
+    if (mined > 0) {
+      this.floorTimer += GAME.TIME_BONUS_MINING * mined;
+    }
+    return mined;
+  }
+
+  _mineExtraFloatingBlocks(originBlock, zoneId, budget) {
+    if (!originBlock || budget <= 0) return 0;
+    const candidates = [];
+    for (const block of this.world.blocks.values()) {
+      if (!block || block === originBlock || block.destroyed || !block.isFloating) continue;
+      const dist = block.position.distanceTo(originBlock.position);
+      if (dist <= 3.25) candidates.push({ block, dist });
+    }
+    candidates.sort((a, b) => a.dist - b.dist);
+
+    let mined = 0;
+    for (const { block } of candidates) {
+      if (mined >= budget) break;
+      const status = this._getMiningStatusForBlock(block, { isPickaxe: true });
+      if (!status.allowed) continue;
+      if (!block.takeDamage(999)) continue;
+
+      const blockPos = block.position.clone();
+      blockPos.y += 0.3;
+      const typeKey = block.typeKey;
+      const blockZoneId = block.zoneId || zoneId || this.zoneManager.currentZoneId;
+      this.world.mineBlock(block, this.particles, audio);
+      this.blocksMined++;
+      this.progression.recordMined(blockZoneId, 1);
+      mined++;
+
+      this.particles.dust(blockPos, 8);
+      this.particles.spark(blockPos, 5);
+      const table = BLOCK_LOOT_TABLES[typeKey];
+      if (table) this.loot.spawnFromTable(blockPos, table);
+
+      if (Math.random() < this.progression.getLetterDropChance('floating')) {
+        const letter = this._pickLetterForZone(blockZoneId);
+        if (letter) {
+          this.letterDrops.spawn(blockPos, letter);
+          this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+        }
+      }
+
+      const blockDef = BLOCK_TYPES[typeKey];
+      if (blockDef?.resource) {
+        this.resources.add(blockDef.resource, 1);
+      }
+    }
+    if (mined > 0) {
+      this.floorTimer += GAME.TIME_BONUS_MINING * mined;
+    }
+    return mined;
   }
 
   _awardTerrainDigRewards(result, hitPos, zoneId) {
     if (!result?.meaningful) return;
 
-    const tier = this.shop.getPickaxeTier(zoneId || this.zoneManager.currentZoneId) || 1;
+    const width = this.progression.getPickaxeWidth();
     const depth = result.depth || 0;
-    const luck = this.shop.getUpgradeLevel?.('mine_luck') || 0;
+    const luck = this.progression.state.letterDropLevel || 0;
     const volumeBonus = Math.min(3, Math.floor((result.removedVolume || 0) / 10));
-    const amount = Math.max(1, Math.min(4, 1 + Math.floor((tier - 1) / 2) + volumeBonus));
-    const resourceType = this._pickDigJunkResource(depth, tier, luck);
+    const amount = Math.max(1, Math.min(4, 1 + Math.floor((width - 1) / 2) + volumeBonus));
+    const resourceType = this._pickDigJunkResource(depth, width, luck);
 
     if (this.resources.add(resourceType, amount)) {
       const name = RESOURCE_META[resourceType]?.name || resourceType.replace(/_/g, ' ');
@@ -1437,6 +1868,14 @@ export class Game {
       const spawnPos = node.position.clone();
       this.letterDrops.spawn(spawnPos, node.letter);
       this.ui.showFloatingText(`Letter ${node.letter}!`, 0xfacc15);
+    }
+
+    if (Math.random() < this.progression.getLetterDropChance('terrain')) {
+      const letter = this._pickLetterForZone(zoneId || result.zoneId || this.zoneManager.currentZoneId);
+      if (letter) {
+        this.letterDrops.spawn(hitPos.clone(), letter);
+        this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+      }
     }
   }
 
@@ -1600,10 +2039,17 @@ export class Game {
   }
 
   _tryCallMissileStrike() {
-    if (this.missileStrikeCooldown > 0) {
-      this.ui.showFloatingText(`${this.missileStrikeCooldown.toFixed(1)}s`, 0xffaa00);
+    if (!this.progression.state.missile.unlocked) {
+      this.ui.showFloatingText('Unlock missile strike first', 0xffaa00);
       SFXMapper.swingMiss();
       return false;
+    }
+    if (this.missileStrikeCooldown > 0) {
+      if (!this.progression.spendMissileCharge()) {
+        this.ui.showFloatingText(`${this.missileStrikeCooldown.toFixed(1)}s`, 0xffaa00);
+        SFXMapper.swingMiss();
+        return false;
+      }
     }
 
     const payload = this._buildMissileStrikePayload();
@@ -1613,7 +2059,7 @@ export class Game {
       return false;
     }
 
-    this.missileStrikeCooldown = GAME.MISSILE_STRIKE_COOLDOWN;
+    this.missileStrikeCooldown = this.progression.getMissileCooldown();
     this._callMissileStrike(payload, { sync: true });
     this.ui.showFloatingText('Missile strike', 0xffaa00);
     return true;
@@ -1623,8 +2069,9 @@ export class Game {
     const center = this._getMissileStrikeCenter();
     if (!center) return null;
 
-    const min = GAME.MISSILE_STRIKE_MIN || 3;
-    const max = GAME.MISSILE_STRIKE_MAX || min;
+    const range = this.progression.getMissileCountRange();
+    const min = range.min || GAME.MISSILE_STRIKE_MIN || 3;
+    const max = range.max || GAME.MISSILE_STRIKE_MAX || min;
     const count = min + Math.floor(Math.random() * (max - min + 1));
     const missiles = [];
 
@@ -1653,7 +2100,7 @@ export class Game {
     }
 
     return {
-      radius: GAME.MISSILE_STRIKE_RADIUS,
+      radius: this.progression.getMissileRadius(),
       damage: GAME.MISSILE_STRIKE_DAMAGE,
       missiles,
     };
@@ -1900,14 +2347,14 @@ export class Game {
   _checkZoneCompletion() {
     const zone = this.zoneManager.getCurrentZone();
     if (!zone || this.zoneManager.isZoneCompleted(zone.id)) return;
-    const aliveZoneEnemies = this.world.enemies.filter(e => e.zoneId === zone.id && !e.dead);
-    const allDead = aliveZoneEnemies.length === 0;
-    const allLettersSpelled = this.letterPool.allSpelledForLevel();
-    if (allDead && allLettersSpelled) {
+    const allLettersPassed = this.progression.allLettersPassed(zone.letters || []);
+    const mined = this.progression.getZoneMined(zone.id);
+    const miningTarget = this.progression.getZoneMiningTarget(zone);
+    if (allLettersPassed && mined >= miningTarget) {
       this.zoneManager.markZoneCompleted(zone.id);
       this.exitOpen = true;
       this.ui.showExitOpen(true);
-      this.ui.showFloatingText('✅ ⛏️ 🔓', 0x4ade80);
+      this.ui.showFloatingText('Zone mastered', 0x4ade80);
       SFXMapper.floorComplete();
       this._createGateways();
       this.ui.updateObjectiveHud?.(this._getObjectiveState(zone.id));
@@ -1917,13 +2364,28 @@ export class Game {
   _getObjectiveState(zoneId = this.zoneManager.currentZoneId) {
     const zone = getZoneById(zoneId);
     if (!zone) return null;
-    const tier = this.shop.getPickaxeTier(zone.id);
+    const width = this.progression.getPickaxeWidth();
+    const mined = this.progression.getZoneMined(zone.id);
+    const miningTarget = this.progression.getZoneMiningTarget(zone);
     const aliveEnemies = this.world.enemies.filter(e => e.zoneId === zone.id && !e.dead).length;
+    const passedLetters = (zone.letters || []).filter(letter => this.progression.hasPassedLetter(letter)).length;
     return {
       zoneId: zone.id,
-      letters: { done: this.letterPool.getSpelledCount(), total: zone.letters.length },
-      enemies: { done: aliveEnemies === 0, remaining: aliveEnemies },
-      pickaxeTier: tier,
+      letters: { done: passedLetters, total: zone.letters.length },
+      enemies: { done: true, remaining: 0, optionalRemaining: aliveEnemies },
+      mining: { done: mined >= miningTarget, current: mined, target: miningTarget },
+      grenade: {
+        unlocked: this.progression.state.grenade.unlocked,
+        charges: this.progression.state.grenade.charges,
+        cap: this.progression.getGrenadeChargeCap(),
+        cooldown: this.player.weapons[3]?.cooldown || 0,
+      },
+      missile: {
+        unlocked: this.progression.state.missile.unlocked,
+        charges: this.progression.state.missile.charges,
+        cooldown: this.missileStrikeCooldown || 0,
+      },
+      pickaxeTier: width,
       completed: this.zoneManager.isZoneCompleted(zone.id),
     };
   }
@@ -2037,21 +2499,18 @@ export class Game {
 
       const dist = this.player.position.distanceTo(new THREE.Vector3(gw.x, this.player.position.y, gw.z));
       if (dist < 5) {
-        const status = this.zoneManager.getGatewayStatus(targetZone.id, this.inventory);
-        if (status && !status.unlocked) {
-          if (status.canEnter) {
-            const previousComplete = this.zoneManager.isZoneCompleted(this.zoneManager.getPreviousZoneId(targetZone.id));
-            this.zoneManager.unlockZone(targetZone.id);
-            this.ui.showFloatingText(`🔓 ${targetZone.name} unlocked!`, 0x4ade80);
-            this.ui.showGatewayIndicator(targetZone.name, false, ['✅', '⛏️', '🛡️', '🔱']);
-            this._createGateways();
-            // Spawn enemies in newly unlocked zone
-            this._respawnZoneEnemies(targetZone.id);
-          } else {
-            const reqList = status.missing.map(m => m.label);
-            this.ui.showGatewayIndicator(targetZone.name, true, reqList);
-            this.ui.showFloatingText(`🔒 ${reqList.join(' ')}`, 0xff4444);
-          }
+        if (this.zoneManager.isZoneUnlocked(targetZone.id)) continue;
+        const previousZoneId = this.zoneManager.getPreviousZoneId(targetZone.id);
+        const canEnter = !previousZoneId || this.zoneManager.isZoneCompleted(previousZoneId);
+        if (canEnter) {
+          this.zoneManager.unlockZone(targetZone.id);
+          this.ui.showFloatingText(`${targetZone.name} unlocked!`, 0x4ade80);
+          this.ui.showGatewayIndicator(targetZone.name, false, ['ABC', '⛏']);
+          this._createGateways();
+          this._respawnZoneEnemies(targetZone.id);
+        } else {
+          this.ui.showGatewayIndicator(targetZone.name, true, ['ABC', '⛏']);
+          this.ui.showFloatingText('Master this zone first', 0xff4444);
         }
       }
     }
@@ -2090,7 +2549,7 @@ export class Game {
   }
 
   _setupHazards() {
-    this.hazards = new HazardSystem(this.scene, this.player, this.inventory, this.ui);
+    this.hazards = null;
   }
 
   _updateCameraZoom() {
@@ -2115,9 +2574,27 @@ export class Game {
     this.cameraMode = mode;
     if (mode === 'thirdPerson') {
       this.camera = this.thirdPersonCamera;
+      const tune = this.tpCameraTuning;
       this.camYaw = this.player.rotation;
-      this.camPitch = -0.12;
-      this.camPos.set(this.player.position.x, this.player.position.y + TP_HEIGHT, this.player.position.z);
+      this.camPitch = tune.pitchDefault;
+      this.thirdPersonCamera.fov = tune.fov;
+      this.thirdPersonCamera.updateProjectionMatrix();
+      const rig = this.tpCamera;
+      const subject = new THREE.Vector3(this.player.position.x, this.player.position.y + tune.height, this.player.position.z);
+      rig.subjectTarget.copy(subject);
+      rig.lookTarget.copy(subject);
+      rig.lookahead.set(0, 0, 0);
+      rig.previousPlayerPos.copy(this.player.position);
+      rig.desiredYaw = this.camYaw;
+      rig.displayYaw = this.camYaw;
+      rig.pitch = this.camPitch;
+      rig.distance = tune.distance;
+      rig.collisionDistance = tune.distance;
+      rig.manualRecenteringTimer = 0;
+      rig.initialized = true;
+      this.camPos.copy(this._getThirdPersonDesiredPosition(subject, rig.displayYaw, rig.pitch, rig.distance));
+      this.thirdPersonCamera.position.copy(this.camPos);
+      this.thirdPersonCamera.lookAt(subject.x, subject.y, subject.z);
       this._tpCollision.initialized = false;
       this._tpCollision.nearHit = false;
       this.renderer.domElement.requestPointerLock?.();
@@ -2301,11 +2778,175 @@ export class Game {
   // Spelling Challenge Methods
   // ==========================================
 
+  _collectLetterForMastery(letter, pickupPosition = null) {
+    const result = this.progression.collectLetter(letter);
+    const state = result.state;
+    if (!state) return;
+    const effectPos = pickupPosition || this.player.position.clone();
+    SFXMapper.letterPickup();
+    const needed = this.progression.getQuizThreshold(letter);
+    const progress = Number.isFinite(needed) ? `${state.dropsTowardQuiz}/${needed}` : 'mastered';
+    this.lettersCollected++;
+    this.ui.updateZoneLetterHud?.(this.zoneManager.currentZoneId);
+    const pickupAnimMs = this.ui.animateLetterPickup?.(state.letter, effectPos, this.zoneManager.currentZoneId) || 0;
+    this.ui.showFloatingText(`${state.letter} ${progress}`, result.queued ? 0x4ade80 : 0xfacc15);
+    this.ui.updateObjectiveHud?.(this._getObjectiveState());
+    if (result.queued && pickupAnimMs > 0) {
+      setTimeout(() => this._tryStartQueuedLetterQuiz(), pickupAnimMs + 120);
+    } else {
+      this._tryStartQueuedLetterQuiz();
+    }
+  }
+
+  _tryStartQueuedLetterQuiz() {
+    if (this.state !== STATES.PLAYING || this.currentLetterQuiz) return false;
+    const queued = this.progression.peekQuiz();
+    if (!queued) return false;
+    const zone = this.zoneManager.getCurrentZone();
+    this._enterLetterSoundQuiz(
+      queued.letter,
+      this.progression.makeQuizChoices(queued.letter, zone?.letters || undefined)
+    );
+    return true;
+  }
+
+  _enterLetterSoundQuiz(letter, choices) {
+    this._rememberSpellingCameraMode();
+    this.state = STATES.SPELLING;
+    this.currentLetterQuiz = { letter, choices };
+
+    if (this.spellingGlyphMesh) {
+      this.scene.remove(this.spellingGlyphMesh);
+      this.spellingGlyphMesh = null;
+    }
+
+    const glyph = glyph3D.createGlyph(letter, 'reward');
+    if (glyph) {
+      glyph.scale.setScalar(1.2);
+      glyph.position.set(this.player.position.x, 1.5, this.player.position.z);
+      this.scene.add(glyph);
+      this.spellingGlyphMesh = glyph;
+    }
+
+    const zoneLetters = this.zoneManager.getCurrentZone()?.letters || [];
+    const progressText = zoneLetters
+      .map(l => {
+        const passed = this.progression.hasPassedLetter(l);
+        const state = this.progression.getLetter(l);
+        return `<span class="${passed ? 'spelled' : 'pending'}">${l}${passed ? '✓' : ` Lv${state?.level || 1}`}</span>`;
+      })
+      .join(' ');
+
+    const state = this.progression.getLetter(letter);
+    const threshold = this.progression.getQuizThreshold(letter);
+    const subtitle = `Listen, then choose ${letter}. Meter ${state?.dropsTowardQuiz || 0}/${threshold}.`;
+    this.ui.showSoundQuiz(letter, choices, progressText, subtitle);
+    setTimeout(() => this._onSpellingPlay(), 250);
+  }
+
+  _resolveLetterSoundQuiz(choice) {
+    if (!this.currentLetterQuiz) return;
+    const target = this.currentLetterQuiz.letter;
+    const correct = String(choice || '').toUpperCase() === target;
+
+    if (!correct) {
+      this.progression.resolveQuiz(target, false);
+      this.ui.setSpellingFeedback('Listen again and try one more time.', false);
+      SFXMapper.swingMiss();
+      this._speakLetter(target);
+      return;
+    }
+
+    const result = this.progression.resolveQuiz(target, true);
+    this.letterPool.markSpelled(target);
+    this.petManager.recordMastery?.(target, result.state);
+    if (result.levelUp) {
+      const levelUpPos = new THREE.Vector3();
+      if (this.spellingGlyphMesh) {
+        this.spellingGlyphMesh.getWorldPosition(levelUpPos);
+      } else {
+        levelUpPos.copy(this.player.position).add(new THREE.Vector3(0, 0.75, 0));
+      }
+      this.pendingLetterLevelUp = {
+        letter: target,
+        oldLevel: result.oldLevel,
+        newLevel: result.newLevel,
+        position: levelUpPos,
+      };
+    }
+    if (this.pet?.letter === target && result.levelUp) {
+      this.pet.setLevel(result.newLevel);
+      this.pet.playLevelUp();
+    }
+    this.player.coins += 10;
+    this.floorTimer += 3;
+    this.ui.setSpellingFeedback(`Correct! +${result.xpGained} XP`, true);
+    if (!result.levelUp) {
+      this.ui.showFloatingText(`${target} Lv.${result.newLevel}`, 0xfacc15);
+    }
+    this.ui.showFloatingText('+10 coins', 0xfacc15);
+    this.ui.showTimeBonus('+3s LETTER!');
+    if (!result.levelUp) SFXMapper.collectOre();
+    this.ui.updateZoneLetterHud?.(this.zoneManager.currentZoneId);
+    setTimeout(() => this._exitLetterSoundQuiz(), 650);
+  }
+
+  _exitLetterSoundQuiz() {
+    this.currentLetterQuiz = null;
+    if (this.spellingGlyphMesh) {
+      this.scene.remove(this.spellingGlyphMesh);
+      this.spellingGlyphMesh.traverse((child) => {
+        if (child.isMesh && child.material && child.material.dispose) child.material.dispose();
+      });
+      this.spellingGlyphMesh = null;
+    }
+    this.ui.hideSpellingChallenge();
+    this.state = STATES.PLAYING;
+    this._restoreSpellingCameraMode();
+    this.ui.updateObjectiveHud?.(this._getObjectiveState());
+    this._playPendingLetterLevelUp();
+    this._checkZoneCompletion();
+    this._tryStartQueuedLetterQuiz();
+  }
+
+  _rememberSpellingCameraMode() {
+    if (this.spellingReturnCameraMode) return;
+    this.spellingReturnCameraMode = this.cameraMode;
+  }
+
+  _restoreSpellingCameraMode() {
+    const mode = this.spellingReturnCameraMode;
+    this.spellingReturnCameraMode = null;
+    if (mode && mode !== this.cameraMode) {
+      this._setCameraMode(mode, false);
+    }
+  }
+
+  _playPendingLetterLevelUp() {
+    if (!this.pendingLetterLevelUp) return;
+    const event = this.pendingLetterLevelUp;
+    this.pendingLetterLevelUp = null;
+    this.shaderFX.playLetterLevelUp(event.letter, event.position, event.oldLevel, event.newLevel);
+    this.ui.showFloatingText(`${event.letter} Lv.${event.newLevel}!`, 0x4ade80);
+    SFXMapper.levelUp();
+  }
+
+  _speakLetter(letter) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(`Letter ${letter}`);
+      utterance.rate = 0.8;
+      utterance.pitch = 1.05;
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+
   _enterSpellingChallenge(letter) {
     if (this.state === STATES.SPELLING) return;
     const wordObj = this.letterPool.pickWordForLetter(letter);
     if (!wordObj) return;
 
+    this._rememberSpellingCameraMode();
     this.state = STATES.SPELLING;
     this.spellingChallenge = new SpellingChallenge(wordObj);
 
@@ -2350,6 +2991,10 @@ export class Game {
   }
 
   async _onSpellingPlay() {
+    if (this.currentLetterQuiz) {
+      this._speakLetter(this.currentLetterQuiz.letter);
+      return;
+    }
     if (!this.spellingChallenge) return;
     this.ui.elSpellingPlayBtn.disabled = true;
     await this.spellingChallenge.playAudio();
@@ -2371,6 +3016,10 @@ export class Game {
   }
 
   _onSpellingCheck(input) {
+    if (this.currentLetterQuiz) {
+      this._resolveLetterSoundQuiz(input);
+      return;
+    }
     if (!this.spellingChallenge) return;
     const correct = this.spellingChallenge.checkAnswer(input);
     if (correct) {
@@ -2411,6 +3060,21 @@ export class Game {
   }
 
   _onSpellingClose() {
+    if (this.currentLetterQuiz) {
+      this.currentLetterQuiz = null;
+      if (this.spellingGlyphMesh) {
+        this.scene.remove(this.spellingGlyphMesh);
+        this.spellingGlyphMesh.traverse((child) => {
+          if (child.isMesh && child.material && child.material.dispose) child.material.dispose();
+        });
+        this.spellingGlyphMesh = null;
+      }
+      this.ui.hideSpellingChallenge();
+      this.state = STATES.PLAYING;
+      this._restoreSpellingCameraMode();
+      this.ui.updateObjectiveHud?.(this._getObjectiveState());
+      return;
+    }
     if (!this.spellingChallenge) return;
     this._exitSpellingChallenge(false);
   }
@@ -2462,6 +3126,7 @@ export class Game {
 
     this.ui.hideSpellingChallenge();
     this.state = STATES.PLAYING;
+    this._restoreSpellingCameraMode();
 
     // Update progress text on HUD if needed
     if (this.letterPool.allSpelledForLevel()) {
