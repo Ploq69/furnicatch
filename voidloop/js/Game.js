@@ -28,7 +28,7 @@ import { RemotePlayer } from './RemotePlayer.js';
 import { Enemy } from './Enemy.js';
 import { settings } from './SettingsManager.js';
 import { ResourceInventory, RESOURCE_META } from './ResourceInventory.js';
-import { WaterSurfaceSystem } from './WaterSurfaceSystem.js';
+import { getBlockProperties } from './BlockProperties.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -176,6 +176,7 @@ export class Game {
     this._renderScale = Math.min(1, this._renderScaleMax);
     this._renderScaleLowTime = 0;
     this._renderScaleHighTime = 0;
+    this._objectiveHudRefreshTimer = 0;
     this._perfFrame = {};
     this._tpCollision = {
       lastAt: -Infinity,
@@ -224,7 +225,6 @@ export class Game {
     this.flipbooks = new FlipbookVFX(this.scene);
     this.shaderFX = new ShaderParticleFX(this.scene);
     this.world = new World(this.scene, this.renderer);
-    this.water = new WaterSurfaceSystem(this.scene);
     this.player = new Player(this.scene);
     this.player.world = this.world;
     this.ui = new UIManager(this);
@@ -312,6 +312,7 @@ export class Game {
     this.inventory = new Inventory();
     this.resources = new ResourceInventory();
     this.hazards = null;
+    this._blockHazardTimer = 0;
     this.currentLetterQuiz = null;
     this.pendingLetterLevelUp = null;
     this._gatewayMeshes = [];
@@ -421,12 +422,32 @@ export class Game {
     this.player.equipTool(this.inventory.getEquippedTool());
     this.player.equipArmor(this.inventory.getEquippedArmor());
     this.player.equipFunctionalWeapon(this.inventory.getEquippedWeapon());
+    // Sync rocket boots from progression save
+    if (this.progression.hasRocketBoots()) {
+      if (!this.inventory.hasItem('rocket_boots')) {
+        this.inventory.addItem('rocket_boots');
+      }
+      if (!this.inventory.getEquippedBoots()) {
+        this.inventory.equip('rocket_boots', 'boots');
+      }
+      this.player.setRocketBootsLevel(this.progression.getRocketBootsFuelLevel());
+    }
+    this.player.equipBoots(this.inventory.getEquippedBoots());
   }
 
   buyProgressionUpgrade(upgradeId) {
     const result = this.progression.purchase(upgradeId, this.player.coins);
     if (result.success) {
       this.player.coins = result.coins;
+      // Handle rocket boots purchase/equip
+      if (upgradeId === 'rocket_boots_unlock') {
+        this.inventory.addItem('rocket_boots');
+        this.inventory.equip('rocket_boots', 'boots');
+        this._syncFunctionalEquipment();
+      }
+      if (upgradeId === 'rocket_boots_fuel') {
+        this.player.setRocketBootsLevel(this.progression.getRocketBootsFuelLevel());
+      }
       this.ui.updateStats();
       this.ui.updateObjectiveHud?.(this._getObjectiveState());
     }
@@ -474,7 +495,6 @@ export class Game {
 
     // Build unified terrain mesh once after all zones are generated
     await this.world.buildTerrainMesh();
-    this.water.setVolumes(ZONES);
 
     // Spawn player at current zone's spawn point
     const currentZone = this.zoneManager.getCurrentZone();
@@ -534,7 +554,6 @@ export class Game {
     }
 
     await this.world.loadAuthoredLevel(levelDoc, { scene: this.scene, letterDrop: this.letterDrops });
-    this.water.clear();
 
     // Spawn player at authored start position
     if (this.world.startPosition) {
@@ -610,9 +629,9 @@ export class Game {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     this._perfFrame = {
       worldMs: 0,
-      waterMs: 0,
       renderMs: 0,
       cameraCollisionMs: 0,
+      uiMs: 0,
     };
     this.world?.terrainMesh?.resetPerfStats?.();
 
@@ -671,21 +690,13 @@ export class Game {
       }
     }
 
-    const waterStart = performance.now();
-    this.water.update(dt, {
-      player: this.player,
-      camera: this.camera,
-      terrain: this.world?.terrainMesh,
-      particles: this.particles,
-      flipbooks: this.flipbooks,
-      sfx: SFXMapper,
-    });
-    this._perfFrame.waterMs = performance.now() - waterStart;
-    this.particles.update(dt);
+    this.particles.update(dt, this.camera);
     this.flipbooks.update(dt, this.camera);
     this.shaderFX.update(dt);
     updateWeaponEmitters(dt, this.camera);
+    const uiStart = performance.now();
     this.ui.update(dt);
+    this._perfFrame.uiMs += performance.now() - uiStart;
     const renderStart = performance.now();
     this._updateSkyPosition();
     // Render terrain first (writes depth + color), then THREE.js scene on top
@@ -739,8 +750,10 @@ export class Game {
     }
 
     // Player update
-    this.player.setWaterState(this.water.getVolumeAt(this.player.position));
+    this.player.setFluidState(this.world.getFluidStateAt(this.player.position));
+    this.player.setSurfaceState(this.world.getSurfaceStateAt(this.player.position));
     this.player.update(dt, input);
+    this._applyBlockHazards(dt);
     if (this.player.jumpStartedThisFrame) {
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.08, 0));
       this.particles.dust(pos, 5);
@@ -749,6 +762,15 @@ export class Game {
     if (this.player.landedThisFrame) {
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.04, 0));
       this.particles.dust(pos, 4);
+    }
+
+    // Rocket boots VFX
+    if (this.player.rocketBootsActive) {
+      const forward = new THREE.Vector3(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation));
+      const leftBoot = this.player.position.clone().add(new THREE.Vector3(-forward.z * 0.2, 0.15, forward.x * 0.2)).sub(forward.clone().multiplyScalar(0.25));
+      const rightBoot = this.player.position.clone().add(new THREE.Vector3(forward.z * 0.2, 0.15, -forward.x * 0.2)).sub(forward.clone().multiplyScalar(0.25));
+      this.particles.spawnRocketTrail(leftBoot, forward, 3);
+      this.particles.spawnRocketTrail(rightBoot, forward, 3);
     }
 
     // Update remote player animation
@@ -875,12 +897,12 @@ export class Game {
           }
 
           if (destroyed) {
-            // Underwater bubble burst when digging underwater terrain
+            // Fluid bubble burst when digging terrain inside a fluid cell
             if (miningTarget.isTerrain) {
-              const waterVol = this.water.getVolumeAt(blockPos);
-              if (waterVol && blockPos.y < waterVol.surfaceY - 0.15) {
+              const fluid = this.world.getFluidStateAt(blockPos);
+              if (fluid?.type === 'water' && blockPos.y < fluid.surfaceY - 0.15) {
                 this.particles.spawn({
-                  pos: blockPos.clone().setY(waterVol.surfaceY - 0.1),
+                  pos: blockPos.clone().setY(fluid.surfaceY - 0.1),
                   count: 4,
                   color: 0xcffff5,
                   speed: 0.6,
@@ -1066,9 +1088,16 @@ export class Game {
       return;
     }
 
-    // Update UI
+    // Update UI. Objective/zone-letter HUD work includes DOM mutation, so keep
+    // it responsive without doing it every animation frame.
+    const uiStart = performance.now();
     this.ui.updateStats();
-    this.ui.updateObjectiveHud?.(this._getObjectiveState());
+    this._objectiveHudRefreshTimer += dt;
+    if (this._objectiveHudRefreshTimer >= 0.2) {
+      this._objectiveHudRefreshTimer = 0;
+      this.ui.updateObjectiveHud?.(this._getObjectiveState());
+    }
+    this._perfFrame.uiMs += performance.now() - uiStart;
 
     // FPS counter
     this.frameCount = (this.frameCount || 0) + 1;
@@ -1087,27 +1116,50 @@ export class Game {
     if (!enabled) return null;
     const terrain = this.world?.terrainMesh?.getStats?.() || {};
     const terrainPerf = this.world?.terrainMesh?.perfStats || {};
-    const water = this.water?.getStats?.() || {};
+    const audioStats = audio.getStats?.() || {};
     return {
       calls: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
+      sceneChildren: this.scene.children.length,
+      geometries: this.renderer.info.memory.geometries,
+      textures: this.renderer.info.memory.textures,
       visibleChunks: terrain.visibleChunks || 0,
       liveChunks: terrain.liveChunks || terrain.chunks || 0,
       dirtyChunks: terrain.dirtyChunks || 0,
+      modifiedCells: terrain.blocks || 0,
       rebuildMs: terrain.rebuildMs || 0,
       worldMs: this._perfFrame.worldMs || 0,
       terrainVisibilityMs: terrainPerf.visibilityMs || 0,
       terrainRebuildMs: terrainPerf.rebuildMs || 0,
       cameraCollisionMs: this._perfFrame.cameraCollisionMs || 0,
-      waterMs: this._perfFrame.waterMs || 0,
+      uiMs: this._perfFrame.uiMs || 0,
       renderMs: this._perfFrame.renderMs || 0,
       raycasts: terrainPerf.raycasts || 0,
       raycastMs: terrainPerf.raycastMs || 0,
       visibilityRecomputed: terrainPerf.visibilityRecomputed || 0,
       renderScale: this._renderScale || 1,
-      waterMeshes: water.waterMeshes || 0,
-      waterRipples: water.waterRipples || 0,
+      shaderEffects: this.shaderFX?.effects?.length || 0,
+      audioBuffers: audioStats.buffers || 0,
+      audioLoading: audioStats.loading || 0,
+      flyers: typeof document !== 'undefined' ? document.querySelectorAll('.letter-pickup-flyer,.floating-loot,.damage-number').length : 0,
     };
+  }
+
+  _applyBlockHazards(dt) {
+    const fluid = this.world?.getFluidStateAt?.(this.player.position);
+    const hazard = fluid?.hazard;
+    if (!hazard?.damagePerSecond) {
+      this._blockHazardTimer = 0;
+      return;
+    }
+
+    this._blockHazardTimer += dt;
+    if (this._blockHazardTimer < 0.5) return;
+    const damage = Math.max(1, Math.round(hazard.damagePerSecond * this._blockHazardTimer));
+    this._blockHazardTimer = 0;
+    this.player.takeDamage(damage);
+    this.ui?.showHazardWarning?.(hazard.type || 'hazard', true);
+    this.ui?.showFloatingText?.(`-${damage}`, 0xff4422);
   }
 
   _updateDynamicRenderScale(fps) {
@@ -1720,13 +1772,18 @@ export class Game {
   }
 
   _buildTerrainMiningStatusFromCenter(brushCenter, zoneId, isPickaxe, hitPoint = brushCenter.clone()) {
-    const depth = Math.max(0, 1 - brushCenter.y);
-    const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
+    const cellX = Math.floor(brushCenter.x);
+    const cellY = Math.floor(brushCenter.y);
+    const cellZ = Math.floor(brushCenter.z);
+    const cellState = this.world.terrainMesh.getCellState?.(cellX, cellY, cellZ);
+    const typeKey = cellState?.type || 'dirt';
     const proxy = {
       typeKey,
       position: hitPoint.clone(),
       zoneId,
       isFloating: false,
+      isTerrain: true,
+      mineable: cellState?.properties?.mineable !== false,
       destroyed: false,
       tier: 1,
     };
@@ -1748,6 +1805,18 @@ export class Game {
         block,
         reason: 'wrong_weapon',
         icon: '⛏',
+        requiredTier: 1,
+        currentTier: this.progression.getPickaxeWidth(),
+      };
+    }
+
+    const properties = getBlockProperties(block.typeKey);
+    if (block.mineable === false || properties.mineable === false) {
+      return {
+        allowed: false,
+        block,
+        reason: 'not_mineable',
+        icon: '',
         requiredTier: 1,
         currentTier: this.progression.getPickaxeWidth(),
       };

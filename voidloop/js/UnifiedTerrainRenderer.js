@@ -45,6 +45,7 @@ out vec3 vWorldPos;
 
 uniform mat4 uProjectionMatrix;
 uniform mat4 uViewMatrix;
+uniform float time;
 
 void main() {
   vMaterialId = aMaterialId;
@@ -53,6 +54,12 @@ void main() {
   vNormal = normalize(mat3(uViewMatrix) * aNormal);
   vUv = aUv;
   vec4 worldPos = vec4(aPosition, 1.0);
+  int materialId = int(floor(aMaterialId + 0.5));
+  if (materialId == 9 && aFaceKind < 0.5) {
+    float rippleA = sin((aPosition.x * 1.35 + aPosition.z * 0.95) + time * 1.55) * 0.025;
+    float rippleB = cos((aPosition.x * -0.72 + aPosition.z * 1.48) - time * 1.15) * 0.018;
+    worldPos.y += rippleA + rippleB;
+  }
   vWorldPos = worldPos.xyz;
   gl_Position = uProjectionMatrix * uViewMatrix * worldPos;
 }
@@ -78,6 +85,7 @@ uniform float fogEnabled;
 uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
+uniform int passMode;
 
 in vec3 vNormal;
 in vec2 vUv;
@@ -96,7 +104,20 @@ vec3 getBaseColor(float tileIndex, vec2 uv) {
 }
 
 void main() {
-  vec3 color = getBaseColor(vTileIndex, vUv);
+  int materialId = int(floor(vMaterialId + 0.5));
+  bool transparentMaterial = materialId == 4 || materialId == 7 || materialId == 9;
+  if (passMode == 0 && transparentMaterial) discard;
+  if (passMode == 1 && !transparentMaterial) discard;
+
+  vec2 sampleUv = vUv;
+  if (materialId == 9) {
+    float waveA = sin(vWorldPos.x * 1.18 + vWorldPos.z * 0.63 + time * 1.65) * 0.028;
+    float waveB = cos(vWorldPos.z * 1.07 - vWorldPos.x * 0.44 - time * 1.25) * 0.022;
+    sampleUv += vec2(time * 0.075 + waveA, time * 0.045 + waveB);
+  } else if (materialId == 4) {
+    sampleUv += vec2(sin(time * 1.4 + vWorldPos.z * 0.8), cos(time * 1.1 + vWorldPos.x * 0.6)) * 0.018;
+  }
+  vec3 color = getBaseColor(vTileIndex, sampleUv);
 
   vec2 toPoint = vWorldPos.xz - cutawayCenter.xz;
   float corridorT = clamp(dot(toPoint, normalize(cutawayForward)), 0.0, cutawayReach);
@@ -112,7 +133,26 @@ void main() {
   float fogT = smoothstep(fogNear, fogFar, distance(uCameraPosition, vWorldPos)) * fogEnabled;
   color = mix(color, fogColor, fogT);
 
-  fragColor = vec4(color, 1.0);
+  float alpha = 1.0;
+  if (materialId == 9) {
+    float topFace = 1.0 - step(0.5, abs(vFaceKind));
+    float shimmer = sin(time * 2.4 + vWorldPos.x * 0.58 + vWorldPos.z * 0.37) * 0.5 + 0.5;
+    float crossing = sin((vWorldPos.x + vWorldPos.z) * 2.25 + time * 2.1) * 0.5 + 0.5;
+    float flowLine = smoothstep(0.82, 1.0, crossing) * topFace;
+    vec3 deepTint = vec3(0.08, 0.42, 0.56);
+    vec3 brightTint = vec3(0.42, 0.88, 0.98);
+    color = mix(color, deepTint, 0.36);
+    color = mix(color, brightTint, 0.10 + flowLine * 0.18 + shimmer * 0.05);
+    alpha = mix(0.32, 0.43, topFace) + shimmer * 0.035;
+  } else if (materialId == 7) {
+    alpha = 0.82;
+    color = mix(color, vec3(0.68, 0.92, 1.0), 0.22);
+  } else if (materialId == 4) {
+    alpha = 0.92;
+    color *= 1.25 + 0.08 * sin(time * 4.0 + vWorldPos.x * 0.7 + vWorldPos.z * 0.5);
+  }
+
+  fragColor = vec4(color, alpha);
 }
 `;
 
@@ -184,6 +224,7 @@ export class UnifiedTerrainRenderer {
     this.uFogColor = this.gl.getUniformLocation(this.program, 'fogColor');
     this.uFogNear = this.gl.getUniformLocation(this.program, 'fogNear');
     this.uFogFar = this.gl.getUniformLocation(this.program, 'fogFar');
+    this.uPassMode = this.gl.getUniformLocation(this.program, 'passMode');
 
     // Chunk slots
     this.slots = [];
@@ -194,6 +235,7 @@ export class UnifiedTerrainRenderer {
         cx: 0, cy: 0, cz: 0,
         vertexOffset: i * this.slotVertices,
         vertexCount: 0,
+        hasTransparent: false,
         lastUsed: 0,
       });
     }
@@ -267,6 +309,9 @@ export class UnifiedTerrainRenderer {
     // Draw list buffers for multi-draw
     this._firsts = new Int32Array(this.slotCount);
     this._counts = new Int32Array(this.slotCount);
+    this._transparentFirsts = new Int32Array(this.slotCount);
+    this._transparentCounts = new Int32Array(this.slotCount);
+    this._transparentSlots = [];
 
     // Stats
     this.stats = {
@@ -330,6 +375,7 @@ export class UnifiedTerrainRenderer {
     slot.state = SLOT_FREE;
     slot.cx = slot.cy = slot.cz = 0;
     slot.vertexCount = 0;
+    slot.hasTransparent = false;
     this.freeSlots.push(slotIndex);
   }
 
@@ -341,6 +387,14 @@ export class UnifiedTerrainRenderer {
       console.warn(`[UnifiedTerrainRenderer] Chunk ${slot.cx},${slot.cy},${slot.cz} exceeds slot capacity: ${vertCount} > ${this.slotVertices}. Truncating.`);
     }
     slot.vertexCount = Math.min(vertCount, this.slotVertices);
+    slot.hasTransparent = false;
+    for (let i = 0; i < slot.vertexCount; i++) {
+      const materialId = Math.round(data[i * VERTEX_STRIDE_FLOATS + 11]);
+      if (materialId === 4 || materialId === 7 || materialId === 9) {
+        slot.hasTransparent = true;
+        break;
+      }
+    }
     slot.state = SLOT_READY;
     slot.lastUsed = performance.now();
 
@@ -385,6 +439,7 @@ export class UnifiedTerrainRenderer {
     for (let i = 0; i < this.slotCount; i++) {
       this.slots[i].state = SLOT_FREE;
       this.slots[i].vertexCount = 0;
+      this.slots[i].hasTransparent = false;
       this.slots[i].cx = this.slots[i].cy = this.slots[i].cz = 0;
       this.freeSlots.push(i);
     }
@@ -475,10 +530,12 @@ export class UnifiedTerrainRenderer {
     const prevCullFace = gl.getParameter(gl.CULL_FACE);
     const prevFrontFace = gl.getParameter(gl.FRONT_FACE);
     const prevBlend = gl.getParameter(gl.BLEND);
+    const prevDepthMask = gl.getParameter(gl.DEPTH_WRITEMASK);
     const prevViewport = gl.getParameter(gl.VIEWPORT);
 
     // Build draw list from visible keys
     let drawCount = 0;
+    this._transparentSlots.length = 0;
     for (const key of visibleKeys) {
       const slotIndex = this.chunkKeyToSlot.get(key);
       if (slotIndex === undefined) continue;
@@ -487,6 +544,25 @@ export class UnifiedTerrainRenderer {
       this._firsts[drawCount] = slot.vertexOffset;
       this._counts[drawCount] = slot.vertexCount;
       drawCount++;
+      if (slot.hasTransparent) {
+        this._transparentSlots.push(slot);
+      }
+    }
+    const camPos = camera.position;
+    this._transparentSlots.sort((a, b) => {
+      const adx = a.cx * 8 + 4 - camPos.x;
+      const ady = a.cy * 8 + 4 - camPos.y;
+      const adz = a.cz * 8 + 4 - camPos.z;
+      const bdx = b.cx * 8 + 4 - camPos.x;
+      const bdy = b.cy * 8 + 4 - camPos.y;
+      const bdz = b.cz * 8 + 4 - camPos.z;
+      return (bdx * bdx + bdy * bdy + bdz * bdz) - (adx * adx + ady * ady + adz * adz);
+    });
+    let transparentDrawCount = 0;
+    for (const slot of this._transparentSlots) {
+      this._transparentFirsts[transparentDrawCount] = slot.vertexOffset;
+      this._transparentCounts[transparentDrawCount] = slot.vertexCount;
+      transparentDrawCount++;
     }
     this.stats.slotUtilization = this.chunkKeyToSlot.size;
 
@@ -506,7 +582,6 @@ export class UnifiedTerrainRenderer {
     gl.uniformMatrix4fv(this.uProjectionMatrix, false, proj);
     gl.uniformMatrix4fv(this.uViewMatrix, false, view);
 
-    const camPos = camera.position;
     gl.uniform3f(this.uCameraPosition, camPos.x, camPos.y, camPos.z);
     gl.uniform1f(this.uTime, this._time);
     gl.uniform1f(this.uRenderMode, this._renderMode);
@@ -544,23 +619,40 @@ export class UnifiedTerrainRenderer {
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
     gl.frontFace(gl.CCW);
-    gl.disable(gl.BLEND);
 
-    // Render
-    if (this.multiDrawExt && drawCount > 1) {
-      this.multiDrawExt.multiDrawArraysWEBGL(
-        gl.TRIANGLES,
-        this._firsts, 0,
-        this._counts, 0,
-        drawCount
-      );
-      this.stats.drawCalls = 1;
-    } else {
-      for (let i = 0; i < drawCount; i++) {
-        gl.drawArrays(gl.TRIANGLES, this._firsts[i], this._counts[i]);
+    const drawPass = (firsts, counts, count) => {
+      if (count <= 0) return 0;
+      if (this.multiDrawExt && count > 1) {
+        this.multiDrawExt.multiDrawArraysWEBGL(
+          gl.TRIANGLES,
+          firsts, 0,
+          counts, 0,
+          count
+        );
+        return 1;
       }
-      this.stats.drawCalls = drawCount;
+      for (let i = 0; i < count; i++) {
+        gl.drawArrays(gl.TRIANGLES, firsts[i], counts[i]);
+      }
+      return count;
+    };
+
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    gl.uniform1i(this.uPassMode, 0);
+    const opaqueCalls = drawPass(this._firsts, this._counts, drawCount);
+
+    let transparentCalls = 0;
+    if (transparentDrawCount > 0) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.uniform1i(this.uPassMode, 1);
+      transparentCalls = drawPass(this._transparentFirsts, this._transparentCounts, transparentDrawCount);
+      gl.depthMask(true);
     }
+
+    this.stats.drawCalls = opaqueCalls + transparentCalls;
 
     this.stats.visibleChunks = drawCount;
 
@@ -573,6 +665,8 @@ export class UnifiedTerrainRenderer {
     else gl.disable(gl.CULL_FACE);
     gl.frontFace(prevFrontFace);
     if (prevBlend) gl.enable(gl.BLEND);
+    else gl.disable(gl.BLEND);
+    gl.depthMask(prevDepthMask);
     gl.viewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
     if (this.threeRenderer.resetState) {
       this.threeRenderer.resetState();

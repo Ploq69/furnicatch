@@ -82,6 +82,27 @@
       color: rgba(255,255,255,0.8);
       margin-top: 2px;
     }
+    .fuel-bar-wrapper {
+      width: 120px;
+      height: 8px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.15);
+      margin-top: 4px;
+      display: none;
+    }
+    .fuel-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #f97316, #fbbf24);
+      border-radius: 4px;
+      transition: width 0.1s;
+      box-shadow: 0 0 6px rgba(249,115,22,0.4);
+    }
+    .fuel-bar-empty .fuel-bar-fill {
+      background: linear-gradient(90deg, #7f1d1d, #991b1b);
+      box-shadow: 0 0 6px rgba(153,27,27,0.4);
+    }
     .coin-display {
       display: flex;
       align-items: center;
@@ -272,9 +293,8 @@
         linear-gradient(180deg, rgba(18,24,32,0.86), rgba(8,10,14,0.78)),
         rgba(0,0,0,0.55);
       border: 1px solid rgba(154, 211, 255, 0.18);
-      box-shadow: 0 10px 28px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.24);
       pointer-events: none;
-      backdrop-filter: blur(6px);
     }
     .zone-letter-card {
       position: relative;
@@ -293,11 +313,11 @@
     }
     .zone-letter-card.ready {
       border-color: rgba(74, 222, 128, 0.58);
-      box-shadow: 0 0 14px rgba(74,222,128,0.18), inset 0 0 14px rgba(74,222,128,0.08);
+      background: rgba(74,222,128,0.1);
     }
     .zone-letter-card.maxed {
       border-color: rgba(250,204,21,0.68);
-      box-shadow: 0 0 16px rgba(250,204,21,0.22), inset 0 0 18px rgba(250,204,21,0.1);
+      background: rgba(250,204,21,0.1);
     }
     .zone-letter-card.letter-fill-pop {
       animation: letterFillPop 0.46s ease-out;
@@ -315,7 +335,6 @@
     .zone-letter-card.ready::after {
       border-radius: inherit;
       box-shadow: inset 0 0 0 1px rgba(74,222,128,0.42);
-      animation: zoneReadyPulse 0.95s ease-in-out infinite;
     }
     .zone-letter-top {
       display: flex;
@@ -350,7 +369,6 @@
       width: 0%;
       border-radius: inherit;
       background: linear-gradient(90deg, #47e4c2, #facc15);
-      box-shadow: 0 0 8px rgba(71,228,194,0.5);
       transition: width 0.28s ease;
     }
     .zone-letter-meta {
@@ -384,18 +402,13 @@
       font-weight: 950;
       line-height: 1;
       text-shadow: 0 1px 0 rgba(255,255,255,0.45);
-      box-shadow: 0 0 16px rgba(250,204,21,0.42), 0 6px 18px rgba(0,0,0,0.26);
       pointer-events: none;
-      will-change: left, top, transform, opacity;
+      will-change: transform, opacity;
     }
     @keyframes letterFillPop {
-      0% { transform: scale(1); box-shadow: 0 0 0 rgba(250,204,21,0); }
-      36% { transform: scale(1.16); box-shadow: 0 0 20px rgba(250,204,21,0.42), inset 0 0 14px rgba(71,228,194,0.2); }
-      100% { transform: scale(1); box-shadow: 0 0 0 rgba(250,204,21,0); }
-    }
-    @keyframes zoneReadyPulse {
-      0%, 100% { opacity: 0.38; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.035); }
+      0% { transform: scale(1); }
+      36% { transform: scale(1.12); }
+      100% { transform: scale(1); }
     }
     @media (max-width: 640px) {
       .zone-letter-hud {
@@ -2471,6 +2484,7 @@
         <span class="hp-heart">❤️</span>
         <div>
           <div class="hp-bar-wrapper"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
+          <div class="fuel-bar-wrapper" id="fuel-bar-wrapper"><div class="fuel-bar-fill" id="fuel-bar" style="width:100%"></div></div>
           <div class="hp-text" id="hp-text">100/100</div>
         </div>
       </div>

@@ -11,6 +11,7 @@ export class Inventory {
       tool: null,
       armor: null,
       weapon: null,
+      boots: null,
     };
     this._load();
   }
@@ -74,13 +75,17 @@ export class Inventory {
     return this.equipped.weapon;
   }
 
+  getEquippedBoots() {
+    return this.equipped.boots;
+  }
+
   getAllItems() {
     return { ...this.items };
   }
 
   reset() {
     this.items = {};
-    this.equipped = { tool: null, armor: null, weapon: null };
+    this.equipped = { tool: null, armor: null, weapon: null, boots: null };
     this._save();
   }
 

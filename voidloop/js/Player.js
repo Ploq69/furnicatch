@@ -121,9 +121,13 @@ export class Player {
     this.stunTimer = 0;
     this.isSwimming = false;
     this.isWading = false;
-    this.waterSurfaceY = 0;
-    this.waterBottomY = -999;
-    this.waterDepth = 0;
+    this.fluidType = null;
+    this.fluidSurfaceY = 0;
+    this.fluidBottomY = -999;
+    this.fluidDepth = 0;
+    this.surfaceType = null;
+    this.surfaceFriction = 8;
+    this.slideVelocity = new THREE.Vector2();
 
     this.mesh = null;
     this.mixer = null;
@@ -178,6 +182,15 @@ export class Player {
     this.equippedTool = null;
     this.equippedArmor = null;
     this.equippedWeapon = null;
+    this.equippedBoots = null;
+
+    // Rocket boots state
+    this.rocketBootsFuel = 1.0;
+    this.rocketBootsMaxFuel = GAME.ROCKET_BOOTS_FUEL_BASE;
+    this.rocketBootsBurnRate = GAME.ROCKET_BOOTS_BURN_RATE;
+    this.rocketBootsThrust = GAME.ROCKET_BOOTS_THRUST;
+    this.rocketBootsActive = false;
+    this.rocketBootsLevel = 0;
 
     // Upgrade-applied stats (set by applyUpgrades)
     this.mineDamage = 1;
@@ -541,8 +554,24 @@ export class Player {
       }
     }
 
+    // Rocket boots logic
+    const hasRocketBoots = this.equippedBoots === 'rocket_boots';
+    if (this.isGrounded) {
+      this.rocketBootsFuel = this.rocketBootsMaxFuel;
+      this.rocketBootsActive = false;
+    } else if (hasRocketBoots && this.jumpHeld && this.rocketBootsFuel > 0 && !this.isSwimming) {
+      this.rocketBootsActive = true;
+      this.rocketBootsFuel -= this.rocketBootsBurnRate * dt;
+      if (this.rocketBootsFuel < 0) this.rocketBootsFuel = 0;
+    } else {
+      this.rocketBootsActive = false;
+    }
+
     let gravityMultiplier = 1;
-    if (this.velocity.y < -0.01) {
+    if (this.rocketBootsActive) {
+      gravityMultiplier = 0;
+      this.velocity.y = this.rocketBootsThrust;
+    } else if (this.velocity.y < -0.01) {
       gravityMultiplier = GAME.FALL_MULTIPLIER;
     } else if (this.velocity.y > 0.01 && !this.jumpHeld) {
       gravityMultiplier = GAME.JUMP_CUT_MULTIPLIER;
@@ -674,32 +703,36 @@ export class Player {
       this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
     }
 
-    const moveX = dx * speed * dt;
-    const moveZ = dz * speed * dt;
-    const tryStepUp = () => {
-      if (!this.world?.isPlayerSpaceClear || !this.isGrounded) return false;
-      const oldY = this.position.y;
-      this.position.y += 1.05;
-      const clear = this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z);
-      if (clear) {
-        this.velocity.y = 0;
-        return true;
-      }
-      this.position.y = oldY;
-      return false;
-    };
+    let moveX = dx * speed * dt;
+    let moveZ = dz * speed * dt;
+    const slippery = !this.isSwimming && this.isGrounded && this.surfaceFriction <= 1.5;
+    if (slippery) {
+      const targetVX = dx * speed;
+      const targetVZ = dz * speed;
+      const inputAccel = dx !== 0 || dz !== 0 ? 4.5 : 0.0;
+      const accelT = Math.min(1, inputAccel * dt);
+      this.slideVelocity.x += (targetVX - this.slideVelocity.x) * accelT;
+      this.slideVelocity.y += (targetVZ - this.slideVelocity.y) * accelT;
+      const damping = Math.exp(-this.surfaceFriction * 0.45 * dt);
+      this.slideVelocity.multiplyScalar(damping);
+      moveX = this.slideVelocity.x * dt;
+      moveZ = this.slideVelocity.y * dt;
+    } else {
+      this.slideVelocity.set(dx * speed, dz * speed);
+      if (!this.isGrounded || this.isSwimming) this.slideVelocity.multiplyScalar(0);
+    }
     if (moveX !== 0) {
       const oldX = this.position.x;
       this.position.x += moveX;
       if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
-        if (!tryStepUp()) this.position.x = oldX;
+        this.position.x = oldX;
       }
     }
     if (moveZ !== 0) {
       const oldZ = this.position.z;
       this.position.z += moveZ;
       if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
-        if (!tryStepUp()) this.position.z = oldZ;
+        this.position.z = oldZ;
       }
     }
 
@@ -732,17 +765,19 @@ export class Player {
     this.playAnim('Jump', { lock: 0.18, loop: false, timeScale: isDoubleJump ? 1.25 : 1.05 });
   }
 
-  setWaterState(volume) {
-    if (!volume) {
+  setFluidState(fluid) {
+    if (!fluid) {
       this.isSwimming = false;
       this.isWading = false;
-      this.waterSurfaceY = 0;
-      this.waterBottomY = -999;
-      this.waterDepth = 0;
+      this.fluidType = null;
+      this.fluidSurfaceY = 0;
+      this.fluidBottomY = -999;
+      this.fluidDepth = 0;
       return;
     }
-    const surfaceY = volume.surfaceY ?? 1.15;
-    const bottomY = volume.bottomY ?? -1.8;
+    const surfaceY = fluid.surfaceY ?? 1.15;
+    const bottomY = fluid.bottomY ?? -1.8;
+    const swimmable = fluid.properties?.fluid?.swim !== false;
     // Check both terrain and placed blocks so we know if the player is standing on solid ground
     let groundY = -999;
     if (this.world) {
@@ -758,16 +793,22 @@ export class Player {
     const onBlockAtSurface = onGround && groundY >= surfaceY - 0.35;
 
     const inVolume = this.position.y <= surfaceY + 0.35 && this.position.y >= bottomY - 0.75;
-    this.isWading = inVolume && onBlockAtSurface;
-    this.isSwimming = inVolume && !this.isWading && this.position.y < surfaceY - 0.10;
-    this.waterSurfaceY = surfaceY;
-    this.waterBottomY = bottomY;
-    this.waterDepth = Math.max(0, surfaceY - Math.max(this.position.y, bottomY));
+    this.isWading = swimmable && inVolume && onBlockAtSurface;
+    this.isSwimming = swimmable && inVolume && !this.isWading && this.position.y < surfaceY - 0.10;
+    this.fluidType = fluid.type || null;
+    this.fluidSurfaceY = surfaceY;
+    this.fluidBottomY = bottomY;
+    this.fluidDepth = Math.max(0, surfaceY - Math.max(this.position.y, bottomY));
+  }
+
+  setSurfaceState(surface) {
+    this.surfaceType = surface?.type || null;
+    this.surfaceFriction = surface?.properties?.friction ?? 8;
   }
 
   _updateSwimmingVertical(dt, input) {
-    const surfaceY = this.waterSurfaceY || 0;
-    const bottomY = Number.isFinite(this.waterBottomY) ? this.waterBottomY : -999;
+    const surfaceY = this.fluidSurfaceY || 0;
+    const bottomY = Number.isFinite(this.fluidBottomY) ? this.fluidBottomY : -999;
     const wantsRise = input.isDown('Space') || input.isDown('KeyE');
     const wantsDive = input.isDown('ControlLeft') || input.isDown('ControlRight');
 
@@ -857,6 +898,10 @@ export class Player {
     this.equippedWeapon = weaponId;
   }
 
+  equipBoots(bootsId) {
+    this.equippedBoots = bootsId;
+  }
+
   getEquippedTool() {
     return this.equippedTool;
   }
@@ -867,6 +912,15 @@ export class Player {
 
   getEquippedWeapon() {
     return this.equippedWeapon;
+  }
+
+  getEquippedBoots() {
+    return this.equippedBoots;
+  }
+
+  setRocketBootsLevel(level) {
+    this.rocketBootsLevel = Math.max(0, Math.min(3, level));
+    this.rocketBootsMaxFuel = GAME.ROCKET_BOOTS_FUEL_BASE + this.rocketBootsLevel * GAME.ROCKET_BOOTS_UPGRADE_FUEL_BONUS;
   }
 
   hasItem(itemId) {

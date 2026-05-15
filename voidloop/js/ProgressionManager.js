@@ -50,6 +50,10 @@ const DEFAULT_STATE = {
     countLevel: 0,
     charges: 0,
   },
+  rocketBoots: {
+    unlocked: false,
+    fuelLevel: 0,
+  },
   letters: {},
   quizQueue: [],
   zoneMined: {},
@@ -127,6 +131,14 @@ export class ProgressionManager {
   getMissileCountRange() {
     const bonus = this.state.missile.countLevel || 0;
     return { min: 3 + Math.floor(bonus / 2), max: 4 + bonus };
+  }
+
+  hasRocketBoots() {
+    return !!this.state.rocketBoots?.unlocked;
+  }
+
+  getRocketBootsFuelLevel() {
+    return Math.max(0, Math.min(3, this.state.rocketBoots?.fuelLevel || 0));
   }
 
   recordMined(zoneId, count = 1) {
@@ -339,6 +351,12 @@ export class ProgressionManager {
       case 'letter_drop':
         this.state.letterDropLevel++;
         break;
+      case 'rocket_boots_unlock':
+        this.state.rocketBoots.unlocked = true;
+        break;
+      case 'rocket_boots_fuel':
+        this.state.rocketBoots.fuelLevel++;
+        break;
       default:
         return { success: false, error: 'Unavailable', coins };
     }
@@ -374,6 +392,10 @@ export class ProgressionManager {
         return ROUND_TIME_COSTS[this.state.roundTimeLevel] ?? null;
       case 'letter_drop':
         return LETTER_DROP_COSTS[this.state.letterDropLevel] ?? null;
+      case 'rocket_boots_unlock':
+        return !this.state.rocketBoots.unlocked ? 350 : null;
+      case 'rocket_boots_fuel':
+        return this.state.rocketBoots.unlocked && this.state.rocketBoots.fuelLevel < 3 ? 200 * (this.state.rocketBoots.fuelLevel + 1) : null;
       default:
         return null;
     }
@@ -484,6 +506,22 @@ export class ProgressionManager {
         desc: 'Add more missiles to each strike call.',
         value: `${this.state.missile.countLevel}/3`,
         cost: this.getPurchaseCost('missile_count'),
+      },
+      {
+        id: 'rocket_boots_unlock',
+        category: 'Movement',
+        name: this.state.rocketBoots.unlocked ? 'Rocket Boots Owned' : 'Unlock Rocket Boots',
+        desc: this.state.rocketBoots.unlocked ? 'Hold jump mid-air to fly with fire trails.' : 'Equipable boots that let you fly mid-air.',
+        value: this.state.rocketBoots.unlocked ? `${this.getRocketBootsFuelLevel()}/3 fuel` : 'Locked',
+        cost: this.getPurchaseCost('rocket_boots_unlock'),
+      },
+      {
+        id: 'rocket_boots_fuel',
+        category: 'Movement',
+        name: 'Rocket Fuel Tanks',
+        desc: 'Longer rocket boots flight time.',
+        value: `${this.getRocketBootsFuelLevel()}/3`,
+        cost: this.getPurchaseCost('rocket_boots_fuel'),
       },
     ];
   }

@@ -75,6 +75,10 @@ class AudioManager {
     src.connect(gain);
     gain.connect(this.sfxGain);
     src.playbackRate.value = opts.pitch ?? 1;
+    src.onended = () => {
+      src.disconnect();
+      gain.disconnect();
+    };
     src.start(0);
   }
 
@@ -87,6 +91,13 @@ class AudioManager {
       return;
     }
     this._synthFallback(opts);
+  }
+
+  getStats() {
+    return {
+      buffers: this.buffers.size,
+      loading: this.loading.size,
+    };
   }
 
   playExplosion(opts = {}) {

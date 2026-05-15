@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { getTerrainTileIndex, buildAtlasRectArray } from './KenneyAtlas.js';
 import { UnifiedTerrainRenderer } from './UnifiedTerrainRenderer.js';
+import { getBlockProperties } from './BlockProperties.js';
 
 const ISO_LEVEL = 0;
 const CHUNK_SIZE = 8;
@@ -28,6 +29,7 @@ const TP_CHUNK_RADIUS = 7;
 const VISIBILITY_MIN_INTERVAL_MS = 180;
 const TP_VISIBILITY_MIN_INTERVAL_MS = 260;
 const MAX_TEXTURE_TILE_SPAN = 8;
+const WATER_FALL_DEPTH = 28;
 const CHUNK_RADIUS = Math.sqrt(3) * CHUNK_SIZE * 0.5;
 const FACE_KEY_MULTIPLIER = 4;
 const UNIFIED_VERTEX_STRIDE_FLOATS = 14;
@@ -138,6 +140,7 @@ export class TerrainMesh {
     this.dirtyChunks = [];
     this.dirtyChunkSet = new Set();
     this.modifiedDensities = new Map();
+    this.modifiedBlockTypes = new Map();
     this.protectedPoints = [];
     this.stats = { chunks: 0, triangles: 0, samples: 0 };
     this.revision = 0;
@@ -166,6 +169,7 @@ export class TerrainMesh {
       amount: 0,
     };
     this._columnBounds = new Map(); // key -> { minY, maxY }
+    this._fallingCells = new Set();
   }
 
   async preloadTypes() {
@@ -240,6 +244,7 @@ export class TerrainMesh {
     const now = this._nowMs();
     const start = now;
     const playerPos = options.playerPos || this._lastPlayerPos;
+    this._processQueuedFallingBlocks(playerPos);
     let rebuilt = 0;
     if (this.dirtyChunks.length > 1) {
       this._prioritizeDirtyChunks(playerPos);
@@ -739,6 +744,8 @@ export class TerrainMesh {
           const distSq = dx * dx + dy * dy + dz * dz;
           if (distSq > brushRadius * brushRadius) continue;
 
+          const cellState = this.getCellState(x, y, z);
+          if (!cellState.renderable || !cellState.properties.mineable) continue;
           const oldDensity = this.sampleDensity(cx, cy, cz);
           if (oldDensity <= ISO_LEVEL) continue;
 
@@ -749,6 +756,8 @@ export class TerrainMesh {
             continue;
           }
           this._setDensity(x, y, z, newDensity);
+          this._setBlockType(x, y, z, 'air');
+          this._queueFallingCheck(x, y + 1, z);
           removedCells++;
           removedVolume += Math.max(0.2, Math.min(oldDensity, oldDensity - Math.max(newDensity, ISO_LEVEL)));
           this._collectTouchedChunks(x, y, z, touched);
@@ -762,6 +771,8 @@ export class TerrainMesh {
       for (let i = 0; i < count; i++) {
         const c = candidates[i];
         this._setDensity(c.x, c.y, c.z, c.newDensity);
+        this._setBlockType(c.x, c.y, c.z, 'air');
+        this._queueFallingCheck(c.x, c.y + 1, c.z);
         removedCells++;
         removedVolume += Math.max(0.2, Math.min(c.oldDensity, c.oldDensity - Math.max(c.newDensity, ISO_LEVEL)));
         this._collectTouchedChunks(c.x, c.y, c.z, touched);
@@ -863,9 +874,98 @@ export class TerrainMesh {
   isCellSolid(x, y, z) {
     if (y < TERRAIN_MIN_Y) return true;
     if (y > TERRAIN_MAX_Y) return false;
+    return this.getCellState(x, y, z).solid;
+  }
+
+  isCellRenderable(x, y, z) {
+    return this.getCellState(x, y, z).renderable;
+  }
+
+  getCellState(x, y, z) {
+    const type = this.getCellBlockType(x, y, z);
+    const properties = getBlockProperties(type);
+    const renderable = type !== 'air' && properties.renderLayer !== 'none';
+    return {
+      type,
+      properties,
+      renderable,
+      solid: renderable && !!properties.solid,
+      fluid: renderable ? properties.fluid : null,
+      hazard: renderable ? properties.hazard : null,
+    };
+  }
+
+  getCellBlockType(x, y, z) {
+    if (y < TERRAIN_MIN_Y) return 'stone_dark';
+    if (y > TERRAIN_MAX_Y) return 'air';
+    const key = this._sampleKey(x, y, z);
+    if (this.modifiedBlockTypes.has(key)) return this.modifiedBlockTypes.get(key);
     const zoneEntry = this._findZoneEntry(x + 0.5, z + 0.5);
-    if (!zoneEntry) return false;
-    return this.sampleDensity(x + 0.5, y + 0.5, z + 0.5) > ISO_LEVEL;
+    if (!zoneEntry) return 'air';
+    const density = this.sampleDensity(x + 0.5, y + 0.5, z + 0.5);
+    if (density <= ISO_LEVEL) {
+      const fluid = this._fluidBodyForCell(x, y, z, zoneEntry);
+      return fluid ? fluid.type : 'air';
+    }
+    return this._baseBlockTypeForCell(x, y, z, null, zoneEntry);
+  }
+
+  getFluidStateAt(position) {
+    if (!position) return null;
+    const x = Math.floor(position.x);
+    const y = Math.floor(position.y);
+    const z = Math.floor(position.z);
+    const zoneEntry = this._findZoneEntry(position.x, position.z);
+    const body = zoneEntry ? this._fluidBodyForPoint(position.x, position.z, zoneEntry) : null;
+    const cellBody = body && zoneEntry ? this._fluidBodyForCell(x, y, z, zoneEntry) : null;
+    if (cellBody) {
+      const surfaceY = cellBody.surfaceY ?? 1.15;
+      const bottomY = this._fluidRenderableBottomY(cellBody);
+      if (position.y <= surfaceY + 0.45 && position.y >= bottomY - 0.75) {
+        const properties = getBlockProperties(cellBody.type);
+        return {
+          type: cellBody.type,
+          surfaceY,
+          bottomY,
+          depth: Math.max(0, surfaceY - Math.max(position.y, bottomY)),
+          properties,
+          hazard: properties.hazard,
+        };
+      }
+    }
+    const state = this.getCellState(x, y, z);
+    if (!state.fluid) return null;
+    const surfaceY = y + 1;
+    const bottomY = y;
+    if (position.y > surfaceY + 0.45 || position.y < bottomY - 0.75) return null;
+    return {
+      type: state.fluid.type,
+      surfaceY,
+      bottomY,
+      depth: Math.max(0, surfaceY - Math.max(position.y, bottomY)),
+      properties: state.properties,
+      hazard: state.hazard,
+    };
+  }
+
+  getSurfaceStateAt(position) {
+    if (!position) return null;
+    const x = Math.floor(position.x);
+    const z = Math.floor(position.z);
+    const startY = Math.floor(clamp(position.y - 0.06, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
+    for (let y = startY; y >= Math.max(TERRAIN_MIN_Y, startY - 2); y--) {
+      const state = this.getCellState(x, y, z);
+      if (state.solid) {
+        return {
+          ...state,
+          x,
+          y,
+          z,
+          topY: y + 1,
+        };
+      }
+    }
+    return null;
   }
 
   sampleDensity(x, y, z) {
@@ -907,6 +1007,8 @@ export class TerrainMesh {
     this.dirtyChunkSet.clear();
     this.emptyChunkKeys.clear();
     this.modifiedDensities.clear();
+    this.modifiedBlockTypes.clear();
+    this._fallingCells.clear();
     this.protectedPoints = [];
     this.stats = { chunks: 0, triangles: 0, samples: 0 };
     this.revision = 0;
@@ -966,18 +1068,18 @@ export class TerrainMesh {
       height = Math.round(height / profile.terrace) * profile.terrace;
     }
 
-    for (const water of zone.waterVolumes || []) {
-      const radiusX = Math.max(0.1, water.radiusX || 1);
-      const radiusZ = Math.max(0.1, water.radiusZ || 1);
-      const dx = (x - water.x) / radiusX;
-      const dz = (z - water.z) / radiusZ;
+    for (const fluid of zone.fluidBodies || []) {
+      const radiusX = Math.max(0.1, fluid.radiusX || 1);
+      const radiusZ = Math.max(0.1, fluid.radiusZ || 1);
+      const dx = (x - fluid.x) / radiusX;
+      const dz = (z - fluid.z) / radiusZ;
       const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist > 1.12) continue;
 
       // Carve a deterministic walk-in bowl: deepest in the middle, with a
       // shallow shelf near shore so the player can enter/exit without snagging.
-      const shelfY = (water.surfaceY ?? 1.15) - 0.42;
-      const bottomY = water.bottomY ?? -1.8;
+      const shelfY = (fluid.surfaceY ?? 1.15) - 0.42;
+      const bottomY = fluid.bottomY ?? -1.8;
       const bowlT = smoothstep(0.18, 0.92, dist);
       const targetHeight = bottomY + (shelfY - bottomY) * bowlT;
       const edgeBlend = 1 - smoothstep(0.92, 1.12, dist);
@@ -1001,6 +1103,87 @@ export class TerrainMesh {
 
   _setDensity(x, y, z, density) {
     this.modifiedDensities.set(this._sampleKey(x, y, z), density);
+  }
+
+  _setBlockType(x, y, z, type) {
+    this.modifiedBlockTypes.set(this._sampleKey(x, y, z), type);
+  }
+
+  _fluidBodyForCell(x, y, z, zoneEntry) {
+    const body = this._fluidBodyForPoint(x + 0.5, z + 0.5, zoneEntry);
+    if (!body) return null;
+    const cy = y + 0.5;
+    const surfaceY = body.surfaceY ?? 1.15;
+    const bottomY = body.bottomY ?? -1.8;
+    const renderBottomY = this._fluidRenderableBottomY(body);
+    if (cy > surfaceY || cy < renderBottomY) return null;
+    if (cy < bottomY) {
+      const aboveDensity = this.sampleDensity(x + 0.5, y + 1.5, z + 0.5);
+      if (aboveDensity > ISO_LEVEL) return null;
+    }
+    return body;
+  }
+
+  _fluidRenderableBottomY(body) {
+    const bottomY = body?.bottomY ?? -1.8;
+    const fallDepth = Math.max(0, body?.flowDepth ?? WATER_FALL_DEPTH);
+    return Math.max(TERRAIN_MIN_Y, body?.flowBottomY ?? bottomY - fallDepth);
+  }
+
+  _fluidBodyForPoint(x, z, zoneEntry) {
+    const bodies = zoneEntry?.zone?.fluidBodies || [];
+    for (const body of bodies) {
+      const radiusX = Math.max(0.1, body.radiusX || 1);
+      const radiusZ = Math.max(0.1, body.radiusZ || 1);
+      const nx = (x - body.x) / radiusX;
+      const nz = (z - body.z) / radiusZ;
+      if (nx * nx + nz * nz <= 1) return body;
+    }
+    return null;
+  }
+
+  _queueFallingCheck(x, y, z) {
+    if (y < TERRAIN_MIN_Y + 1 || y > TERRAIN_MAX_Y) return;
+    this._fallingCells.add(this._sampleKey(x, y, z));
+  }
+
+  _processQueuedFallingBlocks(playerPos) {
+    if (!this._fallingCells.size) return;
+    const touched = new Set();
+    let moved = 0;
+    const maxChecks = 48;
+    for (const key of [...this._fallingCells].slice(0, maxChecks)) {
+      this._fallingCells.delete(key);
+      const [x, y, z] = key.split(',').map(Number);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      if (playerPos && Math.abs(playerPos.x - (x + 0.5)) < 1.1 && Math.abs(playerPos.z - (z + 0.5)) < 1.1 && Math.abs(playerPos.y - (y + 0.5)) < 2.2) {
+        this._fallingCells.add(key);
+        continue;
+      }
+      const state = this.getCellState(x, y, z);
+      if (!state.renderable || !state.properties.falling) continue;
+      if (this.getCellState(x, y - 1, z).renderable) continue;
+      this._moveFallingCell(x, y, z, state.type, touched);
+      moved++;
+    }
+    if (moved <= 0) return;
+    this.revision++;
+    this.queueDirtyChunks(touched);
+    for (const key of touched) {
+      const c = this._parseChunkKey(key);
+      if (c) this._columnBounds.delete(this._columnBoundsKey(c.cx, c.cz));
+    }
+  }
+
+  _moveFallingCell(x, y, z, type, touched) {
+    this._setDensity(x, y, z, -2);
+    this._setBlockType(x, y, z, 'air');
+    this._setDensity(x, y - 1, z, 1.2);
+    this._setBlockType(x, y - 1, z, type);
+    this._queueFallingCheck(x, y - 1, z);
+    this._queueFallingCheck(x, y + 1, z);
+    this._collectTouchedChunks(x, y, z, touched);
+    this._collectTouchedChunks(x, y - 1, z, touched);
   }
 
   _findZoneEntry(x, z) {
@@ -1178,7 +1361,7 @@ export class TerrainMesh {
       for (let x = x0; x < x1; x++) {
         for (let z = z0; z < z1; z++) {
           for (let y = TERRAIN_MIN_Y; y <= TERRAIN_MAX_Y; y++) {
-            if (this.isCellSolid(x, y, z)) {
+            if (this.isCellRenderable(x, y, z)) {
               if (y < minY) minY = y;
               if (y > maxY) maxY = y;
             }
@@ -1233,10 +1416,12 @@ export class TerrainMesh {
         for (let y = y0; y < y1; y++) {
           if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
           for (let z = z0; z < z1; z++) {
-            const solid = this.isCellSolid(x, y, z);
+            const solid = this.isCellRenderable(x, y, z);
             if (!solid) continue;
-            const neighborSolid = dir === 'px' ? this.isCellSolid(x + 1, y, z) : this.isCellSolid(x - 1, y, z);
-            if (!neighborSolid) mask[(y - y0) * width + (z - z0)] = this._faceKeyForCell(x, y, z, dir);
+            const visible = dir === 'px'
+              ? this._isFaceVisible(x, y, z, x + 1, y, z)
+              : this._isFaceVisible(x, y, z, x - 1, y, z);
+            if (visible) mask[(y - y0) * width + (z - z0)] = this._faceKeyForCell(x, y, z, dir);
           }
         }
         this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
@@ -1259,10 +1444,12 @@ export class TerrainMesh {
         mask.fill(-1);
         for (let z = z0; z < z1; z++) {
           for (let x = x0; x < x1; x++) {
-            const solid = this.isCellSolid(x, y, z);
+            const solid = this.isCellRenderable(x, y, z);
             if (!solid) continue;
-            const neighborSolid = dir === 'py' ? this.isCellSolid(x, y + 1, z) : this.isCellSolid(x, y - 1, z);
-            if (!neighborSolid) mask[(z - z0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
+            const visible = dir === 'py'
+              ? this._isFaceVisible(x, y, z, x, y + 1, z)
+              : this._isFaceVisible(x, y, z, x, y - 1, z);
+            if (visible) mask[(z - z0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
           }
         }
         this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
@@ -1284,10 +1471,12 @@ export class TerrainMesh {
       for (let y = y0; y < y1; y++) {
         if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
         for (let x = x0; x < x1; x++) {
-          const solid = this.isCellSolid(x, y, z);
+          const solid = this.isCellRenderable(x, y, z);
           if (!solid) continue;
-          const neighborSolid = dir === 'pz' ? this.isCellSolid(x, y, z + 1) : this.isCellSolid(x, y, z - 1);
-          if (!neighborSolid) mask[(y - y0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
+          const visible = dir === 'pz'
+            ? this._isFaceVisible(x, y, z, x, y, z + 1)
+            : this._isFaceVisible(x, y, z, x, y, z - 1);
+          if (visible) mask[(y - y0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
         }
       }
       this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
@@ -1326,6 +1515,28 @@ export class TerrainMesh {
         }
       }
     }
+  }
+
+  _isFaceVisible(x, y, z, nx, ny, nz) {
+    const cell = this.getCellState(x, y, z);
+    if (!cell.renderable) return false;
+
+    const neighbor = this.getCellState(nx, ny, nz);
+    if (!neighbor.renderable) return true;
+
+    const cellLayer = cell.properties.renderLayer;
+    const neighborLayer = neighbor.properties.renderLayer;
+
+    if (cellLayer === 'transparent') {
+      // Hide internal water/glass faces, but show water against air or another
+      // transparent material type. Faces buried against solid terrain stay hidden.
+      if (neighbor.type === cell.type) return false;
+      return neighborLayer === 'transparent';
+    }
+
+    // Opaque block faces beside water/glass must still exist so transparent
+    // fluid can reveal the shore, bottom, and cave walls behind it.
+    return neighborLayer === 'transparent';
   }
 
   _pushGreedyQuad(dir, x0, y0, z0, x1, y1, z1, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices) {
@@ -1402,8 +1613,14 @@ export class TerrainMesh {
   }
 
   _materialIdForCell(x, y, z, dir) {
-    const zoneEntry = this._findZoneEntry(x + 0.5, z + 0.5);
-    if (!zoneEntry) return TERRAIN_MATERIAL_IDS.stone;
+    const cellType = this.getCellBlockType(x, y, z);
+    if (cellType !== 'air') return TERRAIN_MATERIAL_IDS[cellType] ?? TERRAIN_MATERIAL_IDS.dirt;
+    return TERRAIN_MATERIAL_IDS.dirt;
+  }
+
+  _baseBlockTypeForCell(x, y, z, dir, knownZoneEntry = null) {
+    const zoneEntry = knownZoneEntry || this._findZoneEntry(x + 0.5, z + 0.5);
+    if (!zoneEntry) return 'stone';
 
     const { zone } = zoneEntry;
     const types = zone.blockTypes || [];
@@ -1421,7 +1638,7 @@ export class TerrainMesh {
       typeKey = types[3] || 'stone_dark';
     }
 
-    return TERRAIN_MATERIAL_IDS[typeKey] ?? TERRAIN_MATERIAL_IDS.dirt;
+    return typeKey || 'dirt';
   }
 
   _colorForMaterialId(materialId) {

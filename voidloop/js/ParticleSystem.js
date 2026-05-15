@@ -122,6 +122,41 @@ class ParticleSystem {
     }
   }
 
+  spawnRocketTrail(pos, forward, count = 3) {
+    const tex = this.textures.has('flame') ? this.textures.get('flame') : null;
+    const tex2 = this.textures.has('spark') ? this.textures.get('spark') : null;
+    for (let i = 0; i < count; i++) {
+      const p = this.pool.find(p => p.life <= 0);
+      if (!p) break;
+      p.mesh.position.copy(pos);
+      p.mesh.position.x += (Math.random() - 0.5) * 0.25;
+      p.mesh.position.y += (Math.random() - 0.5) * 0.15;
+      p.mesh.position.z += (Math.random() - 0.5) * 0.25;
+      // Velocity: backward relative to forward, with slight spread
+      const back = forward.clone().multiplyScalar(-(1.5 + Math.random() * 2.5));
+      back.y += -0.5 - Math.random() * 1.5;
+      back.x += (Math.random() - 0.5) * 1.2;
+      back.z += (Math.random() - 0.5) * 1.2;
+      p.vel.copy(back);
+      p.life = 0.45;
+      p.maxLife = 0.45;
+      const isSpark = Math.random() > 0.6;
+      p.mat.color.setHex(isSpark ? 0xff4400 : 0xffaa00);
+      const useTex = isSpark ? tex2 : tex;
+      if (useTex) {
+        p.mat.map = useTex;
+        p.mat.needsUpdate = true;
+      } else {
+        p.mat.map = null;
+        p.mat.needsUpdate = true;
+      }
+      p.mat.opacity = 1;
+      p.mesh.scale.setScalar(isSpark ? 0.22 : 0.35);
+      p.mesh.visible = true;
+      this.particles.push(p);
+    }
+  }
+
   burst(pos, color, count = 12) {
     this.spawn({ pos, count, color, speed: 5, life: 0.5, size: 0.25 });
   }
@@ -185,7 +220,7 @@ class ParticleSystem {
     await Promise.all(keys.map(k => this._loadTexture(k)));
   }
 
-  update(dt) {
+  update(dt, camera = null) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
@@ -201,8 +236,9 @@ class ParticleSystem {
       p.mat.opacity = t;
       p.mesh.position.addScaledVector(p.vel, dt);
       p.vel.y -= 9.8 * dt * 0.3; // light gravity
-      // Skip lookAt for performance — particles are small enough
-      // p.mesh.lookAt(p.mesh.position.clone().add(p.vel));
+      if (camera) {
+        p.mesh.lookAt(camera.position);
+      }
     }
   }
 }

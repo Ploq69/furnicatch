@@ -42,6 +42,8 @@ export class UIManager {
     this.elHp = document.getElementById('hp-bar');
     this.elHpText = document.getElementById('hp-text');
     this.elStamina = document.getElementById('stamina-bar');
+    this.elFuel = document.getElementById('fuel-bar');
+    this.elFuelWrapper = document.getElementById('fuel-bar-wrapper');
     this.elFloor = document.getElementById('floor-display');
     this.elCoin = document.getElementById('coin-display');
     this.elCoinRate = document.getElementById('coin-rate');
@@ -1183,13 +1185,60 @@ export class UIManager {
 
   updateStats() {
     const p = this.game.player;
-    if (this.elHp) this.elHp.style.width = (p.hp / p.maxHp * 100) + '%';
-    if (this.elHpText) this.elHpText.textContent = `${Math.ceil(p.hp)}/${p.maxHp}`;
-    if (this.elStamina) this.elStamina.style.width = (p.stamina / (p.maxStamina || GAME.MAX_STAMINA) * 100) + '%';
-    if (this.elFloor) this.elFloor.textContent = this.game.world.floor;
-    if (this.elCoin) this.elCoin.textContent = p.coins;
-    if (this.elLevel) this.elLevel.textContent = p.level;
-    if (this.elKills) this.elKills.textContent = this.game.killCount;
+    const hpWidth = `${(p.hp / p.maxHp * 100).toFixed(1)}%`;
+    const hpText = `${Math.ceil(p.hp)}/${p.maxHp}`;
+    const staminaWidth = `${(p.stamina / (p.maxStamina || GAME.MAX_STAMINA) * 100).toFixed(1)}%`;
+    const floorText = String(this.game.world.floor);
+    const coinText = String(p.coins);
+    const levelText = String(p.level);
+    const killsText = String(this.game.killCount);
+
+    if (this.elHp && this._lastHpWidth !== hpWidth) {
+      this.elHp.style.width = hpWidth;
+      this._lastHpWidth = hpWidth;
+    }
+    if (this.elHpText && this._lastHpText !== hpText) {
+      this.elHpText.textContent = hpText;
+      this._lastHpText = hpText;
+    }
+    if (this.elStamina && this._lastStaminaWidth !== staminaWidth) {
+      this.elStamina.style.width = staminaWidth;
+      this._lastStaminaWidth = staminaWidth;
+    }
+    // Rocket boots fuel bar
+    const hasBoots = p.equippedBoots === 'rocket_boots';
+    if (this.elFuelWrapper) {
+      this.elFuelWrapper.style.display = hasBoots ? 'block' : 'none';
+    }
+    if (hasBoots && this.elFuel) {
+      const fuelWidth = `${(p.rocketBootsFuel / p.rocketBootsMaxFuel * 100).toFixed(1)}%`;
+      if (this._lastFuelWidth !== fuelWidth) {
+        this.elFuel.style.width = fuelWidth;
+        this._lastFuelWidth = fuelWidth;
+      }
+      // Flash red when empty
+      if (p.rocketBootsFuel <= 0.01 && !this.elFuelWrapper.classList.contains('fuel-bar-empty')) {
+        this.elFuelWrapper.classList.add('fuel-bar-empty');
+      } else if (p.rocketBootsFuel > 0.01 && this.elFuelWrapper.classList.contains('fuel-bar-empty')) {
+        this.elFuelWrapper.classList.remove('fuel-bar-empty');
+      }
+    }
+    if (this.elFloor && this._lastFloorText !== floorText) {
+      this.elFloor.textContent = floorText;
+      this._lastFloorText = floorText;
+    }
+    if (this.elCoin && this._lastCoinText !== coinText) {
+      this.elCoin.textContent = coinText;
+      this._lastCoinText = coinText;
+    }
+    if (this.elLevel && this._lastLevelText !== levelText) {
+      this.elLevel.textContent = levelText;
+      this._lastLevelText = levelText;
+    }
+    if (this.elKills && this._lastKillsText !== killsText) {
+      this.elKills.textContent = killsText;
+      this._lastKillsText = killsText;
+    }
   }
 
   setTimer(seconds) {
@@ -1552,6 +1601,21 @@ export class UIManager {
     const missileText = state.missile?.unlocked
       ? `Q ${state.missile.charges}/2${state.missile.cooldown > 0 ? ` ${state.missile.cooldown.toFixed(0)}s` : ''}`
       : 'Q locked';
+    const signature = [
+      state.zoneId,
+      lettersDone,
+      lettersTotal,
+      miningCurrent,
+      miningTarget,
+      state.pickaxeTier || 0,
+      grenadeText,
+      missileText,
+      state.completed ? 1 : 0,
+    ].join('|');
+    if (signature === this._objectiveHudSignature) {
+      return;
+    }
+    this._objectiveHudSignature = signature;
     this._objectiveHud.innerHTML = `
       <span title="Letters">🔤 ${lettersDone}/${lettersTotal}</span>
       <span title="Mining">⛏ ${Math.min(miningCurrent, miningTarget)}/${miningTarget}</span>
@@ -1639,15 +1703,15 @@ export class UIManager {
     const flyer = document.createElement('div');
     flyer.className = 'letter-pickup-flyer';
     flyer.textContent = targetLetter;
-    flyer.style.left = `${startX - 17}px`;
-    flyer.style.top = `${startY - 17}px`;
+    flyer.style.left = '0';
+    flyer.style.top = '0';
     document.body.appendChild(flyer);
 
     const duration = 720;
     const animation = flyer.animate([
-      { left: `${startX - 17}px`, top: `${startY - 17}px`, transform: 'scale(1) rotate(-6deg)', opacity: 1, offset: 0 },
-      { left: `${midX - 17}px`, top: `${midY - 17}px`, transform: 'scale(1.18) rotate(8deg)', opacity: 1, offset: 0.48 },
-      { left: `${endX - 17}px`, top: `${endY - 17}px`, transform: 'scale(0.42) rotate(0deg)', opacity: 0.28, offset: 1 },
+      { transform: `translate3d(${startX - 17}px, ${startY - 17}px, 0) scale(1) rotate(-6deg)`, opacity: 1, offset: 0 },
+      { transform: `translate3d(${midX - 17}px, ${midY - 17}px, 0) scale(1.18) rotate(8deg)`, opacity: 1, offset: 0.48 },
+      { transform: `translate3d(${endX - 17}px, ${endY - 17}px, 0) scale(0.42) rotate(0deg)`, opacity: 0.28, offset: 1 },
     ], {
       duration,
       easing: 'cubic-bezier(.18,.82,.22,1)',
@@ -1698,11 +1762,11 @@ export class UIManager {
       this.elFps.textContent = fps + ' FPS';
       return;
     }
-    const water = perfStats.waterMeshes ? ` | water ${perfStats.waterMeshes}/${perfStats.waterRipples}` : '';
-    const timings = ` | ms w:${perfStats.worldMs.toFixed(1)} vis:${perfStats.terrainVisibilityMs.toFixed(1)} cam:${perfStats.cameraCollisionMs.toFixed(1)} water:${perfStats.waterMs.toFixed(1)} render:${perfStats.renderMs.toFixed(1)}`;
+    const timings = ` | ms w:${perfStats.worldMs.toFixed(1)} vis:${perfStats.terrainVisibilityMs.toFixed(1)} cam:${perfStats.cameraCollisionMs.toFixed(1)} ui:${(perfStats.uiMs || 0).toFixed(1)} render:${perfStats.renderMs.toFixed(1)}`;
     const ray = ` | rays ${perfStats.raycasts}/${perfStats.raycastMs.toFixed(1)} recompute ${perfStats.visibilityRecomputed}`;
     const scale = perfStats.renderScale && perfStats.renderScale < 0.99 ? ` | scale ${perfStats.renderScale.toFixed(2)}` : '';
-    this.elFps.textContent = `${fps} FPS | calls ${perfStats.calls} | tris ${perfStats.triangles} | terrain ${perfStats.visibleChunks}/${perfStats.liveChunks} | dirty ${perfStats.dirtyChunks} | rebuild ${perfStats.terrainRebuildMs.toFixed(1)}ms${timings}${ray}${scale}${water}`;
+    const live = ` | scene ${perfStats.sceneChildren} geo ${perfStats.geometries} tex ${perfStats.textures} fx ${perfStats.shaderEffects} dom ${perfStats.flyers} audio ${perfStats.audioBuffers}/${perfStats.audioLoading}`;
+    this.elFps.textContent = `${fps} FPS | calls ${perfStats.calls} | tris ${perfStats.triangles} | terrain ${perfStats.visibleChunks}/${perfStats.liveChunks} | dirty ${perfStats.dirtyChunks} cells ${perfStats.modifiedCells} | rebuild ${perfStats.terrainRebuildMs.toFixed(1)}ms${timings}${ray}${scale}${live}`;
   }
 
   // ===== Pet Den UI =====
