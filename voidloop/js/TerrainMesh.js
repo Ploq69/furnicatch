@@ -17,9 +17,11 @@ const TERRAIN_MIN_Y = -150;
 const TERRAIN_MAX_Y = 10;
 const SURFACE_Y = 2;
 const CELL_SIZE = 1;
-const MAX_REBUILDS_PER_FRAME = 4;
-const REBUILD_TIME_BUDGET_MS = 2.5;
-const STREAM_BUILD_LIMIT_PER_FRAME = 6;
+const MAX_REBUILDS_PER_FRAME = 2;
+const REBUILD_TIME_BUDGET_MS = 2.0;
+const STREAM_BUILD_LIMIT_PER_FRAME = 2;
+const PREFETCH_BUDGET_PER_FRAME = 1;
+const PREFETCH_TIME_BUDGET_MS = 1.5;
 const LIVE_CHUNK_CAP = 520;
 const CHUNK_UNLOAD_IDLE_MS = 6000;
 const ISO_VISIBLE_CHUNK_BUDGET = 80;
@@ -255,13 +257,16 @@ export class TerrainMesh {
       const key = this.dirtyChunks.shift();
       this.dirtyChunkSet.delete(key);
       const [cx, cy, cz] = key.split(',').map(Number);
-      this._rebuildChunk(cx, cy, cz);
+      const lod = this._desiredLodForChunk(key);
+      this._rebuildChunk(cx, cy, cz, lod);
       rebuilt++;
     }
     if (rebuilt > 0) this._refreshStats();
     this.visibilityStats.rebuilt = rebuilt;
     this.visibilityStats.rebuildMs = this._nowMs() - start;
     this.perfStats.rebuildMs = this.visibilityStats.rebuildMs;
+
+    this._processPrefetchBuilds(now);
   }
 
   queueDirtyChunks(chunkKeys) {
@@ -350,6 +355,7 @@ export class TerrainMesh {
       const result = this._computeVisibleChunkKeys(position, cameraMode, budget);
       this.visibleChunkKeys = result.visibleKeys;
       this.hotChunkKeys = result.hotKeys;
+      this._prefetchKeys = this._computePrefetchChunkKeys(position, cameraMode);
       this._lastVisibilityAt = now;
       this._lastVisibilityChunkKey = currentChunkKey;
       this._lastVisibilityMode = cameraMode;
@@ -385,7 +391,8 @@ export class TerrainMesh {
 
   ensureChunkMesh(key, now = this._nowMs()) {
     const existing = this.chunks.get(key);
-    if (existing?.raycastMesh) {
+    const desiredLod = this._desiredLodForChunk(key);
+    if (existing?.raycastMesh && existing.lodScale === desiredLod) {
       this._ensureUnifiedSlotForChunk(existing);
       existing.lastTouchedAt = now;
       return existing;
@@ -394,7 +401,7 @@ export class TerrainMesh {
     if (this._streamBuildsThisFrame >= STREAM_BUILD_LIMIT_PER_FRAME && !this.hotChunkKeys.has(key)) return null;
     const coords = this._parseChunkKey(key);
     if (!coords || !this._chunkWithinTerrainBounds(coords.cx, coords.cy, coords.cz)) return null;
-    this._rebuildChunk(coords.cx, coords.cy, coords.cz);
+    this._rebuildChunk(coords.cx, coords.cy, coords.cz, desiredLod);
     this._streamBuildsThisFrame++;
     const chunk = this.chunks.get(key);
     if (chunk) {
@@ -600,6 +607,53 @@ export class TerrainMesh {
     const nz = this.cutaway.center.z + this.cutaway.forward.y * t;
     const radius = this.cutaway.radius + 2.5;
     return (this._tmpCenter.x - nx) ** 2 + (this._tmpCenter.z - nz) ** 2 <= radius * radius;
+  }
+
+  _desiredLodForChunk(key) {
+    // LOD temporarily disabled: corner-sampling approach caused missing faces
+    // and holes with SDF overhangs. Proper LOD requires downsampling the
+    // density field first (see ourCraft's chunkLod1 approach).
+    return 1;
+  }
+
+  _computePrefetchChunkKeys(position, cameraMode) {
+    if (cameraMode !== 'thirdPerson') return [];
+    const startKey = this._chunkKeyForPoint(position);
+    const center = this._parseChunkKey(startKey);
+    const prefetchRadius = TP_CHUNK_RADIUS + 2;
+    const candidates = [];
+    for (let dx = -prefetchRadius; dx <= prefetchRadius; dx++) {
+      for (let dy = -2; dy <= 1; dy++) {
+        for (let dz = -prefetchRadius; dz <= prefetchRadius; dz++) {
+          const cx = center.cx + dx;
+          const cy = center.cy + dy;
+          const cz = center.cz + dz;
+          if (!this._chunkWithinTerrainBounds(cx, cy, cz)) continue;
+          const key = this._chunkKey(cx, cy, cz);
+          if (this.visibleChunkKeys.has(key) || this.hotChunkKeys.has(key)) continue;
+          if (this.chunks.has(key) || this.emptyChunkKeys.has(key)) continue;
+          candidates.push(key);
+        }
+      }
+    }
+    candidates.sort((a, b) => this._chunkDistanceSqToPoint(a, position) - this._chunkDistanceSqToPoint(b, position));
+    return candidates;
+  }
+
+  _processPrefetchBuilds(now) {
+    if (!this._prefetchKeys?.length) return;
+    const start = this._nowMs();
+    let built = 0;
+    while (built < PREFETCH_BUDGET_PER_FRAME && this._prefetchKeys.length > 0) {
+      if (this._nowMs() - start >= PREFETCH_TIME_BUDGET_MS) break;
+      const key = this._prefetchKeys.shift();
+      if (this.chunks.has(key) || this.emptyChunkKeys.has(key)) continue;
+      const coords = this._parseChunkKey(key);
+      if (!coords || !this._chunkWithinTerrainBounds(coords.cx, coords.cy, coords.cz)) continue;
+      const lod = this._desiredLodForChunk(key);
+      this._rebuildChunk(coords.cx, coords.cy, coords.cz, lod);
+      built++;
+    }
   }
 
   _chunkBoundaryOpen(aKey, bKey) {
@@ -1261,13 +1315,15 @@ export class TerrainMesh {
     }
   }
 
-  _rebuildChunk(cx, cy, cz) {
+  _rebuildChunk(cx, cy, cz, lodScale = 1) {
     const key = this._chunkKey(cx, cy, cz);
-    this._disposeChunkMesh(key);
+    const existing = this.chunks.get(key);
+    const desiredLod = lodScale || this._desiredLodForChunk(key);
 
-    const geometry = this._buildChunkGeometry(cx, cy, cz);
+    const geometry = this._buildChunkGeometry(cx, cy, cz, desiredLod);
     if (!geometry) {
       this.emptyChunkKeys.add(key);
+      if (existing) this._disposeChunkMesh(key);
       return;
     }
     this.emptyChunkKeys.delete(key);
@@ -1277,14 +1333,24 @@ export class TerrainMesh {
     const z0 = cz * CHUNK_SIZE;
     const now = this._nowMs();
 
-    this._uploadChunkGeometryToUnifiedRenderer(cx, cy, cz, geometry);
+    let raycastMesh = existing?.raycastMesh;
+    if (raycastMesh) {
+      const oldGeo = raycastMesh.geometry;
+      raycastMesh.geometry = geometry;
+      if (oldGeo && oldGeo !== geometry) oldGeo.dispose();
+      if (this.unifiedRenderer) {
+        this.unifiedRenderer.releaseSlotByChunk(cx, cy, cz);
+      }
+    } else {
+      raycastMesh = new THREE.Mesh(geometry, this.collisionMaterial);
+      raycastMesh.name = `terrain_chunk_${key}`;
+      raycastMesh.castShadow = false;
+      raycastMesh.receiveShadow = false;
+      raycastMesh.visible = true;
+      this.scene.add(raycastMesh);
+    }
 
-    const raycastMesh = new THREE.Mesh(geometry, this.collisionMaterial);
-    raycastMesh.name = `terrain_chunk_${key}`;
-    raycastMesh.castShadow = false;
-    raycastMesh.receiveShadow = false;
-    raycastMesh.visible = true;
-    this.scene.add(raycastMesh);
+    this._uploadChunkGeometryToUnifiedRenderer(cx, cy, cz, geometry);
 
     this.chunks.set(key, {
       cx,
@@ -1297,6 +1363,7 @@ export class TerrainMesh {
       lastTouchedAt: now,
       hot: false,
       raycastMesh,
+      lodScale: desiredLod,
     });
   }
 
@@ -1343,7 +1410,7 @@ export class TerrainMesh {
     return true;
   }
 
-  _buildChunkGeometry(cx, cy, cz) {
+  _buildChunkGeometry(cx, cy, cz, lodScale = 1) {
     const x0 = cx * CHUNK_SIZE;
     const y0 = cy * CHUNK_SIZE;
     const z0 = cz * CHUNK_SIZE;
@@ -1384,12 +1451,12 @@ export class TerrainMesh {
     const tileIndices = [];
     const indices = [];
 
-    this._buildGreedyFaces('px', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
-    this._buildGreedyFaces('nx', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
-    this._buildGreedyFaces('py', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
-    this._buildGreedyFaces('ny', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
-    this._buildGreedyFaces('pz', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
-    this._buildGreedyFaces('nz', x0, effectiveY0, z0, x1, effectiveY1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('px', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('nx', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('py', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('ny', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('pz', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+    this._buildGreedyFaces('nz', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
 
     if (positions.length === 0) return null;
 
@@ -1406,85 +1473,85 @@ export class TerrainMesh {
     return geometry;
   }
 
-  _buildGreedyFaces(dir, x0, y0, z0, x1, y1, z1, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices) {
+  _buildGreedyFaces(dir, x0, y0, z0, x1, y1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices) {
     if (dir === 'px' || dir === 'nx') {
-      const width = z1 - z0;
-      const height = y1 - y0;
+      const width = Math.ceil((z1 - z0) / lodScale);
+      const height = Math.ceil((y1 - y0) / lodScale);
       const mask = new Int16Array(width * height);
-      for (let x = x0; x < x1; x++) {
+      for (let x = x0; x < x1; x += lodScale) {
         mask.fill(-1);
-        for (let y = y0; y < y1; y++) {
+        for (let y = y0; y < y1; y += lodScale) {
           if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
-          for (let z = z0; z < z1; z++) {
+          for (let z = z0; z < z1; z += lodScale) {
             const solid = this.isCellRenderable(x, y, z);
             if (!solid) continue;
             const visible = dir === 'px'
-              ? this._isFaceVisible(x, y, z, x + 1, y, z)
-              : this._isFaceVisible(x, y, z, x - 1, y, z);
-            if (visible) mask[(y - y0) * width + (z - z0)] = this._faceKeyForCell(x, y, z, dir);
+              ? this._isFaceVisible(x, y, z, x + lodScale, y, z)
+              : this._isFaceVisible(x, y, z, x - lodScale, y, z);
+            if (visible) mask[((y - y0) / lodScale) * width + ((z - z0) / lodScale)] = this._faceKeyForCell(x, y, z, dir);
           }
         }
         this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
-          const zA = z0 + u;
-          const zB = zA + w;
-          const yA = y0 + v;
-          const yB = yA + h;
-          this._pushGreedyQuad(dir, dir === 'px' ? x + 1 : x, yA, zA, dir === 'px' ? x + 1 : x, yB, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+          const zA = z0 + u * lodScale;
+          const zB = zA + w * lodScale;
+          const yA = y0 + v * lodScale;
+          const yB = yA + h * lodScale;
+          this._pushGreedyQuad(dir, dir === 'px' ? x + lodScale : x, yA, zA, dir === 'px' ? x + lodScale : x, yB, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
         });
       }
       return;
     }
 
     if (dir === 'py' || dir === 'ny') {
-      const width = x1 - x0;
-      const height = z1 - z0;
+      const width = Math.ceil((x1 - x0) / lodScale);
+      const height = Math.ceil((z1 - z0) / lodScale);
       const mask = new Int16Array(width * height);
-      for (let y = y0; y < y1; y++) {
+      for (let y = y0; y < y1; y += lodScale) {
         if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
         mask.fill(-1);
-        for (let z = z0; z < z1; z++) {
-          for (let x = x0; x < x1; x++) {
+        for (let z = z0; z < z1; z += lodScale) {
+          for (let x = x0; x < x1; x += lodScale) {
             const solid = this.isCellRenderable(x, y, z);
             if (!solid) continue;
             const visible = dir === 'py'
-              ? this._isFaceVisible(x, y, z, x, y + 1, z)
-              : this._isFaceVisible(x, y, z, x, y - 1, z);
-            if (visible) mask[(z - z0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
+              ? this._isFaceVisible(x, y, z, x, y + lodScale, z)
+              : this._isFaceVisible(x, y, z, x, y - lodScale, z);
+            if (visible) mask[((z - z0) / lodScale) * width + ((x - x0) / lodScale)] = this._faceKeyForCell(x, y, z, dir);
           }
         }
         this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
-          const xA = x0 + u;
-          const xB = xA + w;
-          const zA = z0 + v;
-          const zB = zA + h;
-          this._pushGreedyQuad(dir, xA, dir === 'py' ? y + 1 : y, zA, xB, dir === 'py' ? y + 1 : y, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+          const xA = x0 + u * lodScale;
+          const xB = xA + w * lodScale;
+          const zA = z0 + v * lodScale;
+          const zB = zA + h * lodScale;
+          this._pushGreedyQuad(dir, xA, dir === 'py' ? y + lodScale : y, zA, xB, dir === 'py' ? y + lodScale : y, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
         });
       }
       return;
     }
 
-    const width = x1 - x0;
-    const height = y1 - y0;
+    const width = Math.ceil((x1 - x0) / lodScale);
+    const height = Math.ceil((y1 - y0) / lodScale);
     const mask = new Int16Array(width * height);
-    for (let z = z0; z < z1; z++) {
+    for (let z = z0; z < z1; z += lodScale) {
       mask.fill(-1);
-      for (let y = y0; y < y1; y++) {
+      for (let y = y0; y < y1; y += lodScale) {
         if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
-        for (let x = x0; x < x1; x++) {
+        for (let x = x0; x < x1; x += lodScale) {
           const solid = this.isCellRenderable(x, y, z);
           if (!solid) continue;
           const visible = dir === 'pz'
-            ? this._isFaceVisible(x, y, z, x, y, z + 1)
-            : this._isFaceVisible(x, y, z, x, y, z - 1);
-          if (visible) mask[(y - y0) * width + (x - x0)] = this._faceKeyForCell(x, y, z, dir);
+            ? this._isFaceVisible(x, y, z, x, y, z + lodScale)
+            : this._isFaceVisible(x, y, z, x, y, z - lodScale);
+          if (visible) mask[((y - y0) / lodScale) * width + ((x - x0) / lodScale)] = this._faceKeyForCell(x, y, z, dir);
         }
       }
       this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
-        const xA = x0 + u;
-        const xB = xA + w;
-        const yA = y0 + v;
-        const yB = yA + h;
-        this._pushGreedyQuad(dir, xA, yA, dir === 'pz' ? z + 1 : z, xB, yB, dir === 'pz' ? z + 1 : z, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
+        const xA = x0 + u * lodScale;
+        const xB = xA + w * lodScale;
+        const yA = y0 + v * lodScale;
+        const yB = yA + h * lodScale;
+        this._pushGreedyQuad(dir, xA, yA, dir === 'pz' ? z + lodScale : z, xB, yB, dir === 'pz' ? z + lodScale : z, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices);
       });
     }
   }
