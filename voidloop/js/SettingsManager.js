@@ -12,6 +12,7 @@ const DEFAULTS = {
   cameraShake: true,
   showDamageNumbers: true,
   graphicsQuality: 'high', // 'low', 'medium', 'high'
+  shadowQuality: 'medium', // 'low', 'medium', 'high', 'ultra'
   playerName: 'Player',
 };
 
@@ -99,10 +100,25 @@ export class SettingsManager {
   }
 
   getShadowMapSize() {
-    const q = this._data.graphicsQuality;
+    const q = this._data.shadowQuality;
     if (q === 'low') return 256;
     if (q === 'medium') return 512;
-    return 1024;
+    if (q === 'high') return 1024;
+    return 2048; // ultra
+  }
+
+  getShadowType() {
+    const q = this._data.shadowQuality;
+    if (q === 'low') return 'basic';
+    return 'pcfsoft'; // medium+
+  }
+
+  getTerrainShadowSteps() {
+    const q = this._data.shadowQuality;
+    if (q === 'low') return 0;
+    if (q === 'medium') return 14;
+    if (q === 'high') return 20;
+    return 24; // ultra
   }
 }
 

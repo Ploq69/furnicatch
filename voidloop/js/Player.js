@@ -3,6 +3,7 @@ import { GAME } from './constants.js';
 import { Weapon } from './Weapon.js';
 import { assetLoader } from './AssetLoader.js';
 import { SFXMapper } from './SFXMapper.js';
+import { ShadowDecal } from './ShadowDecal.js';
 import {
   DEFAULT_LOADOUT,
   HOTBAR_LOADOUTS,
@@ -177,6 +178,8 @@ export class Player {
     this.level = 1;
     this.xp = 0;
     this.world = null; // set by Game for ground height snapping
+    this.sunDirection = null; // set by Game for fake shadows
+    this.shadowDecal = null;
 
     // Functional equipment slots (separate from visual loadout)
     this.equippedTool = null;
@@ -255,6 +258,7 @@ export class Player {
       this._normalizeMesh(character.model);
       this._bindEquipmentHolders();
       this.scene.add(this.mesh);
+      this._createShadowDecal();
       this._updateMesh();
 
       if (this.animations.length > 0) {
@@ -273,6 +277,7 @@ export class Player {
       this.groundOffset = 0.5;
       this.scene.add(this.mesh);
       this._bindEquipmentHolders();
+      this._createShadowDecal();
     }
   }
 
@@ -752,6 +757,24 @@ export class Player {
     }
 
     this._updateMesh();
+
+    // Update fake ground shadow
+    if (this.shadowDecal) {
+      this.shadowDecal.update(dt, this.sunDirection);
+    }
+  }
+
+  _createShadowDecal() {
+    if (this.shadowDecal) {
+      this.shadowDecal.dispose();
+      this.shadowDecal = null;
+    }
+    if (!this.mesh || !this.world) return;
+    const getGround = (x, z) => this._getGroundHeight(x, z);
+    this.shadowDecal = new ShadowDecal(this.mesh, this.scene, getGround, {
+      baseScale: 0.7,
+      baseOpacity: 0.5,
+    });
   }
 
   _startJump(force, isDoubleJump = false) {
@@ -1029,7 +1052,7 @@ export class Player {
   _polishCharacterRendering(root) {
     root.traverse((c) => {
       if (!c.isMesh) return;
-      c.castShadow = false;
+      c.castShadow = true;
       c.receiveShadow = false;
       this._polishMaterialForCharacter(c.material);
     });
@@ -1038,7 +1061,7 @@ export class Player {
   _polishEquipmentRendering(root) {
     root.traverse((c) => {
       if (!c.isMesh) return;
-      c.castShadow = false;
+      c.castShadow = true;
       c.receiveShadow = false;
       this._polishMaterialForCharacter(c.material);
     });

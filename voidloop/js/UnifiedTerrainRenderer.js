@@ -6,10 +6,12 @@
  * Visible chunks render with a single VAO bind + (multi-)draw calls.
  */
 
-const VERTEX_STRIDE_FLOATS = 14; // position(3) + color(3) + normal(3) + uv(2) + materialId(1) + faceKind(1) + tileIndex(1)
+import * as THREE from 'three';
+
+const VERTEX_STRIDE_FLOATS = 7; // position(3) + normal(3) + isFluid(1)
 const VERTEX_STRIDE_BYTES = VERTEX_STRIDE_FLOATS * 4;
-const DEFAULT_SLOT_VERTICES = 12288; // enough for ~2048 quads (6 verts each)
-const DEFAULT_SLOT_COUNT = 520;   // match LIVE_CHUNK_CAP
+const DEFAULT_SLOT_VERTICES = 32768; // enough for ~5461 quads (6 verts each)
+const DEFAULT_SLOT_COUNT = 260;   // enough for independent levels with CHUNK_SIZE=16
 
 const SLOT_FREE = 0;
 const SLOT_READY = 1;
@@ -17,45 +19,39 @@ const SLOT_DIRTY = 2;
 
 const ATTRIB_LOCATIONS = {
   aPosition: 0,
-  aColor: 1,
-  aNormal: 2,
-  aUv: 3,
-  aMaterialId: 4,
-  aFaceKind: 5,
-  aTileIndex: 6,
+  aNormal: 1,
+  aIsFluid: 2,
 };
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
 in vec3 aPosition;
-in vec3 aColor;
 in vec3 aNormal;
-in vec2 aUv;
-in float aMaterialId;
-in float aFaceKind;
-in float aTileIndex;
+in float aIsFluid;
 
 out vec3 vNormal;
-out vec2 vUv;
-out float vMaterialId;
-out float vFaceKind;
-out float vTileIndex;
 out vec3 vWorldPos;
+out vec3 vBlockPos;
+out float vFaceAxis;
 
 uniform mat4 uProjectionMatrix;
 uniform mat4 uViewMatrix;
 uniform float time;
 
 void main() {
-  vMaterialId = aMaterialId;
-  vFaceKind = aFaceKind;
-  vTileIndex = aTileIndex;
   vNormal = normalize(mat3(uViewMatrix) * aNormal);
-  vUv = aUv;
+  vBlockPos = aPosition;
+
+  if (aNormal.x > 0.5) vFaceAxis = 0.0;
+  else if (aNormal.x < -0.5) vFaceAxis = 1.0;
+  else if (aNormal.y > 0.5) vFaceAxis = 2.0;
+  else if (aNormal.y < -0.5) vFaceAxis = 3.0;
+  else if (aNormal.z > 0.5) vFaceAxis = 4.0;
+  else vFaceAxis = 5.0;
+
   vec4 worldPos = vec4(aPosition, 1.0);
-  int materialId = int(floor(aMaterialId + 0.5));
-  if (materialId == 9 && aFaceKind < 0.5) {
+  if (aIsFluid > 0.5) {
     float rippleA = sin((aPosition.x * 1.35 + aPosition.z * 0.95) + time * 1.55) * 0.025;
     float rippleB = cos((aPosition.x * -0.72 + aPosition.z * 1.48) - time * 1.15) * 0.018;
     worldPos.y += rippleA + rippleB;
@@ -67,6 +63,8 @@ void main() {
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
+precision highp usampler3D;
+precision highp usampler2D;
 
 uniform float time;
 uniform float renderMode;
@@ -80,25 +78,50 @@ uniform float cutawayCeilingY;
 uniform float cutawayAmount;
 uniform sampler2D tileAtlas;
 uniform vec4 atlasRects[256];
+uniform usampler3D zoneBlockData;
+uniform ivec3 zoneBlockDataOrigin;
+uniform usampler2D tileIndexMap;
 uniform vec3 uCameraPosition;
+uniform mat4 uViewMatrix;
 uniform float fogEnabled;
 uniform vec3 fogColor;
 uniform float fogNear;
 uniform float fogFar;
 uniform int passMode;
 
+// Pet point light
+uniform vec3 pointLightPos;
+uniform vec3 pointLightColor;
+uniform float pointLightIntensity;
+uniform float pointLightDistance;
+
 in vec3 vNormal;
-in vec2 vUv;
-in float vMaterialId;
-in float vFaceKind;
-in float vTileIndex;
 in vec3 vWorldPos;
+in vec3 vBlockPos;
+in float vFaceAxis;
 
 out vec4 fragColor;
 
-vec4 sampleAtlas(float tileIndex, vec2 uv) {
-  int idx = int(floor(tileIndex + 0.5));
-  vec4 r = atlasRects[idx];
+int getTileIndex(int materialId, int faceKind) {
+  int idx = materialId * 3 + faceKind;
+  uvec4 texel = texelFetch(tileIndexMap, ivec2(idx, 0), 0);
+  return int(texel.r);
+}
+
+int getFaceKind(int faceAxis) {
+  if (faceAxis == 2) return 0;
+  if (faceAxis == 3) return 2;
+  return 1;
+}
+
+vec2 getFaceUv(vec3 worldPos, int faceAxis) {
+  if (faceAxis == 2 || faceAxis == 3) return worldPos.xz;
+  if (faceAxis == 0 || faceAxis == 1) return worldPos.zy;
+  return worldPos.xy;
+}
+
+vec4 sampleAtlas(int tileIndex, vec2 uv) {
+  vec4 r = atlasRects[tileIndex];
   vec2 localUv = fract(uv);
   localUv = localUv * 0.96875 + vec2(0.015625);
   vec2 atlasUv = localUv * r.zw + r.xy;
@@ -107,17 +130,72 @@ vec4 sampleAtlas(float tileIndex, vec2 uv) {
   return textureGrad(tileAtlas, atlasUv, dx, dy);
 }
 
+// Voxel raymarched shadows with edge softness approximation.
+// zoneBlockData stores 0 for air, matId+1 for solid blocks.
+float voxelShadow(vec3 worldPos, vec3 normal, vec3 lDir, ivec3 origin) {
+  if (shaderQuality < 0.55) return 1.0;
+
+  vec3 ro = worldPos + normal * 0.05;
+  vec3 rd = normalize(lDir);
+
+  // Interleaved gradient noise for dithered step offset
+  float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  float t = 0.35 + dither * 0.7;
+
+  int maxSteps = int(mix(10.0, 22.0, shaderQuality));
+  float maxDist = mix(10.0, 26.0, shaderQuality);
+
+  for (int i = 0; i < 20; i++) {
+    if (i >= maxSteps || t > maxDist) break;
+    vec3 p = ro + rd * t;
+    ivec3 bp = ivec3(floor(p));
+    uvec4 d = texelFetch(zoneBlockData, bp - origin, 0);
+    if (d.r > 0u) {
+      // Estimate edge proximity by checking 6 face neighbors.
+      // More empty neighbors = closer to edge = softer shadow.
+      float emptyNeighbors = 0.0;
+      emptyNeighbors += float(texelFetch(zoneBlockData, bp + ivec3(1,0,0) - origin, 0).r == 0u);
+      emptyNeighbors += float(texelFetch(zoneBlockData, bp + ivec3(-1,0,0) - origin, 0).r == 0u);
+      emptyNeighbors += float(texelFetch(zoneBlockData, bp + ivec3(0,1,0) - origin, 0).r == 0u);
+      emptyNeighbors += float(texelFetch(zoneBlockData, bp + ivec3(0,-1,0) - origin, 0).r == 0u);
+      emptyNeighbors += float(texelFetch(zoneBlockData, bp + ivec3(0,0,1) - origin, 0).r == 0u);
+      emptyNeighbors += float(texelFetch(zoneBlockData, bp + ivec3(0,0,-1) - origin, 0).r == 0u);
+      float softness = emptyNeighbors / 6.0;
+      return mix(0.04, 0.55, softness);
+    }
+    t += 0.92;
+  }
+  return 1.0;
+}
+
 void main() {
-  int materialId = int(floor(vMaterialId + 0.5));
+  ivec3 blockPos = ivec3(floor(vBlockPos));
+  int faceAxis = int(floor(vFaceAxis + 0.5));
+
+  // Faces on the positive axis are emitted at the max boundary of the block,
+  // so we need to step back to sample the correct block.
+  // Faces on the negative axis are emitted at the min boundary, so no offset.
+  if (faceAxis == 0) blockPos.x -= 1;
+  else if (faceAxis == 2) blockPos.y -= 1;
+  else if (faceAxis == 4) blockPos.z -= 1;
+
+  uvec4 blockData = texelFetch(zoneBlockData, blockPos - zoneBlockDataOrigin, 0);
+  // Decode: 0 = air, solid = matId + 1
+  int materialId = int(blockData.r) - 1;
+
+  int faceKind = getFaceKind(faceAxis);
+  int tileIdx = getTileIndex(materialId, faceKind);
+
   bool blendedMaterial = materialId == 4 || materialId == 7 || materialId == 9;
   bool cutoutMaterial =
     materialId == 19 || materialId == 21 || materialId == 23 || materialId == 25 || materialId == 27 ||
     materialId == 28 || materialId == 29 || materialId == 30 || materialId == 41 ||
     materialId == 42 || materialId == 43;
+
   if (passMode == 0 && blendedMaterial) discard;
   if (passMode == 1 && !blendedMaterial) discard;
 
-  vec2 sampleUv = vUv;
+  vec2 sampleUv = getFaceUv(vWorldPos, faceAxis);
   if (materialId == 9) {
     float waveA = sin(vWorldPos.x * 1.18 + vWorldPos.z * 0.63 + time * 1.65) * 0.028;
     float waveB = cos(vWorldPos.z * 1.07 - vWorldPos.x * 0.44 - time * 1.25) * 0.022;
@@ -125,7 +203,8 @@ void main() {
   } else if (materialId == 4) {
     sampleUv += vec2(sin(time * 1.4 + vWorldPos.z * 0.8), cos(time * 1.1 + vWorldPos.x * 0.6)) * 0.018;
   }
-  vec4 texel = sampleAtlas(vTileIndex, sampleUv);
+
+  vec4 texel = sampleAtlas(tileIdx, sampleUv);
   if (cutoutMaterial && texel.a < 0.45) discard;
   vec3 color = texel.rgb;
 
@@ -142,7 +221,7 @@ void main() {
 
   float alpha = 1.0;
   if (materialId == 9) {
-    float topFace = 1.0 - step(0.5, abs(vFaceKind));
+    float topFace = 1.0 - step(0.5, abs(float(faceKind)));
     float shimmer = sin(time * 2.4 + vWorldPos.x * 0.58 + vWorldPos.z * 0.37) * 0.5 + 0.5;
     float crossing = sin((vWorldPos.x + vWorldPos.z) * 2.25 + time * 2.1) * 0.5 + 0.5;
     float flowLine = smoothstep(0.82, 1.0, crossing) * topFace;
@@ -159,6 +238,24 @@ void main() {
     color *= 1.25 + 0.08 * sin(time * 4.0 + vWorldPos.x * 0.7 + vWorldPos.z * 0.5);
   } else if (materialId == 19 || materialId == 21 || materialId == 23 || materialId == 25 || materialId == 27) {
     color = mix(color, vec3(0.4, 0.6, 0.25), 0.12);
+  }
+
+  // Lighting & shadows
+  vec3 viewLightDir = normalize(mat3(uViewMatrix) * lightDir);
+  float NdotL = max(dot(vNormal, viewLightDir), 0.0);
+  float diffuse = mix(0.38, 1.0, NdotL);
+  float shadow = voxelShadow(vWorldPos, normalize(cross(dFdx(vWorldPos), dFdy(vWorldPos))), lightDir, zoneBlockDataOrigin);
+  color *= diffuse * shadow;
+
+  // Point light (pet) contribution — additive on top of sun lighting
+  if (pointLightIntensity > 0.0) {
+    float petDist = distance(vWorldPos, pointLightPos);
+    if (petDist < pointLightDistance) {
+      float petAtten = 1.0 / (1.0 + 0.1 * petDist + 0.02 * petDist * petDist);
+      // Full 360° illumination — no normal dependence for close-range pet glow
+      vec3 petLight = pointLightColor * pointLightIntensity * petAtten;
+      color += texel.rgb * petLight;
+    }
   }
 
   float fogT = smoothstep(fogNear, fogFar, distance(uCameraPosition, vWorldPos)) * fogEnabled;
@@ -208,6 +305,8 @@ export class UnifiedTerrainRenderer {
     }
 
     this.threeRenderer = threeRenderer;
+    this.chunkSize = options.chunkSize || 8;
+    this.chunkCenterOffset = this.chunkSize * 0.5;
     this.slotVertices = options.slotVertices || DEFAULT_SLOT_VERTICES;
     this.slotCount = options.slotCount || DEFAULT_SLOT_COUNT;
 
@@ -232,11 +331,18 @@ export class UnifiedTerrainRenderer {
     this.uCutawayAmount = this.gl.getUniformLocation(this.program, 'cutawayAmount');
     this.uTileAtlas = this.gl.getUniformLocation(this.program, 'tileAtlas');
     this.uAtlasRects = this.gl.getUniformLocation(this.program, 'atlasRects');
+    this.uZoneBlockData = this.gl.getUniformLocation(this.program, 'zoneBlockData');
+    this.uZoneBlockDataOrigin = this.gl.getUniformLocation(this.program, 'zoneBlockDataOrigin');
+    this.uTileIndexMap = this.gl.getUniformLocation(this.program, 'tileIndexMap');
     this.uFogEnabled = this.gl.getUniformLocation(this.program, 'fogEnabled');
     this.uFogColor = this.gl.getUniformLocation(this.program, 'fogColor');
     this.uFogNear = this.gl.getUniformLocation(this.program, 'fogNear');
     this.uFogFar = this.gl.getUniformLocation(this.program, 'fogFar');
     this.uPassMode = this.gl.getUniformLocation(this.program, 'passMode');
+    this.uPointLightPos = this.gl.getUniformLocation(this.program, 'pointLightPos');
+    this.uPointLightColor = this.gl.getUniformLocation(this.program, 'pointLightColor');
+    this.uPointLightIntensity = this.gl.getUniformLocation(this.program, 'pointLightIntensity');
+    this.uPointLightDistance = this.gl.getUniformLocation(this.program, 'pointLightDistance');
 
     // Chunk slots
     this.slots = [];
@@ -271,24 +377,12 @@ export class UnifiedTerrainRenderer {
     // aPosition
     this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aPosition);
     this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aPosition, 3, this.gl.FLOAT, false, stride, 0);
-    // aColor
-    this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aColor);
-    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aColor, 3, this.gl.FLOAT, false, stride, 12);
     // aNormal
     this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aNormal);
-    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aNormal, 3, this.gl.FLOAT, false, stride, 24);
-    // aUv
-    this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aUv);
-    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aUv, 2, this.gl.FLOAT, false, stride, 36);
-    // aMaterialId
-    this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aMaterialId);
-    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aMaterialId, 1, this.gl.FLOAT, false, stride, 44);
-    // aFaceKind
-    this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aFaceKind);
-    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aFaceKind, 1, this.gl.FLOAT, false, stride, 48);
-    // aTileIndex
-    this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aTileIndex);
-    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aTileIndex, 1, this.gl.FLOAT, false, stride, 52);
+    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aNormal, 3, this.gl.FLOAT, false, stride, 12);
+    // aIsFluid
+    this.gl.enableVertexAttribArray(ATTRIB_LOCATIONS.aIsFluid);
+    this.gl.vertexAttribPointer(ATTRIB_LOCATIONS.aIsFluid, 1, this.gl.FLOAT, false, stride, 24);
 
     this.gl.bindVertexArray(null);
 
@@ -309,6 +403,12 @@ export class UnifiedTerrainRenderer {
       amount: 0,
     };
     this._lightDir = new Float32Array([0.35, 0.85, 0.32]);
+    this._pointLight = {
+      pos: new Float32Array([0, -1000, 0]),
+      color: new Float32Array([1, 1, 1]),
+      intensity: 0,
+      distance: 1,
+    };
     this._renderMode = 0;
     this._shaderQuality = 1;
     this._time = 0;
@@ -318,6 +418,9 @@ export class UnifiedTerrainRenderer {
     this._fogFar = 260;
     this._atlasTexture = null;
     this._atlasRectsArray = null;
+    this._zoneBlockTexture = null;
+    this._zoneBlockOrigin = new THREE.Vector3(0, 0, 0);
+    this._tileIndexMapTexture = null;
 
     // Draw list buffers for multi-draw
     this._firsts = new Int32Array(this.slotCount);
@@ -396,23 +499,16 @@ export class UnifiedTerrainRenderer {
   }
 
   /** Upload vertex data for a chunk slot. data is Float32Array of interleaved vertices. */
-  uploadSlot(slotIndex, data) {
+  uploadSlot(slotIndex, data, hasTransparent = false) {
     const slot = this.slots[slotIndex];
     const vertCount = Math.floor(data.length / VERTEX_STRIDE_FLOATS);
     if (vertCount > this.slotVertices) {
       console.warn(`[UnifiedTerrainRenderer] Chunk ${slot.cx},${slot.cy},${slot.cz} exceeds slot capacity: ${vertCount} > ${this.slotVertices}. Truncating.`);
     }
     slot.vertexCount = Math.min(vertCount, this.slotVertices);
-    slot.hasTransparent = false;
+    slot.hasTransparent = hasTransparent;
     slot.truncated = vertCount > this.slotVertices;
     this.stats.maxUploadedVertices = Math.max(this.stats.maxUploadedVertices || 0, vertCount);
-    for (let i = 0; i < slot.vertexCount; i++) {
-      const materialId = Math.round(data[i * VERTEX_STRIDE_FLOATS + 11]);
-      if (materialId === 4 || materialId === 7 || materialId === 9) {
-        slot.hasTransparent = true;
-        break;
-      }
-    }
     slot.state = SLOT_READY;
     slot.lastUsed = performance.now();
 
@@ -484,6 +580,17 @@ export class UnifiedTerrainRenderer {
     }
   }
 
+  /** Set zone block data 3D texture. */
+  setZoneBlockTexture(texture, origin) {
+    this._zoneBlockTexture = texture;
+    this._zoneBlockOrigin.copy(origin);
+  }
+
+  /** Set tile index map 1D texture. */
+  setTileIndexMapTexture(texture) {
+    this._tileIndexMapTexture = texture;
+  }
+
   /** Update cutaway uniforms. */
   setCutaway(center, forward, radius, reach, ceilingY, amount) {
     this._cutawayUniforms.center[0] = center.x;
@@ -510,6 +617,23 @@ export class UnifiedTerrainRenderer {
     this._lightDir[0] = x;
     this._lightDir[1] = y;
     this._lightDir[2] = z;
+  }
+
+  setPointLight(x, y, z, color, intensity, distance) {
+    this._pointLight.pos[0] = x;
+    this._pointLight.pos[1] = y;
+    this._pointLight.pos[2] = z;
+    if (typeof color === 'number') {
+      this._pointLight.color[0] = ((color >> 16) & 255) / 255;
+      this._pointLight.color[1] = ((color >> 8) & 255) / 255;
+      this._pointLight.color[2] = (color & 255) / 255;
+    } else if (color && color.r != null) {
+      this._pointLight.color[0] = color.r;
+      this._pointLight.color[1] = color.g;
+      this._pointLight.color[2] = color.b;
+    }
+    this._pointLight.intensity = intensity;
+    this._pointLight.distance = distance;
   }
 
   setFog(options = {}) {
@@ -568,12 +692,12 @@ export class UnifiedTerrainRenderer {
     }
     const camPos = camera.position;
     this._transparentSlots.sort((a, b) => {
-      const adx = a.cx * 8 + 4 - camPos.x;
-      const ady = a.cy * 8 + 4 - camPos.y;
-      const adz = a.cz * 8 + 4 - camPos.z;
-      const bdx = b.cx * 8 + 4 - camPos.x;
-      const bdy = b.cy * 8 + 4 - camPos.y;
-      const bdz = b.cz * 8 + 4 - camPos.z;
+      const adx = a.cx * this.chunkSize + this.chunkCenterOffset - camPos.x;
+      const ady = a.cy * this.chunkSize + this.chunkCenterOffset - camPos.y;
+      const adz = a.cz * this.chunkSize + this.chunkCenterOffset - camPos.z;
+      const bdx = b.cx * this.chunkSize + this.chunkCenterOffset - camPos.x;
+      const bdy = b.cy * this.chunkSize + this.chunkCenterOffset - camPos.y;
+      const bdz = b.cz * this.chunkSize + this.chunkCenterOffset - camPos.z;
       return (bdx * bdx + bdy * bdy + bdz * bdz) - (adx * adx + ady * ady + adz * adz);
     });
     let transparentDrawCount = 0;
@@ -606,6 +730,10 @@ export class UnifiedTerrainRenderer {
     gl.uniform1f(this.uRenderMode, this._renderMode);
     gl.uniform1f(this.uShaderQuality, this._shaderQuality);
     gl.uniform3f(this.uLightDir, this._lightDir[0], this._lightDir[1], this._lightDir[2]);
+    gl.uniform3f(this.uPointLightPos, this._pointLight.pos[0], this._pointLight.pos[1], this._pointLight.pos[2]);
+    gl.uniform3f(this.uPointLightColor, this._pointLight.color[0], this._pointLight.color[1], this._pointLight.color[2]);
+    gl.uniform1f(this.uPointLightIntensity, this._pointLight.intensity);
+    gl.uniform1f(this.uPointLightDistance, this._pointLight.distance);
     gl.uniform1f(this.uFogEnabled, this._fogEnabled);
     gl.uniform3f(this.uFogColor, this._fogColor[0], this._fogColor[1], this._fogColor[2]);
     gl.uniform1f(this.uFogNear, this._fogNear);
@@ -632,6 +760,21 @@ export class UnifiedTerrainRenderer {
 
     if (this._atlasRectsArray) {
       gl.uniform4fv(this.uAtlasRects, this._atlasRectsArray);
+    }
+
+    // Bind zone block data texture to unit 2
+    if (this._zoneBlockTexture) {
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_3D, this._zoneBlockTexture);
+      gl.uniform1i(this.uZoneBlockData, 2);
+      gl.uniform3i(this.uZoneBlockDataOrigin, this._zoneBlockOrigin.x, this._zoneBlockOrigin.y, this._zoneBlockOrigin.z);
+    }
+
+    // Bind tile index map texture to unit 1
+    if (this._tileIndexMapTexture) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this._tileIndexMapTexture);
+      gl.uniform1i(this.uTileIndexMap, 1);
     }
 
     // Depth test & culling

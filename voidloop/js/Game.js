@@ -113,7 +113,7 @@ export class Game {
     // render scale is a large fragment-cost jump and makes 60fps fragile.
     this.renderer.setPixelRatio(1);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.BasicShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.5;
     this.container.appendChild(this.renderer.domElement);
@@ -200,13 +200,15 @@ export class Game {
     this.sun = new THREE.DirectionalLight(0xfff5e6, 1.2);
     this.sun.position.set(10, 30, 10);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(256, 256);
+    this.sun.shadow.mapSize.set(512, 512);
     this.sun.shadow.camera.near = 0.5;
     this.sun.shadow.camera.far = 80;
-    this.sun.shadow.camera.left = -30;
-    this.sun.shadow.camera.right = 30;
-    this.sun.shadow.camera.top = 30;
-    this.sun.shadow.camera.bottom = -30;
+    this.sun.shadow.camera.left = -20;
+    this.sun.shadow.camera.right = 20;
+    this.sun.shadow.camera.top = 20;
+    this.sun.shadow.camera.bottom = -20;
+    this.sun.shadow.bias = -0.0005;
+    this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun);
     this._applyGraphicsSettings();
 
@@ -286,7 +288,7 @@ export class Game {
 
     // Listen for settings changes
     this._settingsUnsub = settings.onChange((key, value) => {
-      if (key === 'graphicsQuality') this._applyGraphicsSettings();
+      if (key === 'graphicsQuality' || key === 'shadowQuality') this._applyGraphicsSettings();
       if (key === 'masterVolume' || key === 'sfxVolume' || key === 'musicVolume') {
         settings.applyToAudio(audio);
       }
@@ -328,6 +330,7 @@ export class Game {
     this.pendingLetterLevelUp = null;
     this._gatewayMeshes = [];
     this._gatewayLabels = [];
+    this._isTransitioning = false;
 
     // Touch controls for iPad/tablet
     this.touchControls = new TouchControls();
@@ -505,24 +508,23 @@ export class Game {
     return { allowed: true, charged: false };
   }
 
-  async _generateZones(seed) {
+  async _generateZones(seed, zoneId = null) {
     this.world.clear();
     const worldSeed = seed != null ? seed : Math.floor(Math.random() * 1000000);
+    this._worldSeed = worldSeed;
 
-    // Generate all zones (both visible, enemies only in unlocked)
-    for (const zone of ZONES) {
-      const zoneSeed = worldSeed + zone.order * 7919;
-      const spawnEnemies = this.zoneManager.isZoneUnlocked(zone.id);
-      await this.world.generateZone(zone.id, zoneSeed, spawnEnemies);
-    }
+    // Independent levels: only generate the active zone
+    const targetZoneId = zoneId || this.zoneManager.currentZoneId;
+    const zone = getZoneById(targetZoneId);
+    if (!zone) throw new Error(`Unknown zone: ${targetZoneId}`);
 
-    // Build unified terrain mesh once after all zones are generated
+    const zoneSeed = worldSeed + zone.order * 7919;
+    await this.world.generateZone(zone.id, zoneSeed, true);
     await this.world.buildTerrainMesh();
 
     // Spawn player at current zone's spawn point
-    const currentZone = this.zoneManager.getCurrentZone();
-    if (currentZone) {
-      this.player.position.set(currentZone.spawnPoint.x, 1, currentZone.spawnPoint.z);
+    if (zone) {
+      this.player.position.set(zone.spawnPoint.x, 1, zone.spawnPoint.z);
     } else {
       this.player.position.set(0, 1, 0);
     }
@@ -537,13 +539,13 @@ export class Game {
     this.letterPool.reset();
 
     // Set up letter pool for current zone
-    if (currentZone) {
-      this.letterPool.setLetters(currentZone.letters, currentZone.id);
+    if (zone) {
+      this.letterPool.setLetters(zone.letters, zone.id);
     }
 
     const letters = this.letterPool.getCurrentLetters().join(' ');
-    this.ui.setFloorText(`ZONE: ${currentZone?.name?.toUpperCase() || 'UNKNOWN'} — Letters: ${letters}`);
-    this.ui.updateObjectiveHud?.(this._getObjectiveState(currentZone?.id));
+    this.ui.setFloorText(`ZONE: ${zone?.name?.toUpperCase() || 'UNKNOWN'} — Letters: ${letters}`);
+    this.ui.updateObjectiveHud?.(this._getObjectiveState(zone?.id));
     this.ui.showExitOpen(false);
     this._spawnPet();
     this._updateTorches();
@@ -773,9 +775,13 @@ export class Game {
       this._updateThirdPersonControls(dt);
     }
 
+    // Update shared sun direction for fake shadows
+    const sunDir = this._getSunDirection();
+
     // Player update
     this.player.setFluidState(this.world.getFluidStateAt(this.player.position));
     this.player.setSurfaceState(this.world.getSurfaceStateAt(this.player.position));
+    this.player.sunDirection = sunDir;
     this.player.update(dt, input);
     this._applyBlockHazards(dt);
     if (this.player.jumpStartedThisFrame) {
@@ -1037,6 +1043,7 @@ export class Game {
       cameraMode: this.cameraMode,
       camera: this.camera,
       currentZoneId: this.zoneManager.currentZoneId,
+      sunDirection: sunDir,
     });
     this._perfFrame.worldMs = performance.now() - worldStart;
 
@@ -1058,7 +1065,20 @@ export class Game {
 
     // Pet update
     if (this.pet) {
+      this.pet.sunDirection = sunDir;
       this.pet.update(dt, this.player, this.world);
+      // Sync pet light to terrain shader so the ground glows
+      if (this.pet.glowLight) {
+        this.world?.terrainMesh?.setPetLight(
+          this.pet.container.position,
+          this.pet.glowLight.color,
+          this.pet.glowLight.intensity,
+          this.pet.glowLight.distance
+        );
+      }
+    } else {
+      // No pet equipped — turn off terrain point light
+      this.world?.terrainMesh?.setPetLight({ x: 0, y: -1000, z: 0 }, 0x000000, 0, 1);
     }
 
     // Check enemy deaths and spawn loot
@@ -1391,11 +1411,13 @@ export class Game {
     if (this.cameraMode === 'thirdPerson') {
       this._updateThirdPersonCamera(dt, shakeX, shakeY, shakeZ);
       if (this.player.mesh) this.player.mesh.visible = true;
+      this._updateShadowCamera(dt);
       return;
     }
     if (this.cameraMode === 'topDown') {
       this._updateTopDownCamera(dt, shakeX, shakeY, shakeZ);
       if (this.player.mesh) this.player.mesh.visible = true;
+      this._updateShadowCamera(dt);
       return;
     }
 
@@ -1427,6 +1449,7 @@ export class Game {
       this.cameraTarget.z + isoOffset * horizontalScale + shakeZ
     );
     this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
+    this._updateShadowCamera(dt);
   }
 
   _updateTopDownCamera(dt, shakeX = 0, shakeY = 0, shakeZ = 0) {
@@ -1447,6 +1470,26 @@ export class Game {
       this.cameraTarget.z + shakeZ * 0.25
     );
     this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
+  }
+
+  _updateShadowCamera(dt) {
+    if (!this.sun || !this.player) return;
+    const cam = this.sun.shadow.camera;
+    const target = this.player.position;
+    // Smoothly follow player; tighter frustum = sharper shadows
+    const bounds = this.cameraMode === 'thirdPerson' ? 14.0 : 20.0;
+    const speed = 1.0 - Math.exp(-4.0 * dt);
+    const cx = cam.left + (cam.right - cam.left) * 0.5;
+    const cz = cam.top + (cam.bottom - cam.top) * 0.5;
+    const desiredX = target.x;
+    const desiredZ = target.z;
+    const newCx = cx + (desiredX - cx) * speed;
+    const newCz = cz + (desiredZ - cz) * speed;
+    cam.left = newCx - bounds;
+    cam.right = newCx + bounds;
+    cam.top = newCz + bounds;
+    cam.bottom = newCz - bounds;
+    cam.updateProjectionMatrix();
   }
 
   _updateThirdPersonControls(dt) {
@@ -1573,6 +1616,7 @@ export class Game {
     );
     this.thirdPersonCamera.lookAt(rig.lookTarget.x, rig.lookTarget.y, rig.lookTarget.z);
     rig.previousPlayerPos.copy(playerPos);
+    this._updateShadowCamera(dt);
 
     if (this.tpCameraDebug && typeof window !== 'undefined') {
       window.__voidloopThirdPersonCameraTuning = tune;
@@ -2523,16 +2567,8 @@ export class Game {
   }
 
   _syncCurrentZoneFromPosition() {
-    const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
-    if (!currentZone) return;
-    if (!this.zoneManager.isZoneUnlocked(currentZone.id)) return;
-    if (this.zoneManager.currentZoneId === currentZone.id) return;
-
-    this.zoneManager.setCurrentZone(currentZone.id);
-    this.letterPool.setLetters(currentZone.letters, currentZone.id);
-    const letters = this.letterPool.getCurrentLetters().join(' ');
-    this.ui.setFloorText(`ZONE: ${currentZone.name.toUpperCase()} — Letters: ${letters}`);
-    this.ui.updateObjectiveHud?.(this._getObjectiveState(currentZone.id));
+    // With independent levels, zone is managed by gateway transitions, not position.
+    // Keep this as a no-op to avoid accidental zone switching.
   }
 
   _checkZoneCompletion() {
@@ -2618,52 +2654,52 @@ export class Game {
 
   _createGateways() {
     this._clearGateways();
-    for (const zone of ZONES) {
-      if (!zone.exitGateway) continue;
-      const gw = zone.exitGateway;
-      const targetZone = getZoneById(gw.targetZone);
-      if (!targetZone) continue;
+    const currentZone = this.zoneManager.getCurrentZone();
+    if (!currentZone || !currentZone.exitGateway) return;
 
-      // Create barrier mesh
-      const geo = new THREE.PlaneGeometry(4, 4);
-      const isUnlocked = this.zoneManager.isZoneUnlocked(targetZone.id);
-      const color = isUnlocked ? 0x44ff44 : 0xff4444;
-      const mat = new THREE.MeshStandardMaterial({
-        color,
-        emissive: color,
-        emissiveIntensity: 0.5,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(gw.x, 2, gw.z);
-      mesh.rotation.y = Math.PI / 2;
-      this.scene.add(mesh);
-      this._gatewayMeshes.push(mesh);
+    const gw = currentZone.exitGateway;
+    const targetZone = getZoneById(gw.targetZone);
+    if (!targetZone) return;
 
-      // Floating label
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = 512;
-      canvas.height = 128;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.beginPath();
-      ctx.roundRect(0, 0, 512, 128, 16);
-      ctx.fill();
-      ctx.fillStyle = isUnlocked ? '#4ade80' : '#f87171';
-      ctx.font = 'bold 36px sans-serif';
-      ctx.textAlign = 'center';
-      const label = isUnlocked ? `✅ ${targetZone.name}` : `🔒 ${targetZone.name}`;
-      ctx.fillText(label, 256, 80);
-      const tex = new THREE.CanvasTexture(canvas);
-      const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-      const sprite = new THREE.Sprite(spriteMat);
-      sprite.scale.set(4, 1, 1);
-      sprite.position.set(gw.x, 5, gw.z);
-      this.scene.add(sprite);
-      this._gatewayLabels.push(sprite);
-    }
+    // Create barrier mesh
+    const geo = new THREE.PlaneGeometry(4, 4);
+    const isUnlocked = this.zoneManager.isZoneUnlocked(targetZone.id);
+    const color = isUnlocked ? 0x44ff44 : 0xff4444;
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.5,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(gw.x, 2, gw.z);
+    mesh.rotation.y = Math.PI / 2;
+    this.scene.add(mesh);
+    this._gatewayMeshes.push(mesh);
+
+    // Floating label
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 512;
+    canvas.height = 128;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 512, 128, 16);
+    ctx.fill();
+    ctx.fillStyle = isUnlocked ? '#4ade80' : '#f87171';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    const label = isUnlocked ? `✅ ${targetZone.name}` : `🔒 ${targetZone.name}`;
+    ctx.fillText(label, 256, 80);
+    const tex = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.scale.set(4, 1, 1);
+    sprite.position.set(gw.x, 5, gw.z);
+    this.scene.add(sprite);
+    this._gatewayLabels.push(sprite);
   }
 
   _clearGateways() {
@@ -2682,29 +2718,51 @@ export class Game {
   }
 
   _checkGateways() {
-    for (const zone of ZONES) {
-      if (!zone.exitGateway) continue;
-      const gw = zone.exitGateway;
-      const targetZone = getZoneById(gw.targetZone);
-      if (!targetZone) continue;
+    const currentZone = this.zoneManager.getCurrentZone();
+    if (!currentZone || !currentZone.exitGateway) return;
 
-      const dist = this.player.position.distanceTo(new THREE.Vector3(gw.x, this.player.position.y, gw.z));
-      if (dist < 5) {
-        if (this.zoneManager.isZoneUnlocked(targetZone.id)) continue;
-        const previousZoneId = this.zoneManager.getPreviousZoneId(targetZone.id);
-        const canEnter = !previousZoneId || this.zoneManager.isZoneCompleted(previousZoneId);
-        if (canEnter) {
-          this.zoneManager.unlockZone(targetZone.id);
-          this.ui.showFloatingText(`${targetZone.name} unlocked!`, 0x4ade80);
-          this.ui.showGatewayIndicator(targetZone.name, false, ['ABC', '⛏']);
-          this._createGateways();
-          this._respawnZoneEnemies(targetZone.id);
-        } else {
-          this.ui.showGatewayIndicator(targetZone.name, true, ['ABC', '⛏']);
-          this.ui.showFloatingText('Master this zone first', 0xff4444);
-        }
+    const gw = currentZone.exitGateway;
+    const targetZone = getZoneById(gw.targetZone);
+    if (!targetZone) return;
+
+    const dist = this.player.position.distanceTo(new THREE.Vector3(gw.x, this.player.position.y, gw.z));
+    if (dist < 5) {
+      const isUnlocked = this.zoneManager.isZoneUnlocked(targetZone.id);
+      if (isUnlocked) {
+        // Zone is unlocked — offer transition
+        this._transitionToZone(targetZone.id);
+        return;
+      }
+
+      const previousZoneId = this.zoneManager.getPreviousZoneId(targetZone.id);
+      const canEnter = !previousZoneId || this.zoneManager.isZoneCompleted(previousZoneId);
+      if (canEnter) {
+        this.zoneManager.unlockZone(targetZone.id);
+        this.ui.showFloatingText(`${targetZone.name} unlocked!`, 0x4ade80);
+        this._createGateways();
+        this._transitionToZone(targetZone.id);
+      } else {
+        this.ui.showGatewayIndicator(targetZone.name, true, ['ABC', '⛏']);
+        this.ui.showFloatingText('Master this zone first', 0xff4444);
       }
     }
+  }
+
+  async _transitionToZone(targetZoneId) {
+    if (this._isTransitioning) return;
+    this._isTransitioning = true;
+
+    const targetZone = getZoneById(targetZoneId);
+    this.ui.showLoading(`Entering ${targetZone?.name || 'Unknown Zone'}...`);
+
+    // Small delay to let the loading screen render
+    await new Promise(r => setTimeout(r, 150));
+
+    this.zoneManager.setCurrentZone(targetZoneId);
+    await this._generateZones(this._worldSeed, targetZoneId);
+
+    this.ui.hideLoading();
+    this._isTransitioning = false;
   }
 
   _respawnZoneEnemies(zoneId) {
@@ -3343,10 +3401,42 @@ export class Game {
   }
 
   _applyGraphicsSettings() {
-    const size = Math.min(settings.getShadowMapSize(), 512);
+    const size = settings.getShadowMapSize();
     this.renderer.setPixelRatio(this._renderScale || 1);
     this.sun.shadow.mapSize.set(size, size);
     this.sun.shadow.mapSize.needsUpdate = true;
+
+    const shadowType = settings.getShadowType();
+    const targetType = shadowType === 'basic' ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+    if (this.renderer.shadowMap.type !== targetType) {
+      this.renderer.shadowMap.type = targetType;
+    }
+
+    // Update terrain shader shadow quality
+    const sq = settings.get('shadowQuality');
+    const shaderQ = sq === 'low' ? 0.5 : sq === 'medium' ? 0.75 : 1.0;
+    if (this.world?.terrainMesh?.unifiedRenderer) {
+      this.world.terrainMesh.unifiedRenderer.setShaderQuality(shaderQ);
+    }
+
+    // On Low quality, disable expensive Three.js shadow maps and rely on fake decals
+    const enableShadowMaps = sq !== 'low';
+    if (this.renderer.shadowMap.enabled !== enableShadowMaps) {
+      this.renderer.shadowMap.enabled = enableShadowMaps;
+      // Force material updates
+      this.scene.traverse((c) => {
+        if (c.material) {
+          const mats = Array.isArray(c.material) ? c.material : [c.material];
+          mats.forEach(m => { m.needsUpdate = true; });
+        }
+      });
+    }
+  }
+
+  _getSunDirection() {
+    // DirectionalLight shines from its position toward target (default 0,0,0)
+    const dir = new THREE.Vector3().subVectors(this.sun.target.position, this.sun.position).normalize();
+    return dir;
   }
 
   _onResize() {
@@ -3382,6 +3472,8 @@ export class Game {
       onBlockDestroyed: (block) => this._onPetBlockDestroyed(block),
       canMineBlock: (block) => this._getMiningStatusForBlock(block).allowed,
       initialPosition: this.player.position.clone().add(new THREE.Vector3(-1.2, 0.5, -1.2)),
+      getGroundHeight: (x, z) => this.world?.getGroundHeightAt?.(x, z, this.player.position.y) ?? null,
+      sunDirection: this._getSunDirection(),
     });
 
     this.pet = pet;

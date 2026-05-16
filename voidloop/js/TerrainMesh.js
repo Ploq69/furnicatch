@@ -13,7 +13,7 @@ import { getBlockProperties } from './BlockProperties.js';
 import { generateTileAwareMipmaps } from './AtlasMipmapGenerator.js';
 
 const ISO_LEVEL = 0;
-const CHUNK_SIZE = 8;
+const CHUNK_SIZE = 16;
 const TERRAIN_MIN_Y = -150;
 const TERRAIN_MAX_Y = 10;
 const SURFACE_Y = 2;
@@ -24,21 +24,21 @@ const DIG_REBUILD_DELAY_MS = 38;
 const STREAM_BUILD_LIMIT_PER_FRAME = 1;
 const PREFETCH_BUDGET_PER_FRAME = 0;
 const PREFETCH_TIME_BUDGET_MS = 1.5;
-const LIVE_CHUNK_CAP = 260;
+const LIVE_CHUNK_CAP = 128;
 const CHUNK_UNLOAD_IDLE_MS = 3500;
-const ISO_VISIBLE_CHUNK_BUDGET = 80;
-const ISO_UNDERGROUND_VISIBLE_CHUNK_BUDGET = 32;
-const TOP_DOWN_VISIBLE_CHUNK_BUDGET = 64;
-const FP_VISIBLE_CHUNK_BUDGET = 112;
-const FP_HOT_CHUNK_BUDGET = 128;
-const TP_CHUNK_RADIUS = 5;
+const ISO_VISIBLE_CHUNK_BUDGET = 40;
+const ISO_UNDERGROUND_VISIBLE_CHUNK_BUDGET = 20;
+const TOP_DOWN_VISIBLE_CHUNK_BUDGET = 32;
+const FP_VISIBLE_CHUNK_BUDGET = 64;
+const FP_HOT_CHUNK_BUDGET = 80;
+const TP_CHUNK_RADIUS = 4;
 const VISIBILITY_MIN_INTERVAL_MS = 180;
 const TP_VISIBILITY_MIN_INTERVAL_MS = 260;
-const MAX_TEXTURE_TILE_SPAN = 8;
+const MAX_TEXTURE_TILE_SPAN = CHUNK_SIZE;
 const WATER_FALL_DEPTH = 28;
 const CHUNK_RADIUS = Math.sqrt(3) * CHUNK_SIZE * 0.5;
 const FACE_KEY_MULTIPLIER = 4;
-const UNIFIED_VERTEX_STRIDE_FLOATS = 14;
+const UNIFIED_VERTEX_STRIDE_FLOATS = 7;
 const FACE_KIND = {
   top: 0,
   side: 1,
@@ -253,6 +253,35 @@ function fbmNoise3D(x, y, z, seed, octaves = 3) {
   return total > 0 ? value / total : 0;
 }
 
+class ZoneBlockTexture {
+  constructor(gl, bounds) {
+    this.gl = gl;
+    this.bounds = bounds;
+    const w = bounds.maxX - bounds.minX;
+    const h = bounds.maxY - bounds.minY;
+    const d = bounds.maxZ - bounds.minZ;
+    this.texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_3D, this.texture);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8UI, w, h, d, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+    this.origin = new THREE.Vector3(bounds.minX, bounds.minY, bounds.minZ);
+  }
+
+  uploadChunk(x0, y0, z0, data) {
+    this.gl.bindTexture(this.gl.TEXTURE_3D, this.texture);
+    this.gl.texSubImage3D(
+      this.gl.TEXTURE_3D, 0,
+      x0 - this.origin.x, y0 - this.origin.y, z0 - this.origin.z,
+      16, 16, 16,
+      this.gl.RED_INTEGER, this.gl.UNSIGNED_BYTE, data
+    );
+  }
+}
+
 export class TerrainMesh {
   constructor(scene, renderer = null) {
     this.scene = scene;
@@ -300,6 +329,8 @@ export class TerrainMesh {
     };
     this._columnBounds = new Map(); // key -> { minY, maxY }
     this._fallingCells = new Set();
+    this.zoneBlockTexture = null;
+    this.tileIndexMapTexture = null;
   }
 
   getAtlasTexture() {
@@ -342,10 +373,42 @@ export class TerrainMesh {
       throw new Error('[TerrainMesh] Unified terrain renderer requires WebGL2.');
     }
 
-    this.unifiedRenderer = new UnifiedTerrainRenderer(this.renderer);
+    this.unifiedRenderer = new UnifiedTerrainRenderer(this.renderer, { chunkSize: CHUNK_SIZE });
     this.unifiedRenderer.setAtlasTexture(this.tileAtlas);
     this.unifiedRenderer.setAtlasRects(this.atlasRects);
     this.unifiedRenderer.setLightDir(0.35, 0.85, 0.32);
+
+    // Build tile index map texture for shader lookups
+    this._buildTileIndexMapTexture(gl);
+  }
+
+  _buildTileIndexMapTexture(gl) {
+    const tileMapData = new Uint8Array(256 * 3);
+    for (let materialId = 0; materialId < 256; materialId++) {
+      for (let faceKind = 0; faceKind < 3; faceKind++) {
+        const tileIndex = getTerrainTileIndex(materialId, faceKind);
+        tileMapData[materialId * 3 + faceKind] = tileIndex;
+      }
+    }
+    this.tileIndexMapTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.tileIndexMapTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, 768, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, tileMapData);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (this.unifiedRenderer) {
+      this.unifiedRenderer.setTileIndexMapTexture(this.tileIndexMapTexture);
+    }
+  }
+
+  _createZoneBlockTexture(zone) {
+    const gl = this.renderer.getContext();
+    const b = zone.bounds;
+    this.zoneBlockTexture = new ZoneBlockTexture(gl, b);
+    if (this.unifiedRenderer) {
+      this.unifiedRenderer.setZoneBlockTexture(this.zoneBlockTexture.texture, this.zoneBlockTexture.origin);
+    }
   }
 
   addZone(zone, seed = 1) {
@@ -361,6 +424,7 @@ export class TerrainMesh {
         zoneId: zone.id,
       });
     }
+    this._createZoneBlockTexture(zone);
   }
 
   rebuildAll() {
@@ -565,6 +629,10 @@ export class TerrainMesh {
 
   setFog(options = {}) {
     this.unifiedRenderer?.setFog(options);
+  }
+
+  setPetLight(position, color, intensity, distance) {
+    this.unifiedRenderer?.setPointLight(position.x, position.y, position.z, color, intensity, distance);
   }
 
   render(camera) {
@@ -1847,6 +1915,12 @@ export class TerrainMesh {
     const z0 = cz * CHUNK_SIZE;
     const now = this._nowMs();
 
+    // Upload chunk material data to zone texture
+    if (this.zoneBlockTexture && geometry.userData.chunkData) {
+      this.zoneBlockTexture.uploadChunk(x0, y0, z0, geometry.userData.chunkData);
+      geometry.userData.chunkData = null;
+    }
+
     let raycastMesh = existing?.raycastMesh;
     if (raycastMesh) {
       const oldGeo = raycastMesh.geometry;
@@ -1892,20 +1966,18 @@ export class TerrainMesh {
     const slotIndex = this.unifiedRenderer.acquireSlot(cx, cy, cz);
     if (slotIndex < 0) return false;
 
+    const hasTransparent = geometry.userData.hasTransparent || false;
+
     if (geometry.userData?.packedTerrainVertices) {
-      this.unifiedRenderer.uploadSlot(slotIndex, geometry.userData.packedTerrainVertices);
+      this.unifiedRenderer.uploadSlot(slotIndex, geometry.userData.packedTerrainVertices, hasTransparent);
       geometry.userData.packedTerrainVertices = null;
       return true;
     }
 
     const indices = geometry.index ? geometry.index.array : null;
     const pos = geometry.attributes.position.array;
-    const col = geometry.attributes.color.array;
     const norm = geometry.attributes.normal.array;
-    const uv = geometry.attributes.uv.array;
-    const matId = geometry.attributes.materialId.array;
-    const face = geometry.attributes.faceKind.array;
-    const tile = geometry.attributes.tileIndex.array;
+    const isFluid = geometry.attributes.isFluid.array;
     const triCount = indices ? indices.length : pos.length / 3;
     const packed = new Float32Array(triCount * UNIFIED_VERTEX_STRIDE_FLOATS);
     for (let i = 0; i < triCount; i++) {
@@ -1914,19 +1986,12 @@ export class TerrainMesh {
       packed[dst + 0] = pos[vi * 3 + 0];
       packed[dst + 1] = pos[vi * 3 + 1];
       packed[dst + 2] = pos[vi * 3 + 2];
-      packed[dst + 3] = col[vi * 3 + 0];
-      packed[dst + 4] = col[vi * 3 + 1];
-      packed[dst + 5] = col[vi * 3 + 2];
-      packed[dst + 6] = norm[vi * 3 + 0];
-      packed[dst + 7] = norm[vi * 3 + 1];
-      packed[dst + 8] = norm[vi * 3 + 2];
-      packed[dst + 9] = uv[vi * 2 + 0];
-      packed[dst + 10] = uv[vi * 2 + 1];
-      packed[dst + 11] = matId[vi];
-      packed[dst + 12] = face[vi];
-      packed[dst + 13] = tile[vi];
+      packed[dst + 3] = norm[vi * 3 + 0];
+      packed[dst + 4] = norm[vi * 3 + 1];
+      packed[dst + 5] = norm[vi * 3 + 2];
+      packed[dst + 6] = isFluid[vi];
     }
-    this.unifiedRenderer.uploadSlot(slotIndex, packed);
+    this.unifiedRenderer.uploadSlot(slotIndex, packed, hasTransparent);
     return true;
   }
 
@@ -1962,64 +2027,118 @@ export class TerrainMesh {
     const effectiveY1 = Math.min(y1, bounds.maxY + 1);
     if (effectiveY0 >= effectiveY1) return null;
 
+    const cache = this._buildCellStateCache(x0, y0, z0);
+
+    // Check for transparent materials (fluid or transparent solid) in this chunk
+    let hasTransparent = false;
+    for (let i = 0; i < cache.length; i++) {
+      const layer = (cache[i] >> 7) & 3;
+      if (layer === 2) {
+        hasTransparent = true;
+        break;
+      }
+    }
+
     const positions = [];
-    const colors = [];
     const normals = [];
-    const uvs = [];
-    const materialIds = [];
-    const faceKinds = [];
-    const tileIndices = [];
+    const isFluids = [];
     const indices = [];
     const packedVertices = [];
 
-    this._buildGreedyFaces('px', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-    this._buildGreedyFaces('nx', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-    this._buildGreedyFaces('py', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-    this._buildGreedyFaces('ny', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-    this._buildGreedyFaces('pz', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-    this._buildGreedyFaces('nz', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
+    this._buildGreedyFaces('px', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, normals, isFluids, indices, packedVertices, cache);
+    this._buildGreedyFaces('nx', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, normals, isFluids, indices, packedVertices, cache);
+    this._buildGreedyFaces('py', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, normals, isFluids, indices, packedVertices, cache);
+    this._buildGreedyFaces('ny', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, normals, isFluids, indices, packedVertices, cache);
+    this._buildGreedyFaces('pz', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, normals, isFluids, indices, packedVertices, cache);
+    this._buildGreedyFaces('nz', x0, effectiveY0, z0, x1, effectiveY1, z1, lodScale, positions, normals, isFluids, indices, packedVertices, cache);
 
     if (positions.length === 0) return null;
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geometry.setAttribute('materialId', new THREE.Float32BufferAttribute(materialIds, 1));
-    geometry.setAttribute('faceKind', new THREE.Float32BufferAttribute(faceKinds, 1));
-    geometry.setAttribute('tileIndex', new THREE.Float32BufferAttribute(tileIndices, 1));
+    geometry.setAttribute('isFluid', new THREE.Float32BufferAttribute(isFluids, 1));
     geometry.setIndex(indices);
     geometry.userData.packedTerrainVertices = new Float32Array(packedVertices);
+    geometry.userData.hasTransparent = hasTransparent;
     geometry.computeBoundingSphere();
+
+    // Build chunk material data for zone texture upload
+    const chunkData = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      for (let y = 0; y < CHUNK_SIZE; y++) {
+        for (let z = 0; z < CHUNK_SIZE; z++) {
+          const cx_local = x + 1;
+          const cy_local = y + 1;
+          const cz_local = z + 1;
+          const ci = (cz_local * (CHUNK_SIZE + 2) + cy_local) * (CHUNK_SIZE + 2) + cx_local;
+          const matId = (cache[ci] >> 1) & 0x3F;
+          chunkData[(z * CHUNK_SIZE + y) * CHUNK_SIZE + x] = matId;
+        }
+      }
+    }
+    geometry.userData.chunkData = chunkData;
+
     return geometry;
   }
 
-  _buildGreedyFaces(dir, x0, y0, z0, x1, y1, z1, lodScale, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices) {
+  _buildGreedyFaces(dir, x0, y0, z0, x1, y1, z1, lodScale, positions, normals, isFluids, indices, packedVertices, cache) {
+    const CACHE_SIZE = CHUNK_SIZE + 2;
+    // Boundary slices emit individual 1x1 quads to prevent T-junctions at chunk seams.
+    const isBoundary = (axis, val) => {
+      if (axis === 'x') return val === x0 || val + lodScale === x1;
+      if (axis === 'y') return val === y0 || val + lodScale === y1;
+      return val === z0 || val + lodScale === z1;
+    };
+
     if (dir === 'px' || dir === 'nx') {
       const width = Math.ceil((z1 - z0) / lodScale);
       const height = Math.ceil((y1 - y0) / lodScale);
       const mask = new Int16Array(width * height);
       for (let x = x0; x < x1; x += lodScale) {
+        const onBoundary = isBoundary('x', x);
         mask.fill(-1);
         for (let y = y0; y < y1; y += lodScale) {
           if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
           for (let z = z0; z < z1; z += lodScale) {
-            const solid = this.isCellRenderable(x, y, z);
-            if (!solid) continue;
-            const visible = dir === 'px'
-              ? this._isFaceVisible(x, y, z, x + lodScale, y, z)
-              : this._isFaceVisible(x, y, z, x - lodScale, y, z);
-            if (visible) mask[((y - y0) / lodScale) * width + ((z - z0) / lodScale)] = this._faceKeyForCell(x, y, z, dir);
+            const cx = x - x0 + 1;
+            const cy = y - y0 + 1;
+            const cz = z - z0 + 1;
+            const ci = (cz * CACHE_SIZE + cy) * CACHE_SIZE + cx;
+            if (!(cache[ci] & 1)) continue;
+            const nx = dir === 'px' ? x + lodScale : x - lodScale;
+            const ncx = nx - x0 + 1;
+            const ni = (cz * CACHE_SIZE + cy) * CACHE_SIZE + ncx;
+            const neighborRenderable = cache[ni] & 1;
+            let visible;
+            if (!neighborRenderable) {
+              visible = true;
+            } else {
+              visible = this._isFaceVisibleCached(cache, x0, y0, z0, x, y, z, nx, y, z);
+            }
+            if (visible) {
+              const cellLayer = (cache[ci] >> 7) & 3;
+              const cellFluid = (cache[ci] >> 9) & 1;
+              let structType;
+              if (cellLayer === 3) structType = 3;
+              else if (cellLayer === 2) structType = cellFluid ? 1 : 2;
+              else structType = 0;
+              const faceKind = FACE_KIND.side;
+              mask[((y - y0) / lodScale) * width + ((z - z0) / lodScale)] = structType * FACE_KEY_MULTIPLIER + faceKind;
+            }
           }
         }
-        this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
-          const zA = z0 + u * lodScale;
-          const zB = zA + w * lodScale;
-          const yA = y0 + v * lodScale;
-          const yB = yA + h * lodScale;
-          this._pushGreedyQuad(dir, dir === 'px' ? x + lodScale : x, yA, zA, dir === 'px' ? x + lodScale : x, yB, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-        });
+        if (onBoundary) {
+          this._emitIndividualFaces(mask, width, height, z0, y0, lodScale, dir, x, positions, normals, isFluids, indices, packedVertices);
+        } else {
+          this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
+            const zA = z0 + u * lodScale;
+            const zB = zA + w * lodScale;
+            const yA = y0 + v * lodScale;
+            const yB = yA + h * lodScale;
+            this._pushGreedyQuad(dir, dir === 'px' ? x + lodScale : x, yA, zA, dir === 'px' ? x + lodScale : x, yB, zB, faceKey, positions, normals, isFluids, indices, packedVertices);
+          });
+        }
       }
       return;
     }
@@ -2029,25 +2148,49 @@ export class TerrainMesh {
       const height = Math.ceil((z1 - z0) / lodScale);
       const mask = new Int16Array(width * height);
       for (let y = y0; y < y1; y += lodScale) {
+        const onBoundary = isBoundary('y', y);
         if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
         mask.fill(-1);
         for (let z = z0; z < z1; z += lodScale) {
           for (let x = x0; x < x1; x += lodScale) {
-            const solid = this.isCellRenderable(x, y, z);
-            if (!solid) continue;
-            const visible = dir === 'py'
-              ? this._isFaceVisible(x, y, z, x, y + lodScale, z)
-              : this._isFaceVisible(x, y, z, x, y - lodScale, z);
-            if (visible) mask[((z - z0) / lodScale) * width + ((x - x0) / lodScale)] = this._faceKeyForCell(x, y, z, dir);
+            const cx = x - x0 + 1;
+            const cy = y - y0 + 1;
+            const cz = z - z0 + 1;
+            const ci = (cz * CACHE_SIZE + cy) * CACHE_SIZE + cx;
+            if (!(cache[ci] & 1)) continue;
+            const ny = dir === 'py' ? y + lodScale : y - lodScale;
+            const ncy = ny - y0 + 1;
+            const ni = (cz * CACHE_SIZE + ncy) * CACHE_SIZE + cx;
+            const neighborRenderable = cache[ni] & 1;
+            let visible;
+            if (!neighborRenderable) {
+              visible = true;
+            } else {
+              visible = this._isFaceVisibleCached(cache, x0, y0, z0, x, y, z, x, ny, z);
+            }
+            if (visible) {
+              const cellLayer = (cache[ci] >> 7) & 3;
+              const cellFluid = (cache[ci] >> 9) & 1;
+              let structType;
+              if (cellLayer === 3) structType = 3;
+              else if (cellLayer === 2) structType = cellFluid ? 1 : 2;
+              else structType = 0;
+              const faceKind = dir === 'py' ? FACE_KIND.top : FACE_KIND.bottom;
+              mask[((z - z0) / lodScale) * width + ((x - x0) / lodScale)] = structType * FACE_KEY_MULTIPLIER + faceKind;
+            }
           }
         }
-        this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
-          const xA = x0 + u * lodScale;
-          const xB = xA + w * lodScale;
-          const zA = z0 + v * lodScale;
-          const zB = zA + h * lodScale;
-          this._pushGreedyQuad(dir, xA, dir === 'py' ? y + lodScale : y, zA, xB, dir === 'py' ? y + lodScale : y, zB, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-        });
+        if (onBoundary) {
+          this._emitIndividualFaces(mask, width, height, x0, z0, lodScale, dir, y, positions, normals, isFluids, indices, packedVertices);
+        } else {
+          this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
+            const xA = x0 + u * lodScale;
+            const xB = xA + w * lodScale;
+            const zA = z0 + v * lodScale;
+            const zB = zA + h * lodScale;
+            this._pushGreedyQuad(dir, xA, dir === 'py' ? y + lodScale : y, zA, xB, dir === 'py' ? y + lodScale : y, zB, faceKey, positions, normals, isFluids, indices, packedVertices);
+          });
+        }
       }
       return;
     }
@@ -2056,25 +2199,49 @@ export class TerrainMesh {
     const height = Math.ceil((y1 - y0) / lodScale);
     const mask = new Int16Array(width * height);
     for (let z = z0; z < z1; z += lodScale) {
+      const onBoundary = isBoundary('z', z);
       mask.fill(-1);
       for (let y = y0; y < y1; y += lodScale) {
         if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
         for (let x = x0; x < x1; x += lodScale) {
-          const solid = this.isCellRenderable(x, y, z);
-          if (!solid) continue;
-          const visible = dir === 'pz'
-            ? this._isFaceVisible(x, y, z, x, y, z + lodScale)
-            : this._isFaceVisible(x, y, z, x, y, z - lodScale);
-          if (visible) mask[((y - y0) / lodScale) * width + ((x - x0) / lodScale)] = this._faceKeyForCell(x, y, z, dir);
+          const cx = x - x0 + 1;
+          const cy = y - y0 + 1;
+          const cz = z - z0 + 1;
+          const ci = (cz * CACHE_SIZE + cy) * CACHE_SIZE + cx;
+          if (!(cache[ci] & 1)) continue;
+          const nz = dir === 'pz' ? z + lodScale : z - lodScale;
+          const ncz = nz - z0 + 1;
+          const ni = (ncz * CACHE_SIZE + cy) * CACHE_SIZE + cx;
+          const neighborRenderable = cache[ni] & 1;
+          let visible;
+          if (!neighborRenderable) {
+            visible = true;
+          } else {
+            visible = this._isFaceVisibleCached(cache, x0, y0, z0, x, y, z, x, y, nz);
+          }
+          if (visible) {
+            const cellLayer = (cache[ci] >> 7) & 3;
+            const cellFluid = (cache[ci] >> 9) & 1;
+            let structType;
+            if (cellLayer === 3) structType = 3;
+            else if (cellLayer === 2) structType = cellFluid ? 1 : 2;
+            else structType = 0;
+            const faceKind = FACE_KIND.side;
+            mask[((y - y0) / lodScale) * width + ((x - x0) / lodScale)] = structType * FACE_KEY_MULTIPLIER + faceKind;
+          }
         }
       }
-      this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
-        const xA = x0 + u * lodScale;
-        const xB = xA + w * lodScale;
-        const yA = y0 + v * lodScale;
-        const yB = yA + h * lodScale;
-        this._pushGreedyQuad(dir, xA, yA, dir === 'pz' ? z + lodScale : z, xB, yB, dir === 'pz' ? z + lodScale : z, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices);
-      });
+      if (onBoundary) {
+        this._emitIndividualFaces(mask, width, height, x0, y0, lodScale, dir, z, positions, normals, isFluids, indices, packedVertices);
+      } else {
+        this._greedyMask(mask, width, height, (u, v, w, h, faceKey) => {
+          const xA = x0 + u * lodScale;
+          const xB = xA + w * lodScale;
+          const yA = y0 + v * lodScale;
+          const yB = yA + h * lodScale;
+          this._pushGreedyQuad(dir, xA, yA, dir === 'pz' ? z + lodScale : z, xB, yB, dir === 'pz' ? z + lodScale : z, faceKey, positions, normals, isFluids, indices, packedVertices);
+        });
+      }
     }
   }
 
@@ -2101,6 +2268,39 @@ export class TerrainMesh {
           for (let xx = 0; xx < w; xx++) {
             mask[(v + yy) * width + u + xx] = -1;
           }
+        }
+      }
+    }
+  }
+
+  _emitIndividualFaces(mask, width, height, base0, base1, lodScale, dir, sliceVal, positions, normals, isFluids, indices, packedVertices) {
+    for (let v = 0; v < height; v++) {
+      for (let u = 0; u < width; u++) {
+        const faceKey = mask[v * width + u];
+        if (faceKey < 0) continue;
+        const c0 = base0 + u * lodScale;
+        const c1 = base1 + v * lodScale;
+        const c0b = c0 + lodScale;
+        const c1b = c1 + lodScale;
+        switch (dir) {
+          case 'px':
+            this._pushGreedyQuad(dir, sliceVal + lodScale, c1, c0, sliceVal + lodScale, c1b, c0b, faceKey, positions, normals, isFluids, indices, packedVertices);
+            break;
+          case 'nx':
+            this._pushGreedyQuad(dir, sliceVal, c1, c0b, sliceVal, c1b, c0, faceKey, positions, normals, isFluids, indices, packedVertices);
+            break;
+          case 'py':
+            this._pushGreedyQuad(dir, c0, sliceVal + lodScale, c1, c0b, sliceVal + lodScale, c1b, faceKey, positions, normals, isFluids, indices, packedVertices);
+            break;
+          case 'ny':
+            this._pushGreedyQuad(dir, c0, sliceVal, c1b, c0b, sliceVal, c1, faceKey, positions, normals, isFluids, indices, packedVertices);
+            break;
+          case 'pz':
+            this._pushGreedyQuad(dir, c0, c1, sliceVal + lodScale, c0b, c1b, sliceVal + lodScale, faceKey, positions, normals, isFluids, indices, packedVertices);
+            break;
+          case 'nz':
+            this._pushGreedyQuad(dir, c0b, c1, sliceVal, c0, c1b, sliceVal, faceKey, positions, normals, isFluids, indices, packedVertices);
+            break;
         }
       }
     }
@@ -2139,12 +2339,10 @@ export class TerrainMesh {
     return neighbor.type !== cell.type;
   }
 
-  _pushGreedyQuad(dir, x0, y0, z0, x1, y1, z1, faceKey, positions, colors, normals, uvs, materialIds, faceKinds, tileIndices, indices, packedVertices) {
+  _pushGreedyQuad(dir, x0, y0, z0, x1, y1, z1, faceKey, positions, normals, isFluids, indices, packedVertices) {
     const base = positions.length / 3;
-    const materialId = Math.floor(faceKey / FACE_KEY_MULTIPLIER);
-    const faceKind = faceKey % FACE_KEY_MULTIPLIER;
-    const tileIndex = getTerrainTileIndex(materialId, faceKind);
-    const color = this._colorForMaterialId(materialId);
+    const structType = Math.floor(faceKey / FACE_KEY_MULTIPLIER);
+    const isFluid = structType === 1 ? 1.0 : 0.0;
     let normal;
     let corners;
     switch (dir) {
@@ -2174,34 +2372,10 @@ export class TerrainMesh {
         break;
     }
 
-    const quadUvs = [];
     for (const c of corners) {
       positions.push(c[0] * CELL_SIZE, c[1] * CELL_SIZE, c[2] * CELL_SIZE);
-      colors.push(color.r, color.g, color.b);
       normals.push(normal[0], normal[1], normal[2]);
-      let u, v;
-      switch (dir) {
-        case 'px':
-        case 'nx':
-          u = c[2];
-          v = c[1];
-          break;
-        case 'py':
-        case 'ny':
-          u = c[0];
-          v = c[2];
-          break;
-        case 'pz':
-        case 'nz':
-          u = c[0];
-          v = c[1];
-          break;
-      }
-      uvs.push(u, v);
-      quadUvs.push(u, v);
-      materialIds.push(materialId);
-      faceKinds.push(faceKind);
-      tileIndices.push(tileIndex);
+      isFluids.push(isFluid);
     }
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
     if (packedVertices) {
@@ -2210,12 +2384,8 @@ export class TerrainMesh {
         const c = corners[idx];
         packedVertices.push(
           c[0] * CELL_SIZE, c[1] * CELL_SIZE, c[2] * CELL_SIZE,
-          color.r, color.g, color.b,
           normal[0], normal[1], normal[2],
-          quadUvs[idx * 2], quadUvs[idx * 2 + 1],
-          materialId,
-          faceKind,
-          tileIndex
+          isFluid
         );
       }
     }
@@ -2272,6 +2442,67 @@ export class TerrainMesh {
 
   _colorForMaterialId(materialId) {
     return TERRAIN_COLOR_BY_MATERIAL_ID.get(materialId) || TERRAIN_COLORS.dirt;
+  }
+
+  _buildCellStateCache(x0, y0, z0) {
+    const CACHE_SIZE = CHUNK_SIZE + 2;
+    const cache = new Uint16Array(CACHE_SIZE * CACHE_SIZE * CACHE_SIZE);
+    const layerMap = { none: 0, opaque: 1, transparent: 2, cutout: 3 };
+    for (let x = x0 - 1; x < x0 + CHUNK_SIZE + 1; x++) {
+      for (let y = y0 - 1; y < y0 + CHUNK_SIZE + 1; y++) {
+        for (let z = z0 - 1; z < z0 + CHUNK_SIZE + 1; z++) {
+          const state = this.getCellState(x, y, z);
+          let packed = state.renderable ? 1 : 0;
+          // Encode solid blocks as matId + 1 so 0 unambiguously means air
+          const matId = TERRAIN_MATERIAL_IDS[state.type] ?? 0;
+          packed |= ((state.renderable ? (matId + 1) : 0) & 0x3F) << 1;
+          packed |= (layerMap[state.properties.renderLayer] || 0) << 7;
+          packed |= (state.properties.fluid ? 1 : 0) << 9;
+          const cx = x - x0 + 1;
+          const cy = y - y0 + 1;
+          const cz = z - z0 + 1;
+          cache[(cz * CACHE_SIZE + cy) * CACHE_SIZE + cx] = packed;
+        }
+      }
+    }
+    return cache;
+  }
+
+  _isFaceVisibleCached(cache, x0, y0, z0, x, y, z, nx, ny, nz) {
+    const CACHE_SIZE = CHUNK_SIZE + 2;
+    const cx = x - x0 + 1;
+    const cy = y - y0 + 1;
+    const cz = z - z0 + 1;
+    const cix = (cz * CACHE_SIZE + cy) * CACHE_SIZE + cx;
+    const cellPacked = cache[cix];
+    if (!(cellPacked & 1)) return false;
+
+    const ncx = nx - x0 + 1;
+    const ncy = ny - y0 + 1;
+    const ncz = nz - z0 + 1;
+    const nix = (ncz * CACHE_SIZE + ncy) * CACHE_SIZE + ncx;
+    const neighborPacked = cache[nix];
+    if (!(neighborPacked & 1)) return true;
+
+    const cellLayer = (cellPacked >> 7) & 3;
+    const neighborLayer = (neighborPacked >> 7) & 3;
+    const cellMatId = (cellPacked >> 1) & 0x3F;
+    const neighborMatId = (neighborPacked >> 1) & 0x3F;
+    const cellFluid = (cellPacked >> 9) & 1;
+
+    if (cellLayer === 3) {
+      if (neighborMatId === cellMatId) return false;
+      return true;
+    }
+
+    if (cellLayer === 2) {
+      if (neighborMatId === cellMatId) return false;
+      if (cellFluid) return neighborLayer === 2;
+      return true;
+    }
+
+    if (neighborLayer === 2 || neighborLayer === 3) return true;
+    return neighborMatId !== cellMatId;
   }
 
   _clearChunks() {

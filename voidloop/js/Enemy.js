@@ -3,6 +3,7 @@ import { ENEMY_TYPES, GAME } from './constants.js';
 import { assetLoader } from './AssetLoader.js';
 import { SFXMapper } from './SFXMapper.js';
 import { getZoneById } from './ZoneData.js';
+import { ShadowDecal } from './ShadowDecal.js';
 
 const STATES = { IDLE: 0, CHASE: 1, ATTACK: 2, DEAD: 3 };
 
@@ -44,6 +45,8 @@ export class Enemy {
     this.baseScale = 1;
     this.currentAnim = null;
     this.world = null;
+    this.sunDirection = null;
+    this.shadowDecal = null;
 
     // HP bar
     this.hpBarGroup = null;
@@ -73,6 +76,16 @@ export class Enemy {
 
       scene.add(this.mesh);
 
+      // Enable shadow casting for dynamic enemies
+      this.mesh.traverse((c) => {
+        if (c.isMesh) {
+          c.castShadow = true;
+          c.receiveShadow = true;
+        }
+      });
+
+      this._createShadowDecal(scene);
+
       // Load KayKit shared animations if model has none (KayKit character GLBs are separate from anims)
       let animClips = cloned.animations || [];
       if (animClips.length < 3 && this.def.model.includes('KayKit')) {
@@ -91,6 +104,7 @@ export class Enemy {
       this.groundOffset = 0.4;
       this.baseScale = 1;
       scene.add(this.mesh);
+      this._createShadowDecal(scene);
     }
 
     this._createHPBar();
@@ -167,10 +181,6 @@ export class Enemy {
 
   takeDamage(dmg, attackerWeapon) {
     if (this.dead) return;
-    const zone = this.zoneId ? getZoneById(this.zoneId) : null;
-    if (zone?.staffId && attackerWeapon !== zone.staffId) {
-      return;
-    }
     this.hp -= dmg;
 
     // White flash on hit (only on materials that natively support emissive)
@@ -306,6 +316,11 @@ export class Enemy {
         this.mesh.lookAt(lookTarget.x, this.position.y + this.groundOffset + flyOffset, lookTarget.z);
       }
     }
+
+    // Update fake ground shadow
+    if (this.shadowDecal) {
+      this.shadowDecal.update(dt, this.sunDirection);
+    }
   }
 
   _applyProceduralAnim(dt) {
@@ -360,7 +375,28 @@ export class Enemy {
     this.position.addScaledVector(this.velocity, dt);
   }
 
+  _createShadowDecal(scene) {
+    if (this.shadowDecal) {
+      this.shadowDecal.dispose();
+      this.shadowDecal = null;
+    }
+    if (!this.mesh) return;
+    const getGround = (x, z) => {
+      if (!this.world) return null;
+      const y = this.world.getGroundHeightAt ? this.world.getGroundHeightAt(x, z, this.position.y) : this.world.getColumnTop(Math.round(x), Math.round(z));
+      return y > -999 ? y : null;
+    };
+    this.shadowDecal = new ShadowDecal(this.mesh, scene, getGround, {
+      baseScale: (this.def.scale || 1.0) * 0.6,
+      baseOpacity: 0.5,
+    });
+  }
+
   cleanup(scene) {
+    if (this.shadowDecal) {
+      this.shadowDecal.dispose();
+      this.shadowDecal = null;
+    }
     if (this.mesh) scene.remove(this.mesh);
   }
 }

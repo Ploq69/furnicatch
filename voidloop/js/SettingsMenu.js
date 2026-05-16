@@ -29,6 +29,7 @@ export class SettingsMenu {
     this.elShake = document.getElementById('settings-shake');
     this.elDamage = document.getElementById('settings-damage');
     this.elQuality = document.getElementById('settings-quality');
+    this.elShadow = document.getElementById('settings-shadow');
     this.elName = document.getElementById('settings-name');
   }
 
@@ -61,6 +62,7 @@ export class SettingsMenu {
     this.elShake?.addEventListener('change', (e) => settings.set('cameraShake', e.target.checked));
     this.elDamage?.addEventListener('change', (e) => settings.set('showDamageNumbers', e.target.checked));
     this.elQuality?.addEventListener('change', (e) => settings.set('graphicsQuality', e.target.value));
+    this.elShadow?.addEventListener('change', (e) => settings.set('shadowQuality', e.target.value));
     this.elName?.addEventListener('change', (e) => settings.set('playerName', e.target.value.trim() || 'Player'));
 
     // Listen for external show event
@@ -85,6 +87,7 @@ export class SettingsMenu {
     if (this.elShake) this.elShake.checked = settings.get('cameraShake');
     if (this.elDamage) this.elDamage.checked = settings.get('showDamageNumbers');
     if (this.elQuality) this.elQuality.value = settings.get('graphicsQuality');
+    if (this.elShadow) this.elShadow.value = settings.get('shadowQuality');
     if (this.elName) this.elName.value = settings.get('playerName');
   }
 

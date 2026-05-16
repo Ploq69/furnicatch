@@ -414,6 +414,18 @@ export class UIManager {
     this._setTouchControlsVisible(true);
   }
 
+  showLoading(text = 'Loading...') {
+    if (this.elLoadingText) this.elLoadingText.textContent = text;
+    this.elLoading.style.display = 'flex';
+    this.elHud.style.display = 'none';
+    this.elCrosshair.style.display = 'none';
+    this.elHotbar.style.display = 'none';
+    this.elFloorIndicator.style.display = 'none';
+    if (this.elFps) this.elFps.style.display = 'none';
+    if (this.elBrightness) this.elBrightness.style.display = 'none';
+    if (this.elZoom) this.elZoom.style.display = 'none';
+  }
+
   hideLoading() {
     this.elLoading.style.display = 'none';
     this.elHud.style.display = 'block';

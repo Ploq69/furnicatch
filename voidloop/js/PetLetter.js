@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { glyph3D } from '../../js/Glyph3DManager.js';
 import { PET_LEVELS, PET_ATTACK_RANGE, PET_ATTACK_INTERVAL } from './constants.js';
+import { ShadowDecal } from './ShadowDecal.js';
 
 const PET_STATES = {
   FOLLOW: 'follow',
@@ -18,10 +19,14 @@ export class PetLetter {
     this.container = null;
     this.mesh = null;
     this.glowLight = null;
+    this.glowOrb = null;
+    this.shadowDecal = null;
     this.evolvedPrototype = null;
     this.onBlockDestroyed = options.onBlockDestroyed || null;
     this.canMineBlock = options.canMineBlock || null;
     this.initialPosition = options.initialPosition || null;
+    this.getGroundHeight = options.getGroundHeight || null;
+    this.sunDirection = options.sunDirection || null;
 
     this.state = PET_STATES.FOLLOW;
     this.stateTimer = 0;
@@ -41,11 +46,49 @@ export class PetLetter {
     await glyph3D.load();
     this.container = new THREE.Group();
     this.glowLight = null;
+    this.glowOrb = null;
     this._applyVisuals();
+    this._createGlowLight();
+    this._createGlowOrb();
+    if (this.getGroundHeight) {
+      this.shadowDecal = new ShadowDecal(this.container, this.scene, this.getGroundHeight, {
+        baseScale: 0.5,
+        baseOpacity: 0.45,
+      });
+    }
     if (this.initialPosition) {
       this.container.position.copy(this.initialPosition);
     }
     this.scene.add(this.container);
+  }
+
+  _createGlowLight() {
+    if (this.glowLight) return;
+    const cfg = PET_LEVELS.find(l => l.level === this.visualLevel) || PET_LEVELS[0];
+    const color = new THREE.Color(cfg.color);
+    // Dramatically brighter to compete with ambient (0.6) — decay=2 means falloff is steep
+    const intensity = 8.0 + this.visualLevel * 2.0;
+    const distance = 12 + this.visualLevel * 2.0;
+    // Point light that follows the pet — no shadows (too expensive for a moving light)
+    this.glowLight = new THREE.PointLight(color, intensity, distance, 2);
+    this.glowLight.position.set(0, 0.3, 0);
+    this.container.add(this.glowLight);
+  }
+
+  _createGlowOrb() {
+    if (this.glowOrb) return;
+    const cfg = PET_LEVELS.find(l => l.level === this.visualLevel) || PET_LEVELS[0];
+    const color = new THREE.Color(cfg.color);
+    const geometry = new THREE.SphereGeometry(0.12, 8, 8);
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+    });
+    this.glowOrb = new THREE.Mesh(geometry, material);
+    this.glowOrb.position.set(0, 0.3, 0);
+    this.container.add(this.glowOrb);
   }
 
   _applyVisuals() {
@@ -91,6 +134,18 @@ export class PetLetter {
       this.mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.15), mat);
       this.mesh.position.y = 0.4;
       this.container.add(this.mesh);
+    }
+    // Sync glow light color/intensity/range to pet level
+    if (this.glowLight) {
+      const color = new THREE.Color(cfg.color);
+      this.glowLight.color.copy(color);
+      this.glowLight.intensity = 8.0 + this.visualLevel * 2.0;
+      this.glowLight.distance = 12 + this.visualLevel * 2.0;
+    }
+    // Sync glow orb color
+    if (this.glowOrb) {
+      const color = new THREE.Color(cfg.color);
+      this.glowOrb.material.color.copy(color);
     }
   }
 
@@ -145,6 +200,11 @@ export class PetLetter {
     if (this.visualLevel >= 7) {
       this._updateRainbowEffect();
     }
+
+    // Update fake ground shadow
+    if (this.shadowDecal) {
+      this.shadowDecal.update(dt, this.sunDirection);
+    }
   }
 
   _updateRainbowEffect() {
@@ -155,7 +215,14 @@ export class PetLetter {
 
     if (this.glowLight) {
       this.glowLight.color.copy(color);
-      this.glowLight.intensity = intensity * 0.8;
+      this.glowLight.intensity = intensity * 8.0;
+    }
+
+    if (this.glowOrb) {
+      this.glowOrb.material.color.copy(color);
+      this.glowOrb.material.opacity = 0.4 + intensity * 0.3;
+      const scale = 0.8 + intensity * 0.4;
+      this.glowOrb.scale.setScalar(scale);
     }
 
     if (this.mesh) {
@@ -332,6 +399,10 @@ export class PetLetter {
   }
 
   dispose() {
+    if (this.shadowDecal) {
+      this.shadowDecal.dispose();
+      this.shadowDecal = null;
+    }
     if (!this.container) return;
     this.scene.remove(this.container);
     this.container.traverse((child) => {
@@ -345,8 +416,13 @@ export class PetLetter {
         }
         child.geometry?.dispose?.();
       }
+      if (child.isLight) {
+        child.dispose?.();
+      }
     });
     this.container = null;
     this.mesh = null;
+    this.glowLight = null;
+    this.glowOrb = null;
   }
 }

@@ -252,7 +252,7 @@ const ANIM_SPACE = { idle: 'Flying_Idle', walk: 'Fast_Flying', run: 'Fast_Flying
 export const ENEMY_TYPES = {
   slime: {
     name: 'Slime Miner',
-    hp: 30, damage: 5, speed: 2, attackCooldown: 1.5,
+    hp: 20, damage: 5, speed: 2, attackCooldown: 1.5,
     model: 'Ultimate Monsters/Blob/glTF/GreenBlob.gltf',
     scale: 0.6,
     sfx: { hurt: 'DSGNMisc_HIT-Fleeting Hit', death: 'DSGNImpt_EXPLOSION-Flare Extinguish' },
@@ -260,7 +260,7 @@ export const ENEMY_TYPES = {
   },
   goblin: {
     name: 'Goblin Scout',
-    hp: 45, damage: 8, speed: 4, attackCooldown: 1.5,
+    hp: 20, damage: 8, speed: 4, attackCooldown: 1.5,
     model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue.glb',
     scale: 0.8,
     sfx: { hurt: 'FGHTImpt_HIT-Smack', death: 'DSGNImpt_EXPLOSION-Forced Interruption' },
@@ -268,7 +268,7 @@ export const ENEMY_TYPES = {
   },
   skeleton: {
     name: 'Skeleton Warrior',
-    hp: 50, damage: 10, speed: 3, attackCooldown: 1.5,
+    hp: 20, damage: 10, speed: 3, attackCooldown: 1.5,
     model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue_Hooded.glb',
     scale: 0.85,
     sfx: { hurt: 'FGHTImpt_HIT-Strong Punch', death: 'DSGNImpt_EXPLOSION-Forced Interruption' },
@@ -285,7 +285,7 @@ export const ENEMY_TYPES = {
   },
   demon: {
     name: 'Demon Brute',
-    hp: 80, damage: 14, speed: 2.5, attackCooldown: 1.8,
+    hp: 20, damage: 14, speed: 2.5, attackCooldown: 1.8,
     model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb',
     scale: 1.0,
     sfx: { hurt: 'FGHTImpt_HIT-Strong Smack', death: 'DSGNImpt_EXPLOSION-Crunchy Burst' },
@@ -293,7 +293,7 @@ export const ENEMY_TYPES = {
   },
   yeti: {
     name: 'Yeti Guard',
-    hp: 100, damage: 18, speed: 2, attackCooldown: 2.0,
+    hp: 20, damage: 18, speed: 2, attackCooldown: 2.0,
     model: 'KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb',
     scale: 1.2,
     sfx: { hurt: 'FGHTImpt_MELEE-Clap Slapper', death: 'DSGNImpt_EXPLOSION-Bass Hit' },
@@ -301,7 +301,7 @@ export const ENEMY_TYPES = {
   },
   pirate: {
     name: 'Pirate Raider',
-    hp: 55, damage: 9, speed: 3.5, attackCooldown: 1.5,
+    hp: 20, damage: 9, speed: 3.5, attackCooldown: 1.5,
     model: 'Ultimate Animated Character Pack - Nov 2019/glTF/Pirate_Male.gltf',
     scale: 0.9,
     sfx: { hurt: 'FGHTImpt_HIT-Smack', death: 'DSGNImpt_EXPLOSION-Forced Interruption' },
@@ -309,7 +309,7 @@ export const ENEMY_TYPES = {
   },
   soldier: {
     name: 'Hazmat Soldier',
-    hp: 60, damage: 11, speed: 3, attackCooldown: 1.5,
+    hp: 20, damage: 11, speed: 3, attackCooldown: 1.5,
     model: 'Toon Shooter Game Kit - Dec 2022/Characters/glTF/Character_Hazmat.gltf',
     scale: 0.9,
     sfx: { hurt: 'DSGNMisc_HIT-Bitcrusher', death: 'DSGNImpt_EXPLOSION-Bit Bomb' },
@@ -317,7 +317,7 @@ export const ENEMY_TYPES = {
   },
   zombie: {
     name: 'Zombie Miner',
-    hp: 70, damage: 12, speed: 2, attackCooldown: 1.8,
+    hp: 20, damage: 12, speed: 2, attackCooldown: 1.8,
     model: 'Ultimate Animated Character Pack - Nov 2019/glTF/Zombie_Male.gltf',
     scale: 0.9,
     sfx: { hurt: 'DSGNMisc_HIT-Hit Noise', death: 'DSGNImpt_EXPLOSION-Grainy Burst' },
@@ -325,7 +325,7 @@ export const ENEMY_TYPES = {
   },
   space: {
     name: 'Void Drone',
-    hp: 50, damage: 10, speed: 4, attackCooldown: 1.3,
+    hp: 20, damage: 10, speed: 4, attackCooldown: 1.3,
     model: 'Ultimate Space Kit - March 2023/Characters/GLTF/Enemy_Small.gltf',
     scale: 0.85,
     sfx: { hurt: 'DSGNSynth_BUFF-Bonus Crit Chance', death: 'DSGNImpt_EXPLOSION-Electric Hit' },

@@ -972,6 +972,7 @@ export class World {
         continue;
       }
       if (enemy.mesh && !enemy.dead) enemy.mesh.visible = true;
+      enemy.sunDirection = options.sunDirection || null;
       enemy.update(dt, playerPos, particles, audio, player);
     }
     // Remove dead enemies
