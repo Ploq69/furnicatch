@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Sky } from 'three/addons/objects/Sky.js';
 import { assetLoader } from './AssetLoader.js';
 import { input } from './InputManager.js';
 import { audio } from './AudioManager.js';
@@ -59,6 +60,17 @@ const VOXEL_SKY = {
   FOG_FAR: 260,
   TP_FOG_NEAR: 30,
   TP_FOG_FAR: 70,
+};
+
+const ZONE_ATMOSPHERE = {
+  forest: { skyTop: 0x77c7ff, horizon: 0xd8f6ff, fog: 0xbde8d5, sunColor: 0xfff5cf, ambientColor: 0x8abf8a, cloudOpacity: 0.32, hazeStrength: 0.25, groundTint: 0x355f3b, silhouette: 0x17351f },
+  fire: { skyTop: 0x2b1d23, horizon: 0xff8158, fog: 0x5a2a22, sunColor: 0xffb05f, ambientColor: 0xb0694a, cloudOpacity: 0.18, hazeStrength: 0.72, groundTint: 0x4b241c, silhouette: 0x130d0b },
+  ice: { skyTop: 0xa7dbff, horizon: 0xf2fbff, fog: 0xd8f3ff, sunColor: 0xeaffff, ambientColor: 0x9ebfd8, cloudOpacity: 0.42, hazeStrength: 0.38, groundTint: 0xb8dff0, silhouette: 0x47687a },
+  desert: { skyTop: 0x71b7e6, horizon: 0xffdf9b, fog: 0xe8c27e, sunColor: 0xffd17a, ambientColor: 0xc99d62, cloudOpacity: 0.12, hazeStrength: 0.58, groundTint: 0xc28b45, silhouette: 0x6f4720 },
+  steelworks: { skyTop: 0x4f7fa4, horizon: 0xc4d1d4, fog: 0x7b8790, sunColor: 0xffb05c, ambientColor: 0x7f8f9d, cloudOpacity: 0.52, hazeStrength: 0.82, groundTint: 0x4d5961, silhouette: 0x1c2328 },
+  mire: { skyTop: 0x5f8874, horizon: 0xaec6a1, fog: 0x748b6a, sunColor: 0xe8d69a, ambientColor: 0x668b62, cloudOpacity: 0.46, hazeStrength: 0.68, groundTint: 0x314a35, silhouette: 0x142317 },
+  citadel: { skyTop: 0x8fb9de, horizon: 0xf0d3a4, fog: 0xd8b77d, sunColor: 0xffdf9a, ambientColor: 0xb89969, cloudOpacity: 0.24, hazeStrength: 0.34, groundTint: 0x8a7356, silhouette: 0x3f3427 },
+  default: { skyTop: VOXEL_SKY.TOP, horizon: VOXEL_SKY.HORIZON, fog: VOXEL_SKY.HORIZON, sunColor: 0xfff5e6, ambientColor: 0x8888aa, cloudOpacity: 0.28, hazeStrength: 0.3, groundTint: 0x4d6b55, silhouette: 0x263344 },
 };
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -124,6 +136,11 @@ export class Game {
     this.renderer.setClearColor(this.scene.background);
     this.skyMesh = null;
     this.skyMaterial = null;
+    this.horizonMesh = null;
+    this.horizonMaterial = null;
+    this.cloudGroup = null;
+    this.cloudMaterial = null;
+    this.boundaryEnvironment = null;
     this._createSky();
 
     // Camera — Orthographic isometric by default, with a toggleable third-person mining view
@@ -223,6 +240,7 @@ export class Game {
     this.floorPlane.position.y = -160;
     this.floorPlane.receiveShadow = false;
     this.scene.add(this.floorPlane);
+    this._createBoundaryEnvironment();
 
     // Progression (needed before timer init)
     this.progression = new ProgressionManager();
@@ -1248,22 +1266,30 @@ export class Game {
   }
 
   _createSky() {
-    const skyGeo = new THREE.SphereGeometry(180, 24, 12);
-    this.skyMaterial = new THREE.ShaderMaterial({
+    this.skyMesh = new Sky();
+    this.skyMesh.scale.setScalar(900);
+    this.skyMesh.name = 'voxel_sky';
+    this.skyMesh.frustumCulled = false;
+    this.skyMesh.renderOrder = -1000;
+    this.skyMaterial = this.skyMesh.material;
+    this.scene.add(this.skyMesh);
+
+    const hazeGeo = new THREE.SphereGeometry(185, 32, 16);
+    this.horizonMaterial = new THREE.ShaderMaterial({
       side: THREE.BackSide,
+      transparent: true,
       depthWrite: false,
       depthTest: true,
       fog: false,
       uniforms: {
         topColor: { value: new THREE.Color(VOXEL_SKY.TOP) },
         horizonColor: { value: new THREE.Color(VOXEL_SKY.HORIZON) },
-        cloudColor: { value: new THREE.Color(VOXEL_SKY.CLOUD) },
-        cloudOpacity: { value: 0.32 },
+        fogColor: { value: new THREE.Color(VOXEL_SKY.HORIZON) },
         darkness: { value: 0 },
+        hazeStrength: { value: 0.3 },
       },
       vertexShader: `
         varying vec3 vLocalPos;
-
         void main() {
           vLocalPos = position;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -1271,55 +1297,219 @@ export class Game {
       `,
       fragmentShader: `
         precision highp float;
-
         uniform vec3 topColor;
         uniform vec3 horizonColor;
-        uniform vec3 cloudColor;
-        uniform float cloudOpacity;
+        uniform vec3 fogColor;
         uniform float darkness;
+        uniform float hazeStrength;
         varying vec3 vLocalPos;
-
-        float hash(vec2 p) {
-          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-        }
-
         void main() {
           vec3 dir = normalize(vLocalPos);
-          float heightT = smoothstep(-0.08, 0.72, dir.y);
+          float heightT = smoothstep(-0.10, 0.70, dir.y);
+          float horizonBand = 1.0 - smoothstep(-0.05, 0.34, abs(dir.y));
           vec3 color = mix(horizonColor, topColor, heightT);
-
-          float cloudBand = smoothstep(0.08, 0.15, dir.y) * (1.0 - smoothstep(0.38, 0.50, dir.y));
-          float angle = atan(dir.x, dir.z);
-          vec2 cloudCell = floor(vec2(angle * 10.0, dir.y * 24.0 + abs(dir.x) * 3.0));
-          float blockCloud = step(0.69, hash(cloudCell));
-          float cloudEdge = step(0.76, hash(cloudCell + vec2(1.0, 0.0))) * 0.45;
-          float clouds = clamp((blockCloud + cloudEdge) * cloudBand * cloudOpacity, 0.0, 1.0);
-          color = mix(color, cloudColor, clouds);
-
+          color = mix(color, fogColor, horizonBand * hazeStrength);
           color = mix(color, vec3(0.025, 0.035, 0.055), clamp(darkness, 0.0, 1.0));
-          gl_FragColor = vec4(color, 1.0);
+          float alpha = clamp(0.22 + horizonBand * 0.52 + darkness * 0.34, 0.0, 0.82);
+          gl_FragColor = vec4(color, alpha);
         }
       `,
     });
-    this.skyMesh = new THREE.Mesh(skyGeo, this.skyMaterial);
-    this.skyMesh.name = 'voxel_sky';
-    this.skyMesh.frustumCulled = false;
-    this.skyMesh.renderOrder = -1000;
-    this.scene.add(this.skyMesh);
+    this.horizonMesh = new THREE.Mesh(hazeGeo, this.horizonMaterial);
+    this.horizonMesh.name = 'zone_horizon_haze';
+    this.horizonMesh.frustumCulled = false;
+    this.horizonMesh.renderOrder = -995;
+    this.scene.add(this.horizonMesh);
+
+    this._createCloudLayer();
   }
 
   _updateSkyPosition() {
     if (!this.skyMesh || !this.camera) return;
     this.skyMesh.position.copy(this.camera.position);
+    if (this.horizonMesh) this.horizonMesh.position.copy(this.camera.position);
+    if (this.cloudGroup) {
+      this.cloudGroup.position.x = this.camera.position.x;
+      this.cloudGroup.position.z = this.camera.position.z;
+    }
   }
 
-  _setSkyAtmosphere({ visible = true, topColor, horizonColor, cloudOpacity = 0.32, darkness = 0 }) {
+  _setSkyAtmosphere({ visible = true, topColor, horizonColor, fogColor, sunColor, cloudOpacity = 0.32, darkness = 0, hazeStrength = 0.3 }) {
     if (!this.skyMesh || !this.skyMaterial) return;
     this.skyMesh.visible = visible;
-    this.skyMaterial.uniforms.topColor.value.copy(topColor);
-    this.skyMaterial.uniforms.horizonColor.value.copy(horizonColor);
-    this.skyMaterial.uniforms.cloudOpacity.value = cloudOpacity;
-    this.skyMaterial.uniforms.darkness.value = darkness;
+    const uniforms = this.skyMaterial.uniforms;
+    if (uniforms) {
+      uniforms.turbidity.value = 3.5 + hazeStrength * 6 + darkness * 3;
+      uniforms.rayleigh.value = Math.max(0.35, 1.8 - darkness * 1.1);
+      uniforms.mieCoefficient.value = 0.004 + hazeStrength * 0.018;
+      uniforms.mieDirectionalG.value = 0.74;
+      const sun = new THREE.Vector3(0.22, 0.56 - darkness * 0.35, 0.78).normalize().multiplyScalar(450000);
+      uniforms.sunPosition.value.copy(sun);
+    }
+    if (sunColor && this.sun) this.sun.color.copy(sunColor).lerp(new THREE.Color(0x9fb6ff), darkness * 0.25);
+    if (this.horizonMaterial) {
+      this.horizonMesh.visible = visible;
+      this.horizonMaterial.uniforms.topColor.value.copy(topColor);
+      this.horizonMaterial.uniforms.horizonColor.value.copy(horizonColor);
+      this.horizonMaterial.uniforms.fogColor.value.copy(fogColor || horizonColor);
+      this.horizonMaterial.uniforms.darkness.value = darkness;
+      this.horizonMaterial.uniforms.hazeStrength.value = hazeStrength;
+    }
+    if (this.cloudMaterial) {
+      this.cloudMaterial.opacity = cloudOpacity * (1 - darkness);
+      this.cloudMaterial.color.copy(new THREE.Color(VOXEL_SKY.CLOUD).lerp(fogColor || horizonColor, hazeStrength * 0.28));
+    }
+    if (this.cloudGroup) this.cloudGroup.visible = visible && cloudOpacity > 0.03 && darkness < 0.96;
+  }
+
+  _createCloudLayer() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0.0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.30, 'rgba(255,255,255,0.78)');
+    grad.addColorStop(0.56, 'rgba(255,255,255,0.92)');
+    grad.addColorStop(1.0, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    for (let i = 0; i < 9; i++) {
+      const x = 20 + i * 26 + (i % 2) * 8;
+      const y = 52 + Math.sin(i * 1.7) * 13;
+      ctx.fillRect(x, y, 34 + (i % 3) * 10, 10 + (i % 2) * 6);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.LinearFilter;
+    this.cloudMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      color: VOXEL_SKY.CLOUD,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      fog: false,
+      side: THREE.DoubleSide,
+    });
+    this.cloudGroup = new THREE.Group();
+    this.cloudGroup.name = 'stylized_cloud_layer';
+    const cloudGeo = new THREE.PlaneGeometry(38, 12);
+    for (let i = 0; i < 18; i++) {
+      const mesh = new THREE.Mesh(cloudGeo, this.cloudMaterial);
+      const angle = (i / 18) * Math.PI * 2;
+      const radius = 55 + (i % 4) * 12;
+      mesh.position.set(Math.cos(angle) * radius, 38 + (i % 3) * 8, Math.sin(angle) * radius);
+      mesh.rotation.set(-0.22, -angle + Math.PI * 0.5, 0);
+      mesh.scale.setScalar(0.9 + (i % 5) * 0.18);
+      mesh.renderOrder = -960;
+      this.cloudGroup.add(mesh);
+    }
+    this.scene.add(this.cloudGroup);
+  }
+
+  _createBoundaryEnvironment() {
+    this.boundaryEnvironment = new THREE.Group();
+    this.boundaryEnvironment.name = 'distant_boundary_environment';
+    for (const zone of ZONES) {
+      this._addZoneApron(zone);
+      this._addZoneSilhouettes(zone);
+    }
+    this.scene.add(this.boundaryEnvironment);
+  }
+
+  _addZoneApron(zone) {
+    const preset = ZONE_ATMOSPHERE[zone.id] || ZONE_ATMOSPHERE.default;
+    const b = zone.bounds;
+    const width = 26;
+    const yInner = -0.25;
+    const yOuter = -5.5;
+    const mat = new THREE.MeshLambertMaterial({
+      color: preset.groundTint,
+      transparent: true,
+      opacity: 0.82,
+      fog: true,
+      side: THREE.DoubleSide,
+    });
+    const strips = [
+      [[b.minX, yInner, b.minZ], [b.maxX, yInner, b.minZ], [b.maxX, yOuter, b.minZ - width], [b.minX, yOuter, b.minZ - width]],
+      [[b.maxX, yInner, b.minZ], [b.maxX, yInner, b.maxZ], [b.maxX + width, yOuter, b.maxZ], [b.maxX + width, yOuter, b.minZ]],
+      [[b.maxX, yInner, b.maxZ], [b.minX, yInner, b.maxZ], [b.minX, yOuter, b.maxZ + width], [b.maxX, yOuter, b.maxZ + width]],
+      [[b.minX, yInner, b.maxZ], [b.minX, yInner, b.minZ], [b.minX - width, yOuter, b.minZ], [b.minX - width, yOuter, b.maxZ]],
+    ];
+    for (const points of strips) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(points.flat(), 3));
+      geo.setIndex([0, 1, 2, 0, 2, 3]);
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = `${zone.id}_terrain_apron`;
+      mesh.receiveShadow = false;
+      this.boundaryEnvironment.add(mesh);
+    }
+  }
+
+  _addZoneSilhouettes(zone) {
+    const preset = ZONE_ATMOSPHERE[zone.id] || ZONE_ATMOSPHERE.default;
+    const b = zone.bounds;
+    const mat = new THREE.MeshLambertMaterial({
+      color: preset.silhouette,
+      transparent: true,
+      opacity: zone.id === 'steelworks' ? 0.88 : 0.72,
+      fog: true,
+    });
+    const group = new THREE.Group();
+    group.name = `${zone.id}_horizon_silhouette`;
+    const cx = (b.minX + b.maxX) * 0.5;
+    const cz = (b.minZ + b.maxZ) * 0.5;
+    const longX = b.maxX - b.minX;
+    const longZ = b.maxZ - b.minZ;
+
+    if (zone.id === 'steelworks') {
+      for (let i = 0; i < 7; i++) {
+        const stack = new THREE.Mesh(new THREE.BoxGeometry(2.2, 12 + (i % 3) * 5, 2.2), mat);
+        stack.position.set(b.maxX + 15 + (i % 2) * 7, stack.geometry.parameters.height * 0.5 - 0.5, b.minZ + 12 + i * 14);
+        group.add(stack);
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.4, 4.5), mat);
+        cap.position.set(stack.position.x, stack.position.y + stack.geometry.parameters.height * 0.5 + 0.7, stack.position.z);
+        group.add(cap);
+      }
+      const gantry = new THREE.Mesh(new THREE.BoxGeometry(8, 2.2, longZ * 0.72), mat);
+      gantry.position.set(b.maxX + 20, 8, cz);
+      group.add(gantry);
+    } else if (zone.id === 'citadel') {
+      for (let i = 0; i < 5; i++) {
+        const tower = new THREE.Mesh(new THREE.BoxGeometry(5, 15 + i % 2 * 5, 5), mat);
+        tower.position.set(b.maxX + 14, tower.geometry.parameters.height * 0.5, b.minZ + 14 + i * 24);
+        group.add(tower);
+      }
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(5, 7, longZ * 0.82), mat);
+      wall.position.set(b.maxX + 12, 3.5, cz);
+      group.add(wall);
+    } else if (zone.id === 'forest' || zone.id === 'mire') {
+      const count = zone.id === 'mire' ? 18 : 24;
+      for (let i = 0; i < count; i++) {
+        const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 7 + (i % 4), 1.2), mat);
+        trunk.position.set(b.minX + (i / count) * longX, trunk.geometry.parameters.height * 0.5 - 0.8, b.maxZ + 10 + (i % 3) * 2);
+        const crown = new THREE.Mesh(new THREE.ConeGeometry(4 + (i % 2), 9, 5), mat);
+        crown.position.set(trunk.position.x, trunk.position.y + trunk.geometry.parameters.height * 0.5 + 4, trunk.position.z);
+        group.add(trunk, crown);
+      }
+    } else if (zone.id === 'desert' || zone.id === 'ice') {
+      for (let i = 0; i < 8; i++) {
+        const ridge = new THREE.Mesh(new THREE.ConeGeometry(9 + (i % 3) * 3, 7 + (i % 4) * 2, 4), mat);
+        ridge.position.set(b.minX + 8 + i * (longX / 7), ridge.geometry.parameters.height * 0.5 - 1, b.maxZ + 13 + (i % 2) * 5);
+        ridge.rotation.y = Math.PI * 0.25;
+        group.add(ridge);
+      }
+    } else {
+      for (let i = 0; i < 8; i++) {
+        const rock = new THREE.Mesh(new THREE.BoxGeometry(4 + (i % 3), 5 + (i % 4), 4 + (i % 2)), mat);
+        rock.position.set(b.minX + 8 + i * (longX / 7), rock.geometry.parameters.height * 0.5 - 0.8, b.maxZ + 12);
+        group.add(rock);
+      }
+    }
+
+    this.boundaryEnvironment.add(group);
   }
 
   _syncTerrainFog() {
@@ -1344,19 +1534,13 @@ export class Game {
 
   _updateZoneAtmosphere(isoDepthFactor = 0) {
     const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
-    const baseBackground = new THREE.Color(currentZone?.fogColor || 0x0a0a0a);
-    const skyTop = new THREE.Color(VOXEL_SKY.TOP).lerp(baseBackground, 0.18);
-    const skyHorizon = new THREE.Color(VOXEL_SKY.HORIZON).lerp(baseBackground, 0.34);
-    const ambientColors = {
-      forest: 0x88aa88,
-      fire: 0xaa6644,
-      ice: 0x88aacc,
-      desert: 0xccaa66,
-      steelworks: 0x8899aa,
-      mire: 0x669966,
-      citadel: 0xccaa77,
-    };
-    const baseAmbient = new THREE.Color(currentZone ? (ambientColors[currentZone.id] || 0x8888aa) : 0x8888aa);
+    const preset = ZONE_ATMOSPHERE[currentZone?.id] || ZONE_ATMOSPHERE.default;
+    const baseBackground = new THREE.Color(preset.fog ?? currentZone?.fogColor ?? 0x0a0a0a);
+    const skyTop = new THREE.Color(preset.skyTop);
+    const skyHorizon = new THREE.Color(preset.horizon);
+    const fogBase = new THREE.Color(preset.fog).lerp(skyHorizon, 0.22);
+    const baseAmbient = new THREE.Color(preset.ambientColor);
+    const sunColor = new THREE.Color(preset.sunColor);
     const undergroundT = clamp01(isoDepthFactor);
 
     if (undergroundT > 0) {
@@ -1383,36 +1567,47 @@ export class Game {
         visible: undergroundT < 0.98,
         topColor: skyTop,
         horizonColor: skyHorizon,
-        cloudOpacity: 0.18 * (1 - undergroundT),
+        fogColor,
+        sunColor,
+        cloudOpacity: preset.cloudOpacity * 0.55 * (1 - undergroundT),
         darkness: undergroundT,
+        hazeStrength: preset.hazeStrength,
       });
       this.ambient.color.copy(baseAmbient).lerp(new THREE.Color(0xd9e4d0), ISO_UNDERGROUND_VIEW.AMBIENT_BOOST * undergroundT);
     } else if (this.cameraMode === 'thirdPerson') {
-      this.scene.background = skyHorizon;
-      this.renderer.setClearColor(skyHorizon);
+      this.scene.background = fogBase;
+      this.renderer.setClearColor(fogBase);
       const zoneFogNear = Number.isFinite(currentZone?.fogNear) ? currentZone.fogNear + 10 : VOXEL_SKY.TP_FOG_NEAR;
       const zoneFogFar = Number.isFinite(currentZone?.fogFar) ? currentZone.fogFar + 24 : VOXEL_SKY.TP_FOG_FAR;
-      const fogNear = Math.max(22, Math.min(VOXEL_SKY.TP_FOG_NEAR, zoneFogNear));
-      const fogFar = Math.max(fogNear + 24, Math.min(VOXEL_SKY.TP_FOG_FAR, zoneFogFar));
-      this.scene.fog = new THREE.Fog(skyHorizon, fogNear, fogFar);
+      const fogNear = Math.max(18, Math.min(VOXEL_SKY.TP_FOG_NEAR, zoneFogNear - preset.hazeStrength * 8));
+      const fogFar = Math.max(fogNear + 24, Math.min(VOXEL_SKY.TP_FOG_FAR, zoneFogFar - preset.hazeStrength * 6));
+      this.scene.fog = new THREE.Fog(fogBase, fogNear, fogFar);
       this._setSkyAtmosphere({
         visible: true,
         topColor: skyTop,
         horizonColor: skyHorizon,
-        cloudOpacity: 0.34,
+        fogColor: fogBase,
+        sunColor,
+        cloudOpacity: preset.cloudOpacity,
         darkness: 0,
+        hazeStrength: preset.hazeStrength,
       });
       this.ambient.color.copy(baseAmbient);
     } else {
-      this.scene.background = skyHorizon;
-      this.renderer.setClearColor(skyHorizon);
-      this.scene.fog = null;
+      this.scene.background = fogBase;
+      this.renderer.setClearColor(fogBase);
+      const near = currentZone?.fogNear ? currentZone.fogNear + 18 : VOXEL_SKY.FOG_NEAR;
+      const far = currentZone?.fogFar ? currentZone.fogFar + 88 : VOXEL_SKY.FOG_FAR;
+      this.scene.fog = new THREE.Fog(fogBase, near, far);
       this._setSkyAtmosphere({
         visible: true,
         topColor: skyTop,
         horizonColor: skyHorizon,
-        cloudOpacity: 0.28,
+        fogColor: fogBase,
+        sunColor,
+        cloudOpacity: preset.cloudOpacity * 0.85,
         darkness: 0,
+        hazeStrength: preset.hazeStrength,
       });
       this.ambient.color.copy(baseAmbient);
     }

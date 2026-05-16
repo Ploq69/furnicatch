@@ -186,6 +186,9 @@ export class Player {
     this.world = null; // set by Game for ground height snapping
     this.sunDirection = null; // set by Game for fake shadows
     this.shadowDecal = null;
+    this.lastSafePosition = new THREE.Vector3(0, 1, 0);
+    this._lastSafePositionReady = false;
+    this._voidSafetyCooldown = 0;
 
     // Functional equipment slots (separate from visual loadout)
     this.equippedTool = null;
@@ -510,6 +513,7 @@ export class Player {
 
   update(dt, input) {
     if (this.mixer) this.mixer.update(dt);
+    this._voidSafetyCooldown = Math.max(0, this._voidSafetyCooldown - dt);
 
     // Damage flash countdown
     if (this.damageFlashTimer > 0) {
@@ -521,6 +525,11 @@ export class Player {
 
     if (this.animLockTimer > 0) {
       this.animLockTimer -= dt;
+    }
+
+    if (this._applyVoidSafety()) {
+      this._updateMesh();
+      return;
     }
 
     if (this.stunTimer > 0) {
@@ -754,9 +763,12 @@ export class Player {
       this.dodgeTimer -= dt;
       this.position.x += this.dodgeDir.x * GAME.DODGE_FORCE * dt;
       this.position.z += this.dodgeDir.z * GAME.DODGE_FORCE * dt;
+      this._clampToPlayableBounds();
+      this._applyVoidSafety();
       if (this.dodgeTimer <= 0) {
         this.isDodging = false;
       }
+      this.recordSafePosition();
       this._updateMesh();
       return; // Skip normal movement during dodge
     }
@@ -846,6 +858,7 @@ export class Player {
     if (moveX !== 0) {
       const oldX = this.position.x;
       this.position.x += moveX;
+      this._clampToPlayableBounds();
       if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
         this.position.x = oldX;
       }
@@ -853,6 +866,7 @@ export class Player {
     if (moveZ !== 0) {
       const oldZ = this.position.z;
       this.position.z += moveZ;
+      this._clampToPlayableBounds();
       if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
         this.position.z = oldZ;
       }
@@ -873,7 +887,9 @@ export class Player {
       this.playAnim('Idle');
     }
 
+    this._applyVoidSafety();
     this._updateMesh();
+    this.recordSafePosition();
 
     // Update fake ground shadow
     if (this.shadowDecal) {
@@ -1130,6 +1146,93 @@ export class Player {
     return maxY;
   }
 
+  _clampToPlayableBounds() {
+    if (!this.world?.clampToPlayableBounds) return;
+    this.world.clampToPlayableBounds(this.position, 0.72);
+  }
+
+  recordSafePosition() {
+    if (!this.world || !this.isGrounded || this.isSwimming) return;
+    if (!this.world.isInsidePlayableBounds?.(this.position, 1.15)) return;
+    if (this.world.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) return;
+    const groundY = this._getGroundHeight(this.position.x, this.position.z);
+    if (groundY <= -999 || Math.abs(this.position.y - groundY) > 0.45) return;
+    this.lastSafePosition.copy(this.position);
+    this.lastSafePosition.y = groundY;
+    this._lastSafePositionReady = true;
+  }
+
+  _applyVoidSafety() {
+    if (!this.world) return false;
+    const killPlaneY = this.world.getKillPlaneY?.() ?? -34;
+    const outsideBounds = this.world.isInsidePlayableBounds
+      ? !this.world.isInsidePlayableBounds(this.position, -1.0)
+      : false;
+    const belowWorld = this.position.y < killPlaneY;
+    const stuck = this.world.isPlayerSpaceClear
+      ? !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)
+      : false;
+    if (!outsideBounds && !belowWorld && !stuck) return false;
+    this._recoverToSafePosition();
+    return true;
+  }
+
+  _recoverToSafePosition() {
+    const base = this._lastSafePositionReady
+      ? this.lastSafePosition.clone()
+      : (this.world?.getNearestSafeSpawn?.(this.position) || this.world?.startPosition?.clone?.() || new THREE.Vector3(0, 1, 0));
+    const offsets = [
+      [0, 0],
+      [0.8, 0],
+      [-0.8, 0],
+      [0, 0.8],
+      [0, -0.8],
+      [0.8, 0.8],
+      [-0.8, 0.8],
+      [0.8, -0.8],
+      [-0.8, -0.8],
+    ];
+
+    let recovered = false;
+    for (const [ox, oz] of offsets) {
+      const candidate = base.clone().add(new THREE.Vector3(ox, 0, oz));
+      this.world?.clampToPlayableBounds?.(candidate, 1.2);
+      const groundY = this.world?.getGroundHeightAt?.(candidate.x, candidate.z, candidate.y + 4);
+      candidate.y = groundY > -999 ? groundY : candidate.y;
+      const clear = !this.world?.isPlayerSpaceClear || this.world.isPlayerSpaceClear(candidate.x, candidate.y, candidate.z);
+      const inside = !this.world?.isInsidePlayableBounds || this.world.isInsidePlayableBounds(candidate, 0.6);
+      if (clear && inside) {
+        this.position.copy(candidate);
+        this.velocity.set(0, 0, 0);
+        this.isGrounded = true;
+        this.lastSafePosition.copy(candidate);
+        this._lastSafePositionReady = true;
+        recovered = true;
+        break;
+      }
+    }
+
+    if (!recovered || (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z))) {
+      const fallback = this.world.getNearestSafeSpawn?.(this.position) || this.world.startPosition || new THREE.Vector3(0, 1, 0);
+      this.position.copy(fallback);
+      this.world.clampToPlayableBounds?.(this.position, 1.2);
+      this.velocity.set(0, 0, 0);
+      this.isGrounded = true;
+      this.lastSafePosition.copy(this.position);
+      this._lastSafePositionReady = true;
+    }
+
+    if (this._voidSafetyCooldown <= 0) {
+      this._flashDamage();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('voidloop:playerFell', {
+          detail: { message: 'Pulled you back from the edge.' }
+        }));
+      }
+      this._voidSafetyCooldown = 1.25;
+    }
+  }
+
   _respawnFromVoid() {
     // Respawn at level start position
     if (this.world && this.world.startPosition) {
@@ -1149,6 +1252,7 @@ export class Player {
   }
 
   _flashDamage() {
+    if (!this.mesh) return;
     // Restore any previous flash first so we always save true originals
     this._restoreDamageFlash();
 

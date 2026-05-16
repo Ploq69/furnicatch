@@ -190,6 +190,7 @@ export const TERRAIN_TILE_MAP = [
   /* 41 tall_grass */    { all: getTileIndex('wheat_stage4') },
   /* 42 flower_red */    { all: getTileIndex('cotton_red') },
   /* 43 flower_yellow */ { all: getTileIndex('cotton_tan') },
+  /* 44 boundary_bedrock */ { all: getTileIndex('blackstone') },
 ];
 
 export function getTerrainTileIndex(materialId, faceKind) {
@@ -218,6 +219,7 @@ export const BLOCK_TILE_MAP = {
   water: getTileIndex('water'),
   wood: getTileIndex('wood'),
   stone_dark: getTileIndex('greystone'),
+  boundary_bedrock: getTileIndex('blackstone'),
   gravel: getTileIndex('gravel'),
   sand_A: getTileIndex('sand'),
   sand_B: getTileIndex('redsand'),

@@ -36,6 +36,8 @@ const VISIBILITY_MIN_INTERVAL_MS = 180;
 const TP_VISIBILITY_MIN_INTERVAL_MS = 260;
 const MAX_TEXTURE_TILE_SPAN = CHUNK_SIZE;
 const WATER_FALL_DEPTH = 28;
+const BOUNDARY_SHELL_MARGIN = 1.0;
+const BOTTOM_SAFETY_Y = -30;
 const CHUNK_RADIUS = Math.sqrt(3) * CHUNK_SIZE * 0.5;
 const FACE_KEY_MULTIPLIER = 4;
 const UNIFIED_VERTEX_STRIDE_FLOATS = 7;
@@ -97,6 +99,7 @@ const TERRAIN_MATERIAL_IDS = {
   tall_grass: 41,
   flower_red: 42,
   flower_yellow: 43,
+  boundary_bedrock: 44,
 };
 
 const TERRAIN_COLOR_BY_MATERIAL_ID = new Map([
@@ -141,6 +144,7 @@ const TERRAIN_COLOR_BY_MATERIAL_ID = new Map([
   [TERRAIN_MATERIAL_IDS.tall_grass, new THREE.Color(0x66aa33)],
   [TERRAIN_MATERIAL_IDS.flower_red, new THREE.Color(0xff4444)],
   [TERRAIN_MATERIAL_IDS.flower_yellow, new THREE.Color(0xffdd44)],
+  [TERRAIN_MATERIAL_IDS.boundary_bedrock, new THREE.Color(0x171b20)],
 ]);
 
 const ZONE_SURFACE_PROFILES = {
@@ -1212,6 +1216,7 @@ export class TerrainMesh {
         for (let z = minZ; z <= maxZ; z++) {
           if (!zoneContains(zoneEntry.zone, x, z)) continue;
           if (this._isProtected(x, y, z, zoneEntry.zone.id)) continue;
+          if (this._isBoundaryCell(x, y, z, zoneEntry)) continue;
 
           const cx = x + 0.5;
           const cy = y + 0.5;
@@ -1325,6 +1330,7 @@ export class TerrainMesh {
             if (changedCells.has(key)) continue;
             if (!zoneContains(zoneEntry.zone, x, z)) continue;
             if (this._isProtected(x, y, z, zoneEntry.zone.id)) continue;
+            if (this._isBoundaryCell(x, y, z, zoneEntry)) continue;
 
             const cx = x + 0.5;
             const cy = y + 0.5;
@@ -1478,10 +1484,11 @@ export class TerrainMesh {
   getCellBlockType(x, y, z) {
     if (y < TERRAIN_MIN_Y) return 'stone_dark';
     if (y > TERRAIN_MAX_Y) return 'air';
-    const key = this._sampleKey(x, y, z);
-    if (this.modifiedBlockTypes.has(key)) return this.modifiedBlockTypes.get(key);
     const zoneEntry = this._findZoneEntry(x + 0.5, z + 0.5);
     if (!zoneEntry) return 'air';
+    if (this._isBoundaryCell(x, y, z, zoneEntry)) return 'boundary_bedrock';
+    const key = this._sampleKey(x, y, z);
+    if (this.modifiedBlockTypes.has(key)) return this.modifiedBlockTypes.get(key);
     const density = this.sampleDensity(x + 0.5, y + 0.5, z + 0.5);
     if (density <= ISO_LEVEL) {
       const fluid = this._fluidBodyForCell(x, y, z, zoneEntry);
@@ -1624,6 +1631,7 @@ export class TerrainMesh {
     if (!zoneContains(zone, x, z)) return -2;
     if (y < TERRAIN_MIN_Y) return 2;
     if (y > TERRAIN_MAX_Y) return -2;
+    if (this._isBoundaryCell(Math.floor(x), Math.floor(y), Math.floor(z), zoneEntry)) return 2.4;
 
     const b = zone.bounds;
     const edge = Math.min(x - b.minX, b.maxX - x, z - b.minZ, b.maxZ - z);
@@ -1838,6 +1846,16 @@ export class TerrainMesh {
       if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= p.radius) return true;
     }
     return false;
+  }
+
+  _isBoundaryCell(x, y, z, zoneEntry) {
+    if (!zoneEntry?.zone) return false;
+    if (y <= BOTTOM_SAFETY_Y) return true;
+    const b = zoneEntry.zone.bounds;
+    const cx = Math.floor(x) + 0.5;
+    const cz = Math.floor(z) + 0.5;
+    const edgeDistance = Math.min(cx - b.minX, b.maxX - cx, cz - b.minZ, b.maxZ - cz);
+    return edgeDistance < BOUNDARY_SHELL_MARGIN;
   }
 
   _sampleKey(x, y, z) {
@@ -2408,6 +2426,7 @@ export class TerrainMesh {
   _baseBlockTypeForCell(x, y, z, dir, knownZoneEntry = null) {
     const zoneEntry = knownZoneEntry || this._findZoneEntry(x + 0.5, z + 0.5);
     if (!zoneEntry) return 'stone';
+    if (this._isBoundaryCell(x, y, z, zoneEntry)) return 'boundary_bedrock';
 
     const { zone, seed } = zoneEntry;
     const types = zone.blockTypes || [];

@@ -28,8 +28,11 @@ const ISO_UNDERGROUND_CUTAWAY = {
   REACH_BOOST: 4.5,
   HEIGHT_BOOST: 0.65,
 };
+const VOID_KILL_PLANE_Y = -34;
+const PLAYABLE_EDGE_MARGIN = 0.65;
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export class World {
   constructor(scene, renderer = null) {
@@ -625,6 +628,79 @@ export class World {
 
   hasSdfTerrain() {
     return this.terrainMesh?.zones?.size > 0;
+  }
+
+  getKillPlaneY() {
+    return VOID_KILL_PLANE_Y;
+  }
+
+  getPlayableBoundsForPosition(x, z) {
+    const entries = [...(this.terrainMesh?.zones?.values?.() || [])];
+    if (!entries.length && this.authoredDoc?.grid) {
+      return {
+        minX: 0,
+        maxX: this.authoredDoc.grid.width,
+        minZ: 0,
+        maxZ: this.authoredDoc.grid.depth,
+      };
+    }
+    let nearest = null;
+    let nearestDistSq = Infinity;
+    for (const entry of entries) {
+      const b = entry.zone.bounds;
+      if (x >= b.minX && x < b.maxX && z >= b.minZ && z < b.maxZ) return b;
+      const nx = clamp(x, b.minX, b.maxX);
+      const nz = clamp(z, b.minZ, b.maxZ);
+      const dx = x - nx;
+      const dz = z - nz;
+      const distSq = dx * dx + dz * dz;
+      if (distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        nearest = b;
+      }
+    }
+    return nearest;
+  }
+
+  isInsidePlayableBounds(position, margin = 0) {
+    const b = this.getPlayableBoundsForPosition(position.x, position.z);
+    if (!b) return true;
+    return position.x >= b.minX + margin
+      && position.x < b.maxX - margin
+      && position.z >= b.minZ + margin
+      && position.z < b.maxZ - margin;
+  }
+
+  clampToPlayableBounds(position, margin = PLAYABLE_EDGE_MARGIN) {
+    const b = this.getPlayableBoundsForPosition(position.x, position.z);
+    if (!b) return position;
+    position.x = clamp(position.x, b.minX + margin, b.maxX - margin);
+    position.z = clamp(position.z, b.minZ + margin, b.maxZ - margin);
+    return position;
+  }
+
+  getNearestSafeSpawn(position = null) {
+    const fallback = this.startPosition?.clone?.() || new THREE.Vector3(0, 1, 0);
+    const entries = [...(this.terrainMesh?.zones?.values?.() || [])];
+    if (!entries.length) return fallback;
+
+    const px = position?.x ?? fallback.x;
+    const pz = position?.z ?? fallback.z;
+    let best = entries[0].zone;
+    let bestDistSq = Infinity;
+    for (const { zone } of entries) {
+      const sp = zone.spawnPoint || { x: fallback.x, z: fallback.z };
+      const dx = px - sp.x;
+      const dz = pz - sp.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        best = zone;
+      }
+    }
+    const sp = best.spawnPoint || { x: fallback.x, z: fallback.z };
+    const y = this.getGroundHeightAt(sp.x, sp.z, 10);
+    return new THREE.Vector3(sp.x, y > -999 ? y : fallback.y, sp.z);
   }
 
   isPlayerSpaceClear(x, y, z) {

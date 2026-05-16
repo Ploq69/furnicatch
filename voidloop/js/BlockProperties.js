@@ -16,6 +16,14 @@ const BLOCK_PROPERTY_OVERRIDES = Object.freeze({
     mineable: false,
     renderLayer: 'none',
   },
+  boundary_bedrock: {
+    solid: true,
+    transparent: false,
+    friction: 9,
+    falling: false,
+    mineable: false,
+    renderLayer: 'opaque',
+  },
   water: {
     solid: false,
     fluid: { type: 'water', swim: true, drag: 0.62 },
