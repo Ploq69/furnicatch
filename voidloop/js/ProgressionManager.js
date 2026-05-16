@@ -10,7 +10,18 @@ export const PICKAXE_WIDTH_COSTS = {
   4: 350,
   5: 900,
   6: 1800,
+  7: 2600,
+  8: 3800,
+  9: 5500,
 };
+
+function getPickaxeWidthCost(width) {
+  if (width <= 1) return 0;
+  if (width <= 9) return PICKAXE_WIDTH_COSTS[width] ?? null;
+  // Exponential doubling starts at level 10
+  const baseAt10 = 8000;
+  return Math.floor(baseAt10 * Math.pow(2, width - 10));
+}
 
 export const ROUND_TIME_COSTS = [100, 250, 500, 900, 1400, 2100];
 export const LETTER_DROP_COSTS = [60, 160, 360, 720, 1200];
@@ -83,19 +94,42 @@ function normalizeLetter(letter) {
 export class ProgressionManager {
   constructor(storage = (typeof window !== 'undefined' ? window.localStorage : null)) {
     this.storage = storage;
+    this._saveTimer = null;
+    this._deferHotSaves = typeof window !== 'undefined' && storage === window.localStorage;
     this.state = cloneState(DEFAULT_STATE);
     for (const letter of ALPHABET) {
       this.state.letters[letter] = createLetterState(letter);
     }
     this._load();
+    if (this._deferHotSaves) {
+      window.addEventListener?.('pagehide', () => this._flushSave());
+      window.addEventListener?.('beforeunload', () => this._flushSave());
+    }
   }
 
   getPickaxeWidth() {
-    return Math.max(1, Math.min(6, this.state.pickaxeWidth || 1));
+    return Math.max(1, this.state.pickaxeWidth || 1);
   }
 
   getNextPickaxeWidthCost() {
-    return PICKAXE_WIDTH_COSTS[this.getPickaxeWidth() + 1] ?? null;
+    return getPickaxeWidthCost(this.getPickaxeWidth() + 1);
+  }
+
+  getTotalPickaxeSpent() {
+    const current = this.getPickaxeWidth();
+    let total = 0;
+    for (let w = 2; w <= current; w++) {
+      const cost = getPickaxeWidthCost(w);
+      if (cost != null) total += cost;
+    }
+    return total;
+  }
+
+  resetPickaxe() {
+    const refund = this.getTotalPickaxeSpent();
+    this.state.pickaxeWidth = 1;
+    this._save();
+    return refund;
   }
 
   getRoundStartTime(baseSeconds) {
@@ -144,7 +178,7 @@ export class ProgressionManager {
   recordMined(zoneId, count = 1) {
     if (!zoneId) return 0;
     this.state.zoneMined[zoneId] = (this.state.zoneMined[zoneId] || 0) + Math.max(0, count);
-    this._save();
+    this._saveSoon();
     return this.state.zoneMined[zoneId];
   }
 
@@ -221,7 +255,7 @@ export class ProgressionManager {
     state.introduced = true;
     state.dropsTowardQuiz += Math.max(1, count);
     const queued = this._queueReadyQuiz(state.letter);
-    this._save();
+    this._saveSoon();
     return { queued, state };
   }
 
@@ -408,7 +442,7 @@ export class ProgressionManager {
         category: 'Mining',
         name: `Pickaxe Width ${this.getPickaxeWidth()}`,
         desc: `Break up to ${this.getPickaxeWidth()} block${this.getPickaxeWidth() === 1 ? '' : 's'} per swing.`,
-        value: `${this.getPickaxeWidth()}/6`,
+        value: `${this.getPickaxeWidth()}`,
         cost: this.getPurchaseCost('pickaxe_width'),
       },
       {
@@ -555,11 +589,34 @@ export class ProgressionManager {
   }
 
   _save() {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer);
+      this._saveTimer = null;
+    }
     try {
       this.storage?.setItem(SAVE_KEY, JSON.stringify(this.state));
     } catch (error) {
       console.warn('[ProgressionManager] Failed to save:', error);
     }
+  }
+
+  _saveSoon(delayMs = 350) {
+    if (!this._deferHotSaves) {
+      this._save();
+      return;
+    }
+    if (this._saveTimer) return;
+    this._saveTimer = setTimeout(() => {
+      this._saveTimer = null;
+      this._save();
+    }, delayMs);
+  }
+
+  _flushSave() {
+    if (!this._saveTimer) return;
+    clearTimeout(this._saveTimer);
+    this._saveTimer = null;
+    this._save();
   }
 
   reset() {

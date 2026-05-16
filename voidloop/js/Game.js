@@ -40,10 +40,10 @@ const STATES = {
 const ISO_UNDERGROUND_VIEW = {
   DEPTH_START: 0.8,
   DEPTH_FULL: 7.0,
-  HORIZONTAL_SCALE: 0.68,
-  VERTICAL_SCALE: 1.26,
-  TARGET_Y_BIAS: -0.35,
-  TARGET_FORWARD_BIAS: 1.65,
+  HORIZONTAL_SCALE: 0.9,
+  VERTICAL_SCALE: 1.05,
+  TARGET_Y_BIAS: 0.15,
+  TARGET_FORWARD_BIAS: 0,
   BACKDROP_DARKNESS: 0.16,
   BACKDROP_SATURATION: 0.42,
   AMBIENT_BOOST: 0.34,
@@ -57,6 +57,8 @@ const VOXEL_SKY = {
   CLOUD: 0xffffff,
   FOG_NEAR: 64,
   FOG_FAR: 260,
+  TP_FOG_NEAR: 30,
+  TP_FOG_FAR: 70,
 };
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -94,7 +96,9 @@ const TP_COLLISION_EXTEND_HALF_LIFE = 0.24;
 const TP_RECENTER_DELAY = 1.25;
 const TP_COLLISION_REFRESH_MS = 125;
 const TP_COLLISION_MOVE_EPS = 0.35;
-const MIN_RENDER_SCALE = 0.9;
+const TOP_DOWN_HEIGHT = 42;
+const TOP_DOWN_TARGET_Y = 0.75;
+const MIN_RENDER_SCALE = 0.75;
 
 export class Game {
   constructor(container) {
@@ -178,6 +182,7 @@ export class Game {
     this._renderScaleHighTime = 0;
     this._objectiveHudRefreshTimer = 0;
     this._perfFrame = {};
+    this._rewardFeedbackQueue = [];
     this._tpCollision = {
       lastAt: -Infinity,
       lastDesired: new THREE.Vector3(),
@@ -302,6 +307,12 @@ export class Game {
     // Mining combo system
     this.mineCombo = 0;
     this.mineComboTimer = 0;
+    this._lastCollectSfxAt = 0;
+
+    // Resource floating-text batcher (type → { count, timer, color, displayName })
+    this._resourceTextBatcher = new Map();
+    this._RESOURCE_TEXT_FLUSH_DELAY = 0.8; // seconds of inactivity before flush
+    this._RESOURCE_TEXT_IMMEDIATE_FLUSH = 1000; // flush instantly at this threshold
 
     // Missile strike special attack
     this.activeMissiles = [];
@@ -438,7 +449,7 @@ export class Game {
   buyProgressionUpgrade(upgradeId) {
     const result = this.progression.purchase(upgradeId, this.player.coins);
     if (result.success) {
-      this.player.coins = result.coins;
+      if (this.player.coins !== Infinity) this.player.coins = result.coins;
       // Handle rocket boots purchase/equip
       if (upgradeId === 'rocket_boots_unlock') {
         this.inventory.addItem('rocket_boots');
@@ -452,6 +463,18 @@ export class Game {
       this.ui.updateObjectiveHud?.(this._getObjectiveState());
     }
     return result;
+  }
+
+  resetPickaxeUpgrades() {
+    const refund = this.progression.resetPickaxe();
+    if (refund > 0) {
+      this.player.coins += refund;
+      this.ui.showFloatingText(`Pickaxe reset! +${refund} coins refunded`, 0xfbbf24);
+    } else {
+      this.ui.showFloatingText('Pickaxe reset!', 0xfbbf24);
+    }
+    this.ui.updateStats();
+    this.ui.updateObjectiveHud?.(this._getObjectiveState());
   }
 
   sellResource(resourceType, amount = 1) {
@@ -600,6 +623,7 @@ export class Game {
       this._audioInitialized = true;
       audio.init();
       settings.applyToAudio(audio);
+      SFXMapper.preloadGameplay?.();
       window.removeEventListener('click', init);
       window.removeEventListener('keydown', init);
     };
@@ -960,22 +984,11 @@ export class Game {
               const blockDef = BLOCK_TYPES[typeKey];
               if (blockDef && blockDef.resource) {
                 this.resources.add(blockDef.resource, 1);
-                const resName = blockDef.resource.replace(/_/g, ' ');
-                this.ui.showFloatingText(`+1 ${resName}`, 0x88ccff);
+                this.batchResourceText(blockDef.resource, 1, 0x88ccff);
               }
             }
 
-            // Score popup + combo text for floating blocks
-            if (isFloat) {
-              const basePoints = 10;
-              const points = basePoints * this.mineCombo;
-              this.ui.showFloatingText(`+${points}`, 0xfacc15);
-              if (this.mineCombo >= 2) {
-                const comboColors = { 2: 0xfacc15, 3: 0xffaa00, 4: 0xff6600, 5: 0xff2200 };
-                const comboColor = comboColors[Math.min(this.mineCombo, 5)] || 0xff0000;
-                this.ui.showFloatingText(`×${this.mineCombo} COMBO!`, comboColor);
-              }
-            }
+            // Mining combo tracked silently (no floating text spam)
 
             // timeBonus for mining (combo bonus)
             this.floorTimer += GAME.TIME_BONUS_MINING + (isFloat ? this.mineCombo : 0);
@@ -984,9 +997,7 @@ export class Game {
               const extraMined = miningTarget.isTerrain
                 ? this._mineExtraTerrainBlocks(miningTarget, zoneId, extraBudget)
                 : this._mineExtraFloatingBlocks(nearestBlock, zoneId, extraBudget);
-              if (extraMined > 0) {
-                this.ui.showFloatingText(`+${extraMined} width`, 0x7dd3fc);
-              }
+              // Pickaxe width bonus applied silently (no floating text spam)
             }
             SFXMapper.collectOre();
           }
@@ -1078,6 +1089,9 @@ export class Game {
       this.hazards.update(dt);
     }
 
+    this._processRewardFeedbackQueue();
+    this._flushResourceTexts(dt);
+
     this._updateZoneAtmosphere(isoDepthFactor);
 
     // Check death
@@ -1127,6 +1141,8 @@ export class Game {
       liveChunks: terrain.liveChunks || terrain.chunks || 0,
       dirtyChunks: terrain.dirtyChunks || 0,
       modifiedCells: terrain.blocks || 0,
+      terrainTruncatedSlots: terrain.unifiedTruncatedSlots || 0,
+      terrainMaxUploadedVertices: terrain.unifiedMaxUploadedVertices || 0,
       rebuildMs: terrain.rebuildMs || 0,
       worldMs: this._perfFrame.worldMs || 0,
       terrainVisibilityMs: terrainPerf.visibilityMs || 0,
@@ -1297,7 +1313,6 @@ export class Game {
     const baseBackground = new THREE.Color(currentZone?.fogColor || 0x0a0a0a);
     const skyTop = new THREE.Color(VOXEL_SKY.TOP).lerp(baseBackground, 0.18);
     const skyHorizon = new THREE.Color(VOXEL_SKY.HORIZON).lerp(baseBackground, 0.34);
-    const surfaceFogColor = skyHorizon.clone().lerp(baseBackground, 0.18);
     const ambientColors = {
       forest: 0x88aa88,
       fire: 0xaa6644,
@@ -1341,7 +1356,11 @@ export class Game {
     } else if (this.cameraMode === 'thirdPerson') {
       this.scene.background = skyHorizon;
       this.renderer.setClearColor(skyHorizon);
-      this.scene.fog = new THREE.Fog(surfaceFogColor, VOXEL_SKY.FOG_NEAR, VOXEL_SKY.FOG_FAR);
+      const zoneFogNear = Number.isFinite(currentZone?.fogNear) ? currentZone.fogNear + 10 : VOXEL_SKY.TP_FOG_NEAR;
+      const zoneFogFar = Number.isFinite(currentZone?.fogFar) ? currentZone.fogFar + 24 : VOXEL_SKY.TP_FOG_FAR;
+      const fogNear = Math.max(22, Math.min(VOXEL_SKY.TP_FOG_NEAR, zoneFogNear));
+      const fogFar = Math.max(fogNear + 24, Math.min(VOXEL_SKY.TP_FOG_FAR, zoneFogFar));
+      this.scene.fog = new THREE.Fog(skyHorizon, fogNear, fogFar);
       this._setSkyAtmosphere({
         visible: true,
         topColor: skyTop,
@@ -1374,9 +1393,15 @@ export class Game {
       if (this.player.mesh) this.player.mesh.visible = true;
       return;
     }
+    if (this.cameraMode === 'topDown') {
+      this._updateTopDownCamera(dt, shakeX, shakeY, shakeZ);
+      if (this.player.mesh) this.player.mesh.visible = true;
+      return;
+    }
 
     this.player.controlYaw = null;
     if (this.player.mesh) this.player.mesh.visible = true;
+    this.isoCamera.up.set(0, 1, 0);
     const undergroundT = clamp01(isoDepthFactor);
     const horizontalScale = 1 + (ISO_UNDERGROUND_VIEW.HORIZONTAL_SCALE - 1) * undergroundT;
     const verticalScale = 1 + (ISO_UNDERGROUND_VIEW.VERTICAL_SCALE - 1) * undergroundT;
@@ -1400,6 +1425,26 @@ export class Game {
       this.cameraTarget.x + isoOffset * horizontalScale + shakeX,
       this.cameraTarget.y + isoOffset * verticalScale + shakeY,
       this.cameraTarget.z + isoOffset * horizontalScale + shakeZ
+    );
+    this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
+  }
+
+  _updateTopDownCamera(dt, shakeX = 0, shakeY = 0, shakeZ = 0) {
+    this.player.controlYaw = null;
+    const desiredTarget = this.player.position.clone();
+    desiredTarget.y += TOP_DOWN_TARGET_Y;
+    if (!this._cameraTargetReady) {
+      this.cameraTarget.copy(desiredTarget);
+      this._cameraTargetReady = true;
+    } else {
+      this.cameraTarget.lerp(desiredTarget, 1 - Math.exp(-12 * dt));
+    }
+
+    this.isoCamera.up.set(0, 0, -1);
+    this.isoCamera.position.set(
+      this.cameraTarget.x + shakeX * 0.25,
+      this.cameraTarget.y + TOP_DOWN_HEIGHT + shakeY * 0.25,
+      this.cameraTarget.z + shakeZ * 0.25
     );
     this.isoCamera.lookAt(this.cameraTarget.x, this.cameraTarget.y, this.cameraTarget.z);
   }
@@ -1578,8 +1623,7 @@ export class Game {
       || now - cache.lastAt >= TP_COLLISION_REFRESH_MS;
 
     if (shouldRefresh) {
-      const raycaster = new THREE.Raycaster(pivot, direction, 0.05, rayDist + 0.35);
-      const hit = terrain.raycast(raycaster, pivot, TP_DISTANCE + 3);
+      const hit = terrain.raycastVoxel?.(pivot, direction, rayDist + 0.35, { solidOnly: true });
       actualDist = hit?.point ? Math.max(0.6, pivot.distanceTo(hit.point) - 0.3) : rayDist;
       if (!hit?.point && desiredBlocked) actualDist = Math.min(actualDist, 1.1);
       cache.lastAt = now;
@@ -1719,7 +1763,7 @@ export class Game {
       }
     }
 
-    if (this.cameraMode === 'iso') {
+    if (this.cameraMode === 'iso' || this.cameraMode === 'topDown') {
       const underfootTarget = this._findUnderfootTerrainMiningTarget(isPickaxe);
       if (underfootTarget) return underfootTarget;
     }
@@ -1837,26 +1881,40 @@ export class Game {
 
   _getTerrainBrushRadius(zoneId) {
     const width = this.progression.getPickaxeWidth();
-    return width >= 5 ? 1.15 : width >= 3 ? 1.05 : 0.95;
+    // Scale brush radius with pickaxe width — gets ridiculous
+    return Math.min(20, 0.85 + width * 0.25);
   }
 
   _mineExtraTerrainBlocks(miningTarget, zoneId, budget) {
     if (!miningTarget?.brushCenter || budget <= 0) return 0;
-    let mined = 0;
+    // Cap extra blocks for performance even at ridiculous widths
+    budget = Math.min(budget, 500);
     const base = miningTarget.brushCenter;
+    const radius = this._getTerrainBrushRadius(zoneId);
+    const brushes = [];
     for (let i = 0; i < budget; i++) {
       const angle = (Math.PI * 2 * i) / Math.max(1, budget);
       const ring = 0.85 + Math.floor(i / 6) * 0.45;
       const center = base.clone().add(new THREE.Vector3(Math.cos(angle) * ring, 0, Math.sin(angle) * ring));
-      const result = this.world.mineTerrainBlock(center.x, center.y, center.z, 999, {
+      brushes.push({
         center,
         zoneId,
         type: miningTarget.terrainCell?.type || 'dirt',
-        radius: this._getTerrainBrushRadius(zoneId),
+        radius,
       });
+    }
+
+    const batch = this.world.mineTerrainBrushes(brushes, {
+      zoneId,
+      type: miningTarget.terrainCell?.type || 'dirt',
+      radius,
+    });
+
+    let mined = 0;
+    for (const result of batch.brushResults || []) {
       if (!result?.meaningful) continue;
       mined++;
-      const hitPos = center.clone();
+      const hitPos = result.center.clone();
       this.blocksMined++;
       this.progression.recordMined(result.zoneId || zoneId || this.zoneManager.currentZoneId, 1);
       this.particles.dust(hitPos, 4);
@@ -1870,6 +1928,7 @@ export class Game {
 
   _mineExtraFloatingBlocks(originBlock, zoneId, budget) {
     if (!originBlock || budget <= 0) return 0;
+    budget = Math.min(budget, 500);
     const candidates = [];
     for (const block of this.world.blocks.values()) {
       if (!block || block === originBlock || block.destroyed || !block.isFloating) continue;
@@ -1929,21 +1988,85 @@ export class Game {
     const resourceType = this._pickDigJunkResource(depth, width, luck);
 
     if (this.resources.add(resourceType, amount)) {
-      const name = RESOURCE_META[resourceType]?.name || resourceType.replace(/_/g, ' ');
-      this.ui.showFloatingText(`+${amount} ${name}`, 0x9bd47a);
+      this.batchResourceText(resourceType, amount, 0x9bd47a);
     }
 
     for (const node of result.revealedLetters || []) {
       const spawnPos = node.position.clone();
-      this.letterDrops.spawn(spawnPos, node.letter);
-      this.ui.showFloatingText(`Letter ${node.letter}!`, 0xfacc15);
+      this._enqueueRewardFeedback({ kind: 'letterDrop', position: spawnPos, letter: node.letter });
+      this._enqueueRewardFeedback({ kind: 'text', text: `Letter ${node.letter}!`, color: 0xfacc15 });
     }
 
     if (Math.random() < this.progression.getLetterDropChance('terrain')) {
       const letter = this._pickLetterForZone(zoneId || result.zoneId || this.zoneManager.currentZoneId);
       if (letter) {
-        this.letterDrops.spawn(hitPos.clone(), letter);
-        this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
+        this._enqueueRewardFeedback({ kind: 'letterDrop', position: hitPos.clone(), letter });
+        this._enqueueRewardFeedback({ kind: 'text', text: `Letter ${letter}!`, color: 0xfacc15 });
+      }
+    }
+  }
+
+  _enqueueRewardFeedback(job) {
+    if (!job) return;
+    const readyAt = (performance.now?.() || Date.now()) + 45;
+    this._rewardFeedbackQueue.push({ ...job, readyAt });
+    if (this._rewardFeedbackQueue.length > 32) {
+      this._rewardFeedbackQueue.splice(0, this._rewardFeedbackQueue.length - 32);
+    }
+  }
+
+  _processRewardFeedbackQueue(maxJobs = 3) {
+    if (!this._rewardFeedbackQueue.length) return;
+    const now = performance.now?.() || Date.now();
+    let processed = 0;
+    for (let i = 0; i < this._rewardFeedbackQueue.length && processed < maxJobs;) {
+      const job = this._rewardFeedbackQueue[i];
+      if (job.readyAt > now) {
+        i++;
+        continue;
+      }
+      this._rewardFeedbackQueue.splice(i, 1);
+      processed++;
+      if (job.kind === 'text') {
+        this.ui.showFloatingText(job.text, job.color);
+      } else if (job.kind === 'letterDrop') {
+        this.letterDrops.spawn(job.position, job.letter);
+      }
+    }
+  }
+
+  batchResourceText(type, amount = 1, color = 0x88ccff, displayName = null) {
+    const entry = this._resourceTextBatcher.get(type);
+    if (entry) {
+      entry.count += amount;
+      entry.timer = this._RESOURCE_TEXT_FLUSH_DELAY;
+      if (entry.count >= this._RESOURCE_TEXT_IMMEDIATE_FLUSH) {
+        this._flushResourceType(type);
+      }
+    } else {
+      this._resourceTextBatcher.set(type, {
+        count: amount,
+        timer: this._RESOURCE_TEXT_FLUSH_DELAY,
+        color,
+        displayName,
+      });
+    }
+  }
+
+  _flushResourceType(type) {
+    const entry = this._resourceTextBatcher.get(type);
+    if (!entry) return;
+    const name = entry.displayName || entry.count + ' ' + type.replace(/_/g, ' ');
+    const text = entry.displayName ? `+${entry.count} ${entry.displayName}` : `+${name}`;
+    this.ui.showFloatingText(text, entry.color);
+    this._resourceTextBatcher.delete(type);
+  }
+
+  _flushResourceTexts(dt) {
+    for (const [type, entry] of this._resourceTextBatcher) {
+      entry.timer -= dt;
+      if (entry.timer <= 0) {
+        this._flushResourceType(type);
       }
     }
   }
@@ -2100,8 +2223,7 @@ export class Game {
       this.ui.showFloatingText(`${isMissile ? 'Strike' : 'Blast'} broke ${destroyedFloating}`, 0xffaa00);
       for (const [resource, amount] of resourceRewards) {
         if (this.resources.add(resource, amount)) {
-          const name = resource.replace(/_/g, ' ');
-          this.ui.showFloatingText(`+${amount} ${name}`, 0x88ccff);
+          this.batchResourceText(resource, amount, 0x88ccff);
         }
       }
     }
@@ -2634,7 +2756,12 @@ export class Game {
   }
 
   _toggleCameraMode() {
-    this._setCameraMode(this.cameraMode === 'thirdPerson' ? 'iso' : 'thirdPerson');
+    const next = this.cameraMode === 'iso'
+      ? 'thirdPerson'
+      : this.cameraMode === 'thirdPerson'
+        ? 'topDown'
+        : 'iso';
+    this._setCameraMode(next);
   }
 
   _setCameraMode(mode, showToast = true) {
@@ -2669,11 +2796,21 @@ export class Game {
       this.renderer.domElement.requestPointerLock?.();
       if (this.aimReticle) this.aimReticle.style.display = 'block';
       if (showToast) this.ui.showFloatingText('Third-person view', 0x7dd3fc);
+    } else if (mode === 'topDown') {
+      this.camera = this.isoCamera;
+      if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock?.();
+      this.player.controlYaw = null;
+      this._cameraTargetReady = false;
+      this.isoCamera.up.set(0, 0, -1);
+      if (this.player.mesh) this.player.mesh.visible = true;
+      if (this.aimReticle) this.aimReticle.style.display = 'none';
+      if (showToast) this.ui.showFloatingText('Top-down view', 0x7dd3fc);
     } else {
       this.camera = this.isoCamera;
       if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock?.();
       this.player.controlYaw = null;
       this._cameraTargetReady = false;
+      this.isoCamera.up.set(0, 1, 0);
       if (this.player.mesh) this.player.mesh.visible = true;
       if (this.aimReticle) this.aimReticle.style.display = 'none';
       if (showToast) this.ui.showFloatingText('Isometric view', 0x7dd3fc);
@@ -2817,19 +2954,20 @@ export class Game {
     if (type === 'health_meat' || type === 'health_scifi') {
       // Heal
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + 20);
-      this.ui.showFloatingText(`+20 HP`, 0x44ff44);
     } else if (type === 'key') {
       this.player.keys = (this.player.keys || 0) + 1;
-      this.ui.showFloatingText(`KEY!`, 0xffaa00);
     } else {
       // Coin/gem/ore
       if (value > 0) {
         this.player.coins += value;
-        const name = type.replace(/_/g, ' ').toUpperCase();
-        this.ui.showFloatingText(`+${value} 💰`, color);
+        this.batchResourceText(type, value, color, '💰');
       }
     }
-    SFXMapper.collectOre();
+    const now = performance.now?.() || Date.now();
+    if (now - this._lastCollectSfxAt > 70) {
+      this._lastCollectSfxAt = now;
+      SFXMapper.collectOre();
+    }
   }
 
   _pickLetterForZone(zoneId) {
@@ -2859,7 +2997,6 @@ export class Game {
     this.ui.updateZoneLetterHud?.(this.zoneManager.currentZoneId);
     const pickupAnimMs = this.ui.animateLetterPickup?.(state.letter, effectPos, this.zoneManager.currentZoneId) || 0;
     this.ui.showFloatingText(`${state.letter} ${progress}`, result.queued ? 0x4ade80 : 0xfacc15);
-    this.ui.updateObjectiveHud?.(this._getObjectiveState());
     if (result.queued && pickupAnimMs > 0) {
       setTimeout(() => this._tryStartQueuedLetterQuiz(), pickupAnimMs + 120);
     } else {
@@ -2953,7 +3090,7 @@ export class Game {
     if (!result.levelUp) {
       this.ui.showFloatingText(`${target} Lv.${result.newLevel}`, 0xfacc15);
     }
-    this.ui.showFloatingText('+10 coins', 0xfacc15);
+    this.batchResourceText('coins', 10, 0xfacc15, '💰');
     this.ui.showTimeBonus('+3s LETTER!');
     if (!result.levelUp) SFXMapper.collectOre();
     this.ui.updateZoneLetterHud?.(this.zoneManager.currentZoneId);
@@ -3178,7 +3315,7 @@ export class Game {
         this.player.coins += 10;
         this.floorTimer += 5;
         this.ui.showTimeBonus('+5s SPELLING!');
-        this.ui.showFloatingText('+10 💰', 0xfacc15);
+        this.batchResourceText('coins', 10, 0xfacc15, '💰');
       }
       this.spellingChallenge = null;
     }

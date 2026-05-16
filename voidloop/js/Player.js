@@ -171,7 +171,7 @@ export class Player {
       offset: this._defaultCalibrationOffset(),
     };
 
-    this.coins = 0;
+    this.coins = Infinity;
     this.keys = 0;
     this.inventory = {};
     this.level = 1;

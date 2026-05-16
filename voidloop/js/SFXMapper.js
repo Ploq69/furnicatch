@@ -18,12 +18,27 @@ function playVariant(prefix, baseName, opts = {}) {
   audio.playPath(path, opts);
 }
 
+function variantPaths(prefix, baseName) {
+  return [1, 2].map(n => variantPath(prefix, baseName, n));
+}
+
 // Helper: pick random from array
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 export const SFXMapper = {
+  preloadGameplay() {
+    audio.preloadPaths([
+      ...variantPaths('WHSH', 'MOVEMENT-Simple Whoosh'),
+      ...variantPaths('DSGNTonl', 'USABLE-Coin Toss'),
+      ...variantPaths('MAGAngl', 'BUFF-Buff Pickup'),
+      ...variantPaths('DSGNImpt', 'EXPLOSION-Thud'),
+      ...variantPaths('DSGNImpt', 'EXPLOSION-Grainy Burst'),
+      ...variantPaths('MAGSpel', 'CAST-Tweety Cast'),
+    ]);
+  },
+
   // === PLAYER MOVEMENT ===
   footstep(surface = 'generic') {
     const map = {

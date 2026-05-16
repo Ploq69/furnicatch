@@ -69,10 +69,15 @@ export const RESOURCE_META = {
 export class ResourceInventory {
   constructor() {
     this.resources = {};
+    this._saveTimer = null;
     for (const r of RESOURCE_TYPES) {
       this.resources[r] = 0;
     }
     this._load();
+    if (typeof window !== 'undefined') {
+      window.addEventListener?.('pagehide', () => this._flushSave());
+      window.addEventListener?.('beforeunload', () => this._flushSave());
+    }
   }
 
   add(resourceType, amount = 1) {
@@ -81,7 +86,7 @@ export class ResourceInventory {
       return false;
     }
     this.resources[resourceType] += amount;
-    this._save();
+    this._saveSoon();
     return true;
   }
 
@@ -132,6 +137,10 @@ export class ResourceInventory {
   }
 
   _save() {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer);
+      this._saveTimer = null;
+    }
     try {
       const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
       saved.resources = this.resources;
@@ -139,6 +148,25 @@ export class ResourceInventory {
     } catch (e) {
       console.warn('[ResourceInventory] Failed to save:', e);
     }
+  }
+
+  _saveSoon(delayMs = 350) {
+    if (typeof window === 'undefined') {
+      this._save();
+      return;
+    }
+    if (this._saveTimer) return;
+    this._saveTimer = setTimeout(() => {
+      this._saveTimer = null;
+      this._save();
+    }, delayMs);
+  }
+
+  _flushSave() {
+    if (!this._saveTimer) return;
+    clearTimeout(this._saveTimer);
+    this._saveTimer = null;
+    this._save();
   }
 
   _load() {

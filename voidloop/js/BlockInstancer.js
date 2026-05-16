@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { assetLoader } from './AssetLoader.js';
 import { BLOCK_TYPES, GAME } from './constants.js';
-import { getBlockFaceTileIndex, TILES } from './KenneyAtlas.js';
+import { getBlockFaceTileIndex, TILES } from './TerrainAtlas.js';
 
 const BLOCK_VISUAL_SCALE = 0.5;
 const BLOCK_VISUAL_OFFSET = 0.5;
@@ -33,13 +33,27 @@ export class BlockInstancer {
     this._atlasGeoCache = new Map();
   }
 
+  setAtlasTexture(texture) {
+    this._atlasTexture = texture;
+    if (this._atlasMaterial) {
+      this._atlasMaterial.map = texture;
+      this._atlasMaterial.needsUpdate = true;
+    } else {
+      this._atlasMaterial = new THREE.MeshStandardMaterial({
+        map: this._atlasTexture,
+        roughness: 0.8,
+        metalness: 0.1,
+      });
+    }
+  }
+
   _ensureAtlas() {
     if (this._atlasTexture) return;
-    this._atlasTexture = new THREE.TextureLoader().load('assets/textures/kenney_tiles.png', (tex) => {
+    this._atlasTexture = new THREE.TextureLoader().load('assets/textures/ourcraft_atlas.png', (tex) => {
       tex.magFilter = THREE.NearestFilter;
-      tex.minFilter = THREE.NearestMipmapNearestFilter;
+      tex.minFilter = THREE.LinearFilter;
       tex.colorSpace = THREE.SRGBColorSpace;
-      tex.generateMipmaps = true;
+      tex.generateMipmaps = false;
     });
     this._atlasMaterial = new THREE.MeshStandardMaterial({
       map: this._atlasTexture,
@@ -64,7 +78,9 @@ export class BlockInstancer {
       const rect = TILES[tileIdx] || TILES[sideTileIdx];
       const u = uv.getX(i);
       const v = uv.getY(i);
-      uv.setXY(i, u * rect.w + rect.x, v * rect.h + rect.y);
+      const insetU = u * 0.96875 + 0.015625;
+      const insetV = v * 0.96875 + 0.015625;
+      uv.setXY(i, insetU * rect.w + rect.x, insetV * rect.h + rect.y);
     }
     geo.scale(BLOCK_VISUAL_SCALE, BLOCK_VISUAL_SCALE, BLOCK_VISUAL_SCALE);
     this._atlasGeoCache.set(cacheKey, geo);

@@ -107,6 +107,38 @@ export const BLOCK_TYPES = {
   sand_B: { hp: 1, color: 0xd4a574, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/sand_B.gltf' },
   prototype: { hp: 2, color: 0xcccccc, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/prototype.gltf' },
 
+  // New ourCraft-inspired blocks
+  cobblestone: { hp: 2, color: 0x777777, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone.gltf' },
+  coarse_dirt: { hp: 1, color: 0x8B6914, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/dirt.gltf' },
+  mossy_stone: { hp: 2, color: 0x6a8a5a, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone.gltf' },
+  stone_bricks: { hp: 2, color: 0x777777, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/bricks_A.gltf' },
+  blackstone: { hp: 2, color: 0x2a2a2a, drop: 'stone', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_dark.gltf' },
+  blue_ice: { hp: 1, color: 0x88ccff, drop: 'ice', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/glass.gltf' },
+  gold_ore: { hp: 3, color: 0xffd700, drop: 'gold_nugget', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_gold.gltf' },
+  iron_ore: { hp: 3, color: 0xd4a574, drop: 'metal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_copper.gltf' },
+  diamond_ore: { hp: 4, color: 0x22ccff, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/stone_with_silver.gltf' },
+  red_sand: { hp: 1, color: 0xc4783e, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/sand_B.gltf' },
+
+  // Trees
+  birch_log: { hp: 2, color: 0xc4b8a8, drop: 'wood', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf' },
+  birch_leaves: { hp: 1, color: 0x6a9a4a, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf' },
+  oak_log: { hp: 2, color: 0x8B5a2b, drop: 'wood', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf' },
+  oak_leaves: { hp: 1, color: 0x4a7a2a, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf' },
+  jungle_log: { hp: 2, color: 0x5a4a2b, drop: 'wood', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf' },
+  jungle_leaves: { hp: 1, color: 0x2d5a1a, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf' },
+  acacia_log: { hp: 2, color: 0x9a6a3b, drop: 'wood', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf' },
+  acacia_leaves: { hp: 1, color: 0x6a8a3a, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf' },
+  dark_oak_log: { hp: 2, color: 0x3a2a1b, drop: 'wood', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/wood.gltf' },
+  dark_oak_leaves: { hp: 1, color: 0x2a4a1a, drop: 'dirt', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/tree.gltf' },
+
+  // Decorations (no model = fallback cube)
+  cactus: { hp: 1, color: 0x4a8a3a, drop: 'dirt' },
+  dead_bush: { hp: 1, color: 0x8a7a4a, drop: 'dirt' },
+  mushroom: { hp: 1, color: 0x8a5a3a, drop: 'dirt' },
+  tall_grass: { hp: 1, color: 0x66aa33, drop: 'dirt' },
+  flower_red: { hp: 1, color: 0xff4444, drop: 'dirt' },
+  flower_yellow: { hp: 1, color: 0xffdd44, drop: 'dirt' },
+
   // Legacy floating blocks (kept for backwards compatibility)
   crystal: { hp: 5, color: 0x22ccff, drop: 'crystal', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },
   diamond: { hp: 5, color: 0x00ffff, drop: 'diamond', model: 'KayKit_BlockBits_1.0_FREE/Assets/gltf/decorative_block_blue.gltf' },

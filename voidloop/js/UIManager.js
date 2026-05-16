@@ -26,6 +26,10 @@ export class UIManager {
     this.calibrationSlot = 'rightHand';
     this.vfxPreviewEnabled = false;
     this.selectedElement = DEFAULT_ELEMENT;
+    this._floatingTextCount = 0;
+    this._lastFloatingText = { text: '', at: 0 };
+    this._zoneLetterCards = new Map();
+    this._activeLetterFlyers = 0;
     for (const cat of Object.keys(UPGRADES)) {
       for (const u of UPGRADES[cat]) {
         this.upgradeLevels[u.id] = 0;
@@ -1287,6 +1291,11 @@ export class UIManager {
   }
 
   showFloatingText(text, color = 0xffffff) {
+    const now = performance.now?.() || Date.now();
+    if (this._floatingTextCount >= 8) return;
+    if (this._lastFloatingText.text === text && now - this._lastFloatingText.at < 120) return;
+    this._lastFloatingText = { text, at: now };
+
     const el = document.createElement('div');
     el.className = 'floating-loot';
     el.textContent = text;
@@ -1305,7 +1314,11 @@ export class UIManager {
       el.style.top = '35%';
       el.style.opacity = '0';
     });
-    setTimeout(() => el.remove(), 1000);
+    this._floatingTextCount++;
+    setTimeout(() => {
+      el.remove();
+      this._floatingTextCount = Math.max(0, this._floatingTextCount - 1);
+    }, 1000);
   }
 
   showExitOpen(show) {
@@ -1430,6 +1443,28 @@ export class UIManager {
         <div><strong>Grenades</strong><span>${progression.state.grenade.unlocked ? `${progression.state.grenade.charges}/${progression.getGrenadeChargeCap()} charges` : 'Locked'}</span></div>
         <div><strong>Strike</strong><span>${progression.state.missile.unlocked ? `${progression.state.missile.charges}/2 beacons` : 'Locked'}</span></div>
       `;
+    }
+
+    // Add reset pickaxe button if width > 1
+    let resetBtn = this._progressionOverlay.querySelector('#pickaxe-reset-btn');
+    if (progression.getPickaxeWidth() > 1) {
+      if (!resetBtn) {
+        resetBtn = document.createElement('button');
+        resetBtn.id = 'pickaxe-reset-btn';
+        resetBtn.className = 'pickaxe-reset-btn';
+        resetBtn.textContent = '⛏ Reset Pickaxe';
+        resetBtn.title = 'Reset pickaxe to width 1 and refund all coins spent';
+        const header = this._progressionOverlay.querySelector('.shop-header-actions');
+        if (header) header.appendChild(resetBtn);
+        resetBtn.addEventListener('click', () => {
+          SFXMapper.uiClick();
+          this.game.resetPickaxeUpgrades();
+          this._renderProgressionOverlay();
+        });
+      }
+      resetBtn.style.display = '';
+    } else if (resetBtn) {
+      resetBtn.style.display = 'none';
     }
 
     const content = this._progressionOverlay.querySelector('#progression-content');
@@ -1650,6 +1685,7 @@ export class UIManager {
     this._zoneLetterHudSignature = signature;
 
     this._zoneLetterHud.innerHTML = '';
+    this._zoneLetterCards.clear();
     for (const item of letters) {
       const card = document.createElement('div');
       card.className = [
@@ -1681,15 +1717,23 @@ export class UIManager {
         ? `${item.letter} mastered at level ${item.level}`
         : `${item.letter} level ${item.level}: ${item.xp}/${item.nextXp} XP, quiz ${item.dropsTowardQuiz}/${item.quizThreshold}`;
       this._zoneLetterHud.appendChild(card);
+      this._zoneLetterCards.set(item.letter, card);
     }
   }
 
   animateLetterPickup(letter, worldPosition, zoneId = this.game?.zoneManager?.currentZoneId) {
     const targetLetter = String(letter || '').toUpperCase()[0];
     if (!targetLetter) return 0;
-    this.updateZoneLetterHud(zoneId);
-    const card = this._zoneLetterHud?.querySelector(`.zone-letter-card[data-letter="${targetLetter}"]`);
+    const card = this._zoneLetterCards?.get(targetLetter)
+      || this._zoneLetterHud?.querySelector(`.zone-letter-card[data-letter="${targetLetter}"]`);
     if (!card) return 0;
+
+    if (this.game?.cameraMode === 'thirdPerson' || this._activeLetterFlyers > 0) {
+      card.classList.remove('letter-fill-pop');
+      requestAnimationFrame(() => card.classList.add('letter-fill-pop'));
+      setTimeout(() => card.classList.remove('letter-fill-pop'), 360);
+      return 180;
+    }
 
     const endRect = card.getBoundingClientRect();
     const endX = endRect.left + endRect.width / 2;
@@ -1706,6 +1750,7 @@ export class UIManager {
     flyer.style.left = '0';
     flyer.style.top = '0';
     document.body.appendChild(flyer);
+    this._activeLetterFlyers++;
 
     const duration = 720;
     const animation = flyer.animate([
@@ -1720,7 +1765,9 @@ export class UIManager {
 
     animation.onfinish = () => {
       flyer.remove();
-      const freshCard = this._zoneLetterHud?.querySelector(`.zone-letter-card[data-letter="${targetLetter}"]`);
+      this._activeLetterFlyers = Math.max(0, this._activeLetterFlyers - 1);
+      const freshCard = this._zoneLetterCards?.get(targetLetter)
+        || this._zoneLetterHud?.querySelector(`.zone-letter-card[data-letter="${targetLetter}"]`);
       if (freshCard) {
         freshCard.classList.remove('letter-fill-pop');
         freshCard.offsetHeight;
@@ -1765,8 +1812,9 @@ export class UIManager {
     const timings = ` | ms w:${perfStats.worldMs.toFixed(1)} vis:${perfStats.terrainVisibilityMs.toFixed(1)} cam:${perfStats.cameraCollisionMs.toFixed(1)} ui:${(perfStats.uiMs || 0).toFixed(1)} render:${perfStats.renderMs.toFixed(1)}`;
     const ray = ` | rays ${perfStats.raycasts}/${perfStats.raycastMs.toFixed(1)} recompute ${perfStats.visibilityRecomputed}`;
     const scale = perfStats.renderScale && perfStats.renderScale < 0.99 ? ` | scale ${perfStats.renderScale.toFixed(2)}` : '';
+    const terrainGuard = perfStats.terrainTruncatedSlots ? ` | TRUNC ${perfStats.terrainTruncatedSlots} maxV ${perfStats.terrainMaxUploadedVertices}` : '';
     const live = ` | scene ${perfStats.sceneChildren} geo ${perfStats.geometries} tex ${perfStats.textures} fx ${perfStats.shaderEffects} dom ${perfStats.flyers} audio ${perfStats.audioBuffers}/${perfStats.audioLoading}`;
-    this.elFps.textContent = `${fps} FPS | calls ${perfStats.calls} | tris ${perfStats.triangles} | terrain ${perfStats.visibleChunks}/${perfStats.liveChunks} | dirty ${perfStats.dirtyChunks} cells ${perfStats.modifiedCells} | rebuild ${perfStats.terrainRebuildMs.toFixed(1)}ms${timings}${ray}${scale}${live}`;
+    this.elFps.textContent = `${fps} FPS | calls ${perfStats.calls} | tris ${perfStats.triangles} | terrain ${perfStats.visibleChunks}/${perfStats.liveChunks} | dirty ${perfStats.dirtyChunks} cells ${perfStats.modifiedCells} | rebuild ${perfStats.terrainRebuildMs.toFixed(1)}ms${timings}${ray}${scale}${terrainGuard}${live}`;
   }
 
   // ===== Pet Den UI =====

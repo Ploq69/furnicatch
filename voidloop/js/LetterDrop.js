@@ -21,6 +21,7 @@ export class LetterDrop {
     this.scene = scene;
     this.drops = [];
     this.preloaded = false;
+    this._tmpDir = new THREE.Vector3();
   }
 
   async preload() {
@@ -88,7 +89,10 @@ export class LetterDrop {
       // Spin
       d.mesh.rotation.y += d.spinSpeed * dt;
 
-      const dist = playerPos.distanceTo(d.mesh.position);
+      const dx = playerPos.x - d.mesh.position.x;
+      const dy = playerPos.y - d.mesh.position.y;
+      const dz = playerPos.z - d.mesh.position.z;
+      const distSq = dx * dx + dy * dy + dz * dz;
 
       if (d.state === 'bounce') {
         d.velocity.y += GRAVITY * dt;
@@ -107,7 +111,7 @@ export class LetterDrop {
           d.velocity.set(0, 0, 0);
         }
 
-        if (dist < MAGNET_RANGE * 0.5 && d.stateTime > 0.1) {
+        if (distSq < MAGNET_RANGE * MAGNET_RANGE * 0.25 && d.stateTime > 0.1) {
           d.state = 'hover';
         }
       }
@@ -116,15 +120,16 @@ export class LetterDrop {
         d.bobPhase += dt * 3;
         d.mesh.position.y = d.groundY + 0.1 + Math.sin(d.bobPhase) * 0.1;
 
-        if (dist < MAGNET_RANGE) {
-          const dir = new THREE.Vector3().subVectors(playerPos, d.mesh.position).normalize();
+        if (distSq < MAGNET_RANGE * MAGNET_RANGE) {
+          const dist = Math.sqrt(distSq);
+          const dir = this._tmpDir.set(dx, dy, dz).multiplyScalar(dist > 0.0001 ? 1 / dist : 0);
           const speed = Math.min(MAGNET_MAX_SPEED, MAGNET_ACCEL * (MAGNET_RANGE - dist));
           d.mesh.position.addScaledVector(dir, speed * dt);
         }
       }
 
       // Collect
-      if (dist < COLLECT_DIST) {
+      if (distSq < COLLECT_DIST * COLLECT_DIST) {
         collected = {
           letter: d.letter,
           position: d.mesh.position.clone(),

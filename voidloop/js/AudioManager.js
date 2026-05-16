@@ -54,6 +54,14 @@ class AudioManager {
     }
   }
 
+  preloadPaths(paths = []) {
+    if (!this.initialized) this.init();
+    for (const path of paths) {
+      if (!path || this.buffers.has(path) || this.loading.has(path)) continue;
+      this.loadBuffer(path);
+    }
+  }
+
   playPath(path, opts = {}) {
     if (!this.initialized) this.init();
     const buf = this.buffers.get(path);

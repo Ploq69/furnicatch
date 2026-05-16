@@ -10,6 +10,7 @@ import { SeededRNG } from './SeededRNG.js';
 import { BlockInstancer } from './BlockInstancer.js';
 import { OccupancyGrid } from './OccupancyGrid.js';
 import { TerrainMesh } from './TerrainMesh.js';
+import { StructureGenerator } from './StructureGenerator.js';
 
 // Biome-specific floating block types for procedural generation
 const FLOAT_BLOCK_TYPES = {
@@ -23,9 +24,9 @@ const FLOAT_BLOCK_TYPES = {
 const ISO_UNDERGROUND_CUTAWAY = {
   DEPTH_START: 0.8,
   DEPTH_FULL: 7.0,
-  RADIUS_BOOST: 4.25,
-  REACH_BOOST: 6.0,
-  HEIGHT_BOOST: 1.15,
+  RADIUS_BOOST: 2.4,
+  REACH_BOOST: 4.5,
+  HEIGHT_BOOST: 0.65,
 };
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -49,6 +50,7 @@ export class World {
     this.instancer = new BlockInstancer(scene);
     this.occupancyGrid = new OccupancyGrid();
     this.terrainMesh = new TerrainMesh(scene, renderer);
+    this.structureGenerator = new StructureGenerator(this.terrainMesh);
     this.floatingBlocks = new Set();
     this.hiddenLetterNodes = [];
     this._cutawayActive = false;
@@ -82,7 +84,9 @@ export class World {
     const allTypes = [...new Set([...types, 'stone', 'stone_dark'])];
     await this.instancer.preloadTypes([...new Set([...allTypes, 'stone_dark'])]);
     await this.terrainMesh.preloadTypes(allTypes);
+    this.instancer.setAtlasTexture(this.terrainMesh.getAtlasTexture());
     this.terrainMesh.addZone(zone, seed || 1);
+    this.structureGenerator.generateForZone(zone, seed || 1);
     this._generateHiddenLetters(zone, rng);
 
     const gridW = b.maxX - b.minX;
@@ -634,6 +638,10 @@ export class World {
   }
 
   getTerrainDepthAtPlayer(position) {
+    const terrainTop = this.terrainMesh?.getColumnTop?.(position.x, position.z, 10);
+    if (Number.isFinite(terrainTop) && terrainTop > -999) {
+      return Math.max(0, terrainTop - position.y - 0.75);
+    }
     return Math.max(0, 1 - position.y);
   }
 
@@ -774,6 +782,55 @@ export class World {
     };
   }
 
+  mineTerrainBrushes(brushes, options = {}) {
+    if (!this.terrainMesh) {
+      return { meaningful: false, removedVolume: 0, removedCells: 0, brushResults: [] };
+    }
+
+    const normalized = (brushes || []).map((brush) => ({
+      center: brush.center || new THREE.Vector3(brush.x, brush.y, brush.z),
+      radius: brush.radius || options.radius || 0.9,
+      strength: brush.strength || 1,
+      zoneId: brush.zoneId || options.zoneId || null,
+      type: brush.type || options.type || 'dirt',
+    }));
+    const result = this.terrainMesh.applyDigBrushes(normalized, options.zoneId || null);
+    const revealedByBrush = this._revealHiddenLettersForBrushes(result.brushes, result.zoneId);
+    const brushResults = result.brushes.map((brush) => {
+      const center = brush.center.clone ? brush.center.clone() : new THREE.Vector3(brush.center.x, brush.center.y, brush.center.z);
+      const revealedLetters = revealedByBrush.get(brush) || [];
+      return {
+        destroyed: brush.meaningful,
+        meaningful: brush.meaningful,
+        removedVolume: brush.removedVolume,
+        removedCells: brush.removedCells,
+        depth: Math.max(0, 2 - center.y),
+        radius: brush.radius,
+        center,
+        zoneId: brush.zoneId || result.zoneId,
+        revealedLetters,
+        drop: null,
+        cell: {
+          type: brush.type || options.type || 'dirt',
+          zoneId: brush.zoneId || result.zoneId,
+          destroyed: brush.meaningful,
+        },
+      };
+    });
+
+    return {
+      ...result,
+      revealedLetters: brushResults.flatMap(r => r.revealedLetters),
+      brushResults,
+      drop: null,
+      cell: {
+        type: options.type || 'dirt',
+        zoneId: result.zoneId,
+        destroyed: result.meaningful,
+      },
+    };
+  }
+
   explodeTerrain(center, options = {}) {
     if (!this.terrainMesh) {
       return { meaningful: false, removedVolume: 0, removedCells: 0, revealedLetters: [], zoneId: null, center, radius: 0 };
@@ -812,9 +869,35 @@ export class World {
     return revealed;
   }
 
+  _revealHiddenLettersForBrushes(brushes, fallbackZoneId) {
+    const active = (brushes || []).filter(brush => brush?.meaningful && (brush.zoneId || fallbackZoneId));
+    const revealedByBrush = new Map();
+    if (!active.length) return revealedByBrush;
+
+    for (const node of this.hiddenLetterNodes) {
+      if (node.revealed) continue;
+      for (const brush of active) {
+        const zoneId = brush.zoneId || fallbackZoneId;
+        if (node.zoneId !== zoneId) continue;
+        const center = brush.center;
+        const dx = center.x - node.position.x;
+        const dy = center.y - node.position.y;
+        const dz = center.z - node.position.z;
+        const reach = brush.radius + node.radius;
+        if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
+
+        node.revealed = true;
+        if (!revealedByBrush.has(brush)) revealedByBrush.set(brush, []);
+        revealedByBrush.get(brush).push(node);
+        break;
+      }
+    }
+    return revealedByBrush;
+  }
+
   update(dt, playerPos, particles, audio, player, options = {}) {
     const playerDepth = this.getTerrainDepthAtPlayer(playerPos);
-    const allowCutaway = options.cameraMode !== 'thirdPerson';
+    const allowCutaway = options.cameraMode === 'iso';
     if (allowCutaway) {
       if (!this._cutawayActive && playerDepth > 1.2) this._cutawayActive = true;
       if (this._cutawayActive && playerDepth < 0.6) this._cutawayActive = false;
@@ -830,9 +913,9 @@ export class World {
     const isoUndergroundT = allowCutaway
       ? clamp01((playerDepth - ISO_UNDERGROUND_CUTAWAY.DEPTH_START) / (ISO_UNDERGROUND_CUTAWAY.DEPTH_FULL - ISO_UNDERGROUND_CUTAWAY.DEPTH_START))
       : 0;
-    const cutawayRadius = Math.min(22, 7.5 + playerDepth * 0.34 + ISO_UNDERGROUND_CUTAWAY.RADIUS_BOOST * isoUndergroundT);
-    const cutawayReach = Math.min(34, 4 + playerDepth * 1.2 + ISO_UNDERGROUND_CUTAWAY.REACH_BOOST * isoUndergroundT);
-    const cutawayHeight = playerPos.y + 2.25 + ISO_UNDERGROUND_CUTAWAY.HEIGHT_BOOST * isoUndergroundT;
+    const cutawayRadius = Math.min(12.5, 5.8 + playerDepth * 0.22 + ISO_UNDERGROUND_CUTAWAY.RADIUS_BOOST * isoUndergroundT);
+    const cutawayReach = Math.min(18, 4.5 + playerDepth * 0.55 + ISO_UNDERGROUND_CUTAWAY.REACH_BOOST * isoUndergroundT);
+    const cutawayHeight = playerPos.y + 2.15 + ISO_UNDERGROUND_CUTAWAY.HEIGHT_BOOST * isoUndergroundT;
     this.terrainMesh.setCutaway(playerPos, this._cutawayAmount, cutawayRadius, cutawayHeight, {
       forward: { x: Math.SQRT1_2, z: Math.SQRT1_2 },
       reach: cutawayReach,

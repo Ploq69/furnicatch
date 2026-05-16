@@ -79,7 +79,7 @@ uniform float cutawayReach;
 uniform float cutawayCeilingY;
 uniform float cutawayAmount;
 uniform sampler2D tileAtlas;
-uniform vec4 atlasRects[96];
+uniform vec4 atlasRects[256];
 uniform vec3 uCameraPosition;
 uniform float fogEnabled;
 uniform vec3 fogColor;
@@ -96,18 +96,26 @@ in vec3 vWorldPos;
 
 out vec4 fragColor;
 
-vec3 getBaseColor(float tileIndex, vec2 uv) {
+vec4 sampleAtlas(float tileIndex, vec2 uv) {
   int idx = int(floor(tileIndex + 0.5));
   vec4 r = atlasRects[idx];
   vec2 localUv = fract(uv);
-  return texture(tileAtlas, localUv * r.zw + r.xy).rgb;
+  localUv = localUv * 0.96875 + vec2(0.015625);
+  vec2 atlasUv = localUv * r.zw + r.xy;
+  vec2 dx = dFdx(uv) * r.zw * 0.96875;
+  vec2 dy = dFdy(uv) * r.zw * 0.96875;
+  return textureGrad(tileAtlas, atlasUv, dx, dy);
 }
 
 void main() {
   int materialId = int(floor(vMaterialId + 0.5));
-  bool transparentMaterial = materialId == 4 || materialId == 7 || materialId == 9;
-  if (passMode == 0 && transparentMaterial) discard;
-  if (passMode == 1 && !transparentMaterial) discard;
+  bool blendedMaterial = materialId == 4 || materialId == 7 || materialId == 9;
+  bool cutoutMaterial =
+    materialId == 19 || materialId == 21 || materialId == 23 || materialId == 25 || materialId == 27 ||
+    materialId == 28 || materialId == 29 || materialId == 30 || materialId == 41 ||
+    materialId == 42 || materialId == 43;
+  if (passMode == 0 && blendedMaterial) discard;
+  if (passMode == 1 && !blendedMaterial) discard;
 
   vec2 sampleUv = vUv;
   if (materialId == 9) {
@@ -117,7 +125,9 @@ void main() {
   } else if (materialId == 4) {
     sampleUv += vec2(sin(time * 1.4 + vWorldPos.z * 0.8), cos(time * 1.1 + vWorldPos.x * 0.6)) * 0.018;
   }
-  vec3 color = getBaseColor(vTileIndex, sampleUv);
+  vec4 texel = sampleAtlas(vTileIndex, sampleUv);
+  if (cutoutMaterial && texel.a < 0.45) discard;
+  vec3 color = texel.rgb;
 
   vec2 toPoint = vWorldPos.xz - cutawayCenter.xz;
   float corridorT = clamp(dot(toPoint, normalize(cutawayForward)), 0.0, cutawayReach);
@@ -129,9 +139,6 @@ void main() {
   float heightMask = smoothstep(cutawayCeilingY - 0.10, cutawayCeilingY + 0.30, vWorldPos.y);
   float cutMask = clamp(radialMask * heightMask * cutawayAmount, 0.0, 1.0);
   if (cutMask > 0.42) discard;
-
-  float fogT = smoothstep(fogNear, fogFar, distance(uCameraPosition, vWorldPos)) * fogEnabled;
-  color = mix(color, fogColor, fogT);
 
   float alpha = 1.0;
   if (materialId == 9) {
@@ -150,7 +157,12 @@ void main() {
   } else if (materialId == 4) {
     alpha = 0.92;
     color *= 1.25 + 0.08 * sin(time * 4.0 + vWorldPos.x * 0.7 + vWorldPos.z * 0.5);
+  } else if (materialId == 19 || materialId == 21 || materialId == 23 || materialId == 25 || materialId == 27) {
+    color = mix(color, vec3(0.4, 0.6, 0.25), 0.12);
   }
+
+  float fogT = smoothstep(fogNear, fogFar, distance(uCameraPosition, vWorldPos)) * fogEnabled;
+  color = mix(color, fogColor, fogT);
 
   fragColor = vec4(color, alpha);
 }
@@ -236,6 +248,7 @@ export class UnifiedTerrainRenderer {
         vertexOffset: i * this.slotVertices,
         vertexCount: 0,
         hasTransparent: false,
+        truncated: false,
         lastUsed: 0,
       });
     }
@@ -318,6 +331,8 @@ export class UnifiedTerrainRenderer {
       drawCalls: 0,
       visibleChunks: 0,
       slotUtilization: 0,
+      truncatedSlots: 0,
+      maxUploadedVertices: 0,
     };
   }
 
@@ -376,6 +391,7 @@ export class UnifiedTerrainRenderer {
     slot.cx = slot.cy = slot.cz = 0;
     slot.vertexCount = 0;
     slot.hasTransparent = false;
+    slot.truncated = false;
     this.freeSlots.push(slotIndex);
   }
 
@@ -388,6 +404,8 @@ export class UnifiedTerrainRenderer {
     }
     slot.vertexCount = Math.min(vertCount, this.slotVertices);
     slot.hasTransparent = false;
+    slot.truncated = vertCount > this.slotVertices;
+    this.stats.maxUploadedVertices = Math.max(this.stats.maxUploadedVertices || 0, vertCount);
     for (let i = 0; i < slot.vertexCount; i++) {
       const materialId = Math.round(data[i * VERTEX_STRIDE_FLOATS + 11]);
       if (materialId === 4 || materialId === 7 || materialId === 9) {
@@ -440,6 +458,7 @@ export class UnifiedTerrainRenderer {
       this.slots[i].state = SLOT_FREE;
       this.slots[i].vertexCount = 0;
       this.slots[i].hasTransparent = false;
+      this.slots[i].truncated = false;
       this.slots[i].cx = this.slots[i].cy = this.slots[i].cz = 0;
       this.freeSlots.push(i);
     }
@@ -453,11 +472,10 @@ export class UnifiedTerrainRenderer {
   /** Set atlas rects uniform array. */
   setAtlasRects(rects) {
     // rects is array of THREE.Vector4 or plain {x,y,z,w}
-    // Flatten to Float32Array[96*4]
     if (!this._atlasRectsArray) {
-      this._atlasRectsArray = new Float32Array(96 * 4);
+      this._atlasRectsArray = new Float32Array(256 * 4);
     }
-    for (let i = 0; i < Math.min(rects.length, 96); i++) {
+    for (let i = 0; i < Math.min(rects.length, 256); i++) {
       const r = rects[i];
       this._atlasRectsArray[i * 4 + 0] = r.x;
       this._atlasRectsArray[i * 4 + 1] = r.y;
@@ -565,6 +583,7 @@ export class UnifiedTerrainRenderer {
       transparentDrawCount++;
     }
     this.stats.slotUtilization = this.chunkKeyToSlot.size;
+    this.stats.truncatedSlots = this.slots.reduce((sum, slot) => sum + (slot.truncated ? 1 : 0), 0);
 
     if (drawCount === 0) {
       this.stats.drawCalls = 0;

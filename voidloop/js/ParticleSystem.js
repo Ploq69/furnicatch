@@ -47,6 +47,8 @@ class ParticleSystem {
     this.scene = scene;
     this.particles = [];
     this.maxParticles = 256;
+    this._poolCursor = 0;
+    this._tmpLook = new THREE.Vector3();
     this.geometry = new THREE.PlaneGeometry(0.3, 0.3);
     // Pool of reusable meshes
     this.pool = [];
@@ -93,7 +95,7 @@ class ParticleSystem {
     const tex = texture && this.textures.has(texture) ? this.textures.get(texture) : null;
 
     for (let i = 0; i < count; i++) {
-      const p = this.pool.find(p => p.life <= 0);
+      const p = this._nextFreeParticle();
       if (!p) break;
       p.mesh.position.copy(pos);
       p.mesh.position.x += (Math.random() - 0.5) * 0.5;
@@ -117,7 +119,7 @@ class ParticleSystem {
       p.mat.opacity = 1;
       p.mesh.scale.setScalar(size);
       p.mesh.visible = true;
-      p.mesh.lookAt(p.mesh.position.clone().add(p.vel));
+      p.mesh.lookAt(this._tmpLook.copy(p.mesh.position).add(p.vel));
       this.particles.push(p);
     }
   }
@@ -126,7 +128,7 @@ class ParticleSystem {
     const tex = this.textures.has('flame') ? this.textures.get('flame') : null;
     const tex2 = this.textures.has('spark') ? this.textures.get('spark') : null;
     for (let i = 0; i < count; i++) {
-      const p = this.pool.find(p => p.life <= 0);
+      const p = this._nextFreeParticle();
       if (!p) break;
       p.mesh.position.copy(pos);
       p.mesh.position.x += (Math.random() - 0.5) * 0.25;
@@ -155,6 +157,17 @@ class ParticleSystem {
       p.mesh.visible = true;
       this.particles.push(p);
     }
+  }
+
+  _nextFreeParticle() {
+    for (let i = 0; i < this.pool.length; i++) {
+      const index = (this._poolCursor + i) % this.pool.length;
+      const particle = this.pool[index];
+      if (particle.life > 0) continue;
+      this._poolCursor = (index + 1) % this.pool.length;
+      return particle;
+    }
+    return null;
   }
 
   burst(pos, color, count = 12) {
