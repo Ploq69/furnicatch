@@ -788,6 +788,10 @@ export class Game {
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.08, 0));
       this.particles.dust(pos, 5);
       this.particles.spark(pos, this.player.jumpsRemaining === 0 ? 4 : 2);
+      if (this.player.wallJumpedThisFrame) {
+        this.particles.spark(pos, 10);
+        this._screenShake(0.7, 0.22);
+      }
     }
     if (this.player.landedThisFrame) {
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.04, 0));
@@ -801,6 +805,16 @@ export class Game {
       const rightBoot = this.player.position.clone().add(new THREE.Vector3(forward.z * 0.2, 0.15, -forward.x * 0.2)).sub(forward.clone().multiplyScalar(0.25));
       this.particles.spawnRocketTrail(leftBoot, forward, 3);
       this.particles.spawnRocketTrail(rightBoot, forward, 3);
+    }
+
+    // Wall-slide VFX
+    if (this.player.isWallSliding) {
+      const pos = this.player.position.clone().add(new THREE.Vector3(
+        this.player.wallSlideNormalX * 0.25,
+        0.4 + Math.random() * 0.4,
+        this.player.wallSlideNormalZ * 0.25
+      ));
+      this.particles.dust(pos, 1);
     }
 
     // Update remote player animation
@@ -1553,8 +1567,18 @@ export class Game {
     }
 
     rig.distance = tune.distance;
-    if (Math.abs(this.thirdPersonCamera.fov - tune.fov) > 0.01) {
-      this.thirdPersonCamera.fov = tune.fov;
+
+    // Dynamic FOV based on jet speed / rocket boot activity
+    let targetFov = tune.fov;
+    const jetSpeed = this.player.jetVelocity ? Math.sqrt(this.player.jetVelocity.x ** 2 + this.player.jetVelocity.y ** 2) : 0;
+    if (this.player.rocketBootsActive) {
+      targetFov = tune.fov + 5 + Math.min(6, jetSpeed * 1.2);
+    } else if (jetSpeed > 2.5) {
+      targetFov = tune.fov + Math.min(4, (jetSpeed - 2.5) * 0.8);
+    }
+    const fovT = smoothFactor(dt, 0.1);
+    this.thirdPersonCamera.fov += (targetFov - this.thirdPersonCamera.fov) * fovT;
+    if (Math.abs(this.thirdPersonCamera.fov - tune.fov) > 0.01 || this.player.rocketBootsActive) {
       this.thirdPersonCamera.updateProjectionMatrix();
     }
 

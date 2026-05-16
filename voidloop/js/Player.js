@@ -129,6 +129,11 @@ export class Player {
     this.surfaceType = null;
     this.surfaceFriction = 8;
     this.slideVelocity = new THREE.Vector2();
+    this.jetVelocity = new THREE.Vector2();
+    this.isWallSliding = false;
+    this.wallSlideNormalX = 0;
+    this.wallSlideNormalZ = 0;
+    this.wallJumpedThisFrame = false;
 
     this.mesh = null;
     this.mixer = null;
@@ -152,6 +157,7 @@ export class Player {
     this.jumpSquashTimer = 0;
     this.landedThisFrame = false;
     this.jumpStartedThisFrame = false;
+    this.wallJumpedThisFrame = false;
 
     this.weapons = [
       new Weapon('pickaxe'),
@@ -551,9 +557,44 @@ export class Player {
       this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
     }
 
+    // Wall-slide detection (before jump execution so wall-jump can fire on first contact)
+    this.isWallSliding = false;
+    if (!this.isGrounded && !this.isSwimming && !this.rocketBootsActive) {
+      let wsDx = 0, wsDz = 0;
+      if (this.controlYaw != null) {
+        let fm = 0, sm = 0;
+        if (input.isDown('ArrowUp') || input.isDown('KeyW')) fm += 1;
+        if (input.isDown('ArrowDown') || input.isDown('KeyS')) fm -= 1;
+        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) sm -= 1;
+        if (input.isDown('ArrowRight') || input.isDown('KeyD')) sm += 1;
+        wsDx = Math.sin(this.controlYaw) * fm - Math.cos(this.controlYaw) * sm;
+        wsDz = Math.cos(this.controlYaw) * fm + Math.sin(this.controlYaw) * sm;
+      } else {
+        if (input.isDown('ArrowUp') || input.isDown('KeyW')) wsDz -= 1;
+        if (input.isDown('ArrowDown') || input.isDown('KeyS')) wsDz += 1;
+        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) wsDx -= 1;
+        if (input.isDown('ArrowRight') || input.isDown('KeyD')) wsDx += 1;
+      }
+      if (wsDx !== 0 || wsDz !== 0) {
+        const len = Math.sqrt(wsDx * wsDx + wsDz * wsDz);
+        if (len > 1) { wsDx /= len; wsDz /= len; }
+      }
+      if ((wsDx !== 0 || wsDz !== 0) && this.velocity.y <= 1.5) {
+        const probeX = this.position.x + wsDx * 0.38;
+        const probeZ = this.position.z + wsDz * 0.38;
+        if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(probeX, this.position.y, probeZ)) {
+          this.isWallSliding = true;
+          this.wallSlideNormalX = -wsDx;
+          this.wallSlideNormalZ = -wsDz;
+        }
+      }
+    }
+
     if (!this.isSwimming && this.jumpBufferTimer > 0) {
       if (this.isGrounded || this.coyoteTimer > 0) {
         this._startJump(GAME.JUMP_FORCE, false);
+      } else if (this.isWallSliding) {
+        this._wallJump();
       } else if (this.jumpsRemaining > 0) {
         this._startJump(GAME.DOUBLE_JUMP_FORCE, true);
       }
@@ -561,12 +602,21 @@ export class Player {
 
     // Rocket boots logic
     const hasRocketBoots = this.equippedBoots === 'rocket_boots';
+    let wantsHover = false;
     if (this.isGrounded) {
       this.rocketBootsFuel = this.rocketBootsMaxFuel;
       this.rocketBootsActive = false;
-    } else if (hasRocketBoots && this.jumpHeld && this.rocketBootsFuel > 0 && !this.isSwimming) {
-      this.rocketBootsActive = true;
-      this.rocketBootsFuel -= this.rocketBootsBurnRate * dt;
+    } else if (hasRocketBoots && !this.isSwimming) {
+      wantsHover = input.isDown('ShiftLeft') && this.rocketBootsFuel > 0;
+      if (wantsHover) {
+        this.rocketBootsActive = true;
+        this.rocketBootsFuel -= GAME.ROCKET_BOOTS_HOVER_DRAIN * dt;
+      } else if (this.jumpHeld && this.rocketBootsFuel > 0) {
+        this.rocketBootsActive = true;
+        this.rocketBootsFuel -= this.rocketBootsBurnRate * dt;
+      } else {
+        this.rocketBootsActive = false;
+      }
       if (this.rocketBootsFuel < 0) this.rocketBootsFuel = 0;
     } else {
       this.rocketBootsActive = false;
@@ -574,14 +624,65 @@ export class Player {
 
     let gravityMultiplier = 1;
     if (this.rocketBootsActive) {
-      gravityMultiplier = 0;
-      this.velocity.y = this.rocketBootsThrust;
+      if (wantsHover) {
+        gravityMultiplier = GAME.ROCKET_BOOTS_HOVER_GRAVITY;
+        // Dampen vertical velocity for hover stability
+        this.velocity.y *= Math.max(0, 1 - 4 * dt);
+      } else {
+        gravityMultiplier = 0;
+        // Additive vertical thrust with cap
+        this.velocity.y += this.rocketBootsThrust * 2.5 * dt;
+        const maxVY = GAME.ROCKET_BOOTS_MAX_VERT_SPEED;
+        if (this.velocity.y > maxVY) this.velocity.y = maxVY;
+      }
+    } else if (this.isWallSliding) {
+      gravityMultiplier = GAME.WALL_SLIDE_GRAVITY_MULT;
     } else if (this.velocity.y < -0.01) {
       gravityMultiplier = GAME.FALL_MULTIPLIER;
     } else if (this.velocity.y > 0.01 && !this.jumpHeld) {
       gravityMultiplier = GAME.JUMP_CUT_MULTIPLIER;
     } else if (Math.abs(this.velocity.y) < 1.1 && this.jumpHeld) {
       gravityMultiplier = GAME.JUMP_PEAK_GRAVITY_MULTIPLIER;
+    }
+
+    // Jetpack horizontal physics
+    if (!this.isGrounded && !this.isSwimming && hasRocketBoots) {
+      let jetDx = 0, jetDz = 0;
+      if (this.controlYaw != null) {
+        let fm = 0, sm = 0;
+        if (input.isDown('ArrowUp') || input.isDown('KeyW')) fm += 1;
+        if (input.isDown('ArrowDown') || input.isDown('KeyS')) fm -= 1;
+        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) sm -= 1;
+        if (input.isDown('ArrowRight') || input.isDown('KeyD')) sm += 1;
+        jetDx = Math.sin(this.controlYaw) * fm - Math.cos(this.controlYaw) * sm;
+        jetDz = Math.cos(this.controlYaw) * fm + Math.sin(this.controlYaw) * sm;
+      } else {
+        if (input.isDown('ArrowUp') || input.isDown('KeyW')) jetDz -= 1;
+        if (input.isDown('ArrowDown') || input.isDown('KeyS')) jetDz += 1;
+        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) jetDx -= 1;
+        if (input.isDown('ArrowRight') || input.isDown('KeyD')) jetDx += 1;
+      }
+      if (jetDx !== 0 || jetDz !== 0) {
+        const len = Math.sqrt(jetDx * jetDx + jetDz * jetDz);
+        if (len > 1) { jetDx /= len; jetDz /= len; }
+      }
+      if (this.rocketBootsActive && (jetDx !== 0 || jetDz !== 0)) {
+        this.jetVelocity.x += jetDx * GAME.ROCKET_BOOTS_HORIZ_THRUST * dt;
+        this.jetVelocity.y += jetDz * GAME.ROCKET_BOOTS_HORIZ_THRUST * dt;
+      }
+      // Air drag
+      const drag = Math.exp(-GAME.ROCKET_BOOTS_AIR_DRAG * dt);
+      this.jetVelocity.multiplyScalar(drag);
+      // Cap horizontal jet speed
+      const maxJetSpeed = GAME.PLAYER_SPRINT_SPEED * 1.4;
+      const jetSpeed = Math.sqrt(this.jetVelocity.x * this.jetVelocity.x + this.jetVelocity.y * this.jetVelocity.y);
+      if (jetSpeed > maxJetSpeed) {
+        const s = maxJetSpeed / jetSpeed;
+        this.jetVelocity.x *= s;
+        this.jetVelocity.y *= s;
+      }
+    } else {
+      this.jetVelocity.set(0, 0);
     }
 
     // SDF terrain owns vertical collision, but only against local floor under the feet.
@@ -698,33 +799,49 @@ export class Player {
       this.dodge(dx, dz);
     }
 
-    const baseSpeed = input.isDown('ShiftLeft') && this.stamina > 0
-      ? GAME.PLAYER_SPRINT_SPEED
-      : GAME.PLAYER_SPEED;
-    const swimMultiplier = this.isSwimming ? 0.62 : 1;
-    const speed = baseSpeed * this.hazardSpeedMultiplier * swimMultiplier;
+    const useJetMovement = !this.isGrounded && !this.isSwimming && hasRocketBoots && (this.rocketBootsActive || this.jetVelocity.lengthSq() > 0.01);
 
-    if (input.isDown('ShiftLeft')) {
-      this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
-    }
+    let moveX = 0;
+    let moveZ = 0;
 
-    let moveX = dx * speed * dt;
-    let moveZ = dz * speed * dt;
-    const slippery = !this.isSwimming && this.isGrounded && this.surfaceFriction <= 1.5;
-    if (slippery) {
-      const targetVX = dx * speed;
-      const targetVZ = dz * speed;
-      const inputAccel = dx !== 0 || dz !== 0 ? 4.5 : 0.0;
-      const accelT = Math.min(1, inputAccel * dt);
-      this.slideVelocity.x += (targetVX - this.slideVelocity.x) * accelT;
-      this.slideVelocity.y += (targetVZ - this.slideVelocity.y) * accelT;
-      const damping = Math.exp(-this.surfaceFriction * 0.45 * dt);
-      this.slideVelocity.multiplyScalar(damping);
-      moveX = this.slideVelocity.x * dt;
-      moveZ = this.slideVelocity.y * dt;
+    if (useJetMovement) {
+      moveX = this.jetVelocity.x * dt;
+      moveZ = this.jetVelocity.y * dt;
+      // Add air control for responsiveness
+      if (dx !== 0 || dz !== 0) {
+        const airControl = GAME.PLAYER_SPEED * 0.35;
+        moveX += dx * airControl * dt;
+        moveZ += dz * airControl * dt;
+      }
     } else {
-      this.slideVelocity.set(dx * speed, dz * speed);
-      if (!this.isGrounded || this.isSwimming) this.slideVelocity.multiplyScalar(0);
+      const baseSpeed = input.isDown('ShiftLeft') && this.stamina > 0
+        ? GAME.PLAYER_SPRINT_SPEED
+        : GAME.PLAYER_SPEED;
+      const swimMultiplier = this.isSwimming ? 0.62 : 1;
+      const speed = baseSpeed * this.hazardSpeedMultiplier * swimMultiplier;
+
+      if (input.isDown('ShiftLeft')) {
+        this.stamina = Math.max(0, this.stamina - GAME.SPRINT_DRAIN * dt);
+      }
+
+      moveX = dx * speed * dt;
+      moveZ = dz * speed * dt;
+      const slippery = !this.isSwimming && this.isGrounded && this.surfaceFriction <= 1.5;
+      if (slippery) {
+        const targetVX = dx * speed;
+        const targetVZ = dz * speed;
+        const inputAccel = dx !== 0 || dz !== 0 ? 4.5 : 0.0;
+        const accelT = Math.min(1, inputAccel * dt);
+        this.slideVelocity.x += (targetVX - this.slideVelocity.x) * accelT;
+        this.slideVelocity.y += (targetVZ - this.slideVelocity.y) * accelT;
+        const damping = Math.exp(-this.surfaceFriction * 0.45 * dt);
+        this.slideVelocity.multiplyScalar(damping);
+        moveX = this.slideVelocity.x * dt;
+        moveZ = this.slideVelocity.y * dt;
+      } else {
+        this.slideVelocity.set(dx * speed, dz * speed);
+        if (!this.isGrounded || this.isSwimming) this.slideVelocity.multiplyScalar(0);
+      }
     }
     if (moveX !== 0) {
       const oldX = this.position.x;
@@ -786,6 +903,21 @@ export class Player {
     this.jumpSquashTimer = isDoubleJump ? 0.18 : 0.12;
     this.jumpStartedThisFrame = true;
     this.playAnim('Jump', { lock: 0.18, loop: false, timeScale: isDoubleJump ? 1.25 : 1.05 });
+  }
+
+  _wallJump() {
+    this.velocity.y = GAME.WALL_JUMP_FORCE;
+    const push = GAME.WALL_JUMP_PUSH;
+    this.jetVelocity.x = this.wallSlideNormalX * push;
+    this.jetVelocity.y = this.wallSlideNormalZ * push;
+    this.isWallSliding = false;
+    this.jumpsRemaining = 1;
+    this.jumpBufferTimer = 0;
+    this.coyoteTimer = 0;
+    this.jumpStartedThisFrame = true;
+    this.wallJumpedThisFrame = true;
+    this.jumpSquashTimer = 0.14;
+    this.playAnim('Jump', { lock: 0.18, loop: false, timeScale: 1.1 });
   }
 
   setFluidState(fluid) {
