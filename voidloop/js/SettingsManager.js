@@ -14,6 +14,10 @@ const DEFAULTS = {
   graphicsQuality: 'high', // 'low', 'medium', 'high'
   shadowQuality: 'medium', // 'low', 'medium', 'high', 'ultra'
   playerName: 'Player',
+  gamepadEnabled: true,
+  gamepadLookSensitivity: 1.0,
+  gamepadDeadZone: 0.12,
+  gamepadVibration: true,
 };
 
 export class SettingsManager {

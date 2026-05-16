@@ -8,6 +8,8 @@ import { assetLoader } from './AssetLoader.js';
 import { LobbyManager } from './LobbyManager.js';
 import { Game } from './Game.js';
 import { settings } from './SettingsManager.js';
+import { ZoneManager } from './ZoneManager.js';
+import { ZONES } from './ZoneData.js';
 
 export class MainMenu {
   constructor(container) {
@@ -215,8 +217,75 @@ export class MainMenu {
   // ── Button Handlers ──
   _onSolo() {
     if (this._hasStarted) return;
-    this._hasStarted = true;
-    this._transitionToGame(false);
+    this._showZoneSelect();
+  }
+
+  _showZoneSelect() {
+    const zoneManager = new ZoneManager();
+    const zones = zoneManager.getAllZones();
+    const overlay = document.getElementById('zone-select-overlay');
+    const grid = document.getElementById('zone-select-grid');
+    const backBtn = document.getElementById('zone-select-back');
+    if (!overlay || !grid) return;
+
+    grid.innerHTML = '';
+    const zoneColors = {
+      forest: '#87ceeb',
+      fire: '#ff6b4a',
+      ice: '#aaddff',
+      desert: '#e6c288',
+      steelworks: '#8899aa',
+      mire: '#5a7a5a',
+      citadel: '#d4a574',
+    };
+
+    for (const zone of zones) {
+      const card = document.createElement('div');
+      card.className = 'zone-card' + (zone.completed ? ' completed' : '') + (!zone.unlocked ? ' locked' : '');
+      card.style.setProperty('--zone-color', zoneColors[zone.id] || '#888');
+
+      const name = document.createElement('div');
+      name.className = 'zone-card-name';
+      name.textContent = zone.name;
+      card.appendChild(name);
+
+      const desc = document.createElement('div');
+      desc.className = 'zone-card-desc';
+      desc.textContent = zone.description;
+      card.appendChild(desc);
+
+      const meta = document.createElement('div');
+      meta.className = 'zone-card-meta';
+      meta.textContent = `Letters: ${zone.letters?.join(' ') || ''}`;
+      card.appendChild(meta);
+
+      if (zone.unlocked) {
+        const btn = document.createElement('button');
+        btn.className = 'zone-card-btn';
+        btn.textContent = zone.completed ? 'Replay' : 'Play';
+        btn.addEventListener('click', () => {
+          this._hasStarted = true;
+          overlay.classList.remove('active');
+          this._transitionToGame(false, null, false, zone.id);
+        });
+        card.appendChild(btn);
+      } else {
+        const locked = document.createElement('div');
+        locked.className = 'zone-card-locked';
+        const prev = zones.find(z => z.order === zone.order - 1);
+        locked.textContent = prev ? `🔒 Complete ${prev.name} to unlock` : '🔒 Locked';
+        card.appendChild(locked);
+      }
+
+      grid.appendChild(card);
+    }
+
+    backBtn.onclick = () => {
+      overlay.classList.remove('active');
+      this._hasStarted = false;
+    };
+
+    overlay.classList.add('active');
   }
 
   _onCoop() {
@@ -235,7 +304,7 @@ export class MainMenu {
     document.dispatchEvent(new CustomEvent('show-settings'));
   }
 
-  _transitionToGame(isMultiplayer = false, net = null, isHost = false) {
+  _transitionToGame(isMultiplayer = false, net = null, isHost = false, startZoneId = null) {
     this._destroyBackground();
     this.elMenu.classList.add('hidden');
     const vignette = document.querySelector('.menu-vignette');
@@ -245,7 +314,7 @@ export class MainMenu {
     if (loading) loading.style.display = 'flex';
 
     try {
-      this.game = new Game(this.container);
+      this.game = new Game(this.container, { startZoneId });
       this.game.isMultiplayer = isMultiplayer;
       this.game.isHost = isHost;
       this.game.net = net;

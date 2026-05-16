@@ -212,12 +212,7 @@ export const ZONES = [
     bounds: { minX: 60, maxX: 180, minZ: -180, maxZ: -60 },
     spawnPoint: { x: 120, z: -120 },
     exitGateway: { x: 120, z: -62, targetZone: 'citadel' },
-    hazard: {
-      type: 'quicksand',
-      slowdownPercent: 50,
-      staminaDrainPerSecond: 5,
-      mitigationItem: 'wading_boots',
-    },
+    hazard: null,
     structures: {
       trees: ['dark_oak'],
       treeDensity: 0.03,

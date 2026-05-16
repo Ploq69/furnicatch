@@ -1,9 +1,12 @@
 class InputManager {
   constructor() {
     this.keys = {};
+    this.gamepadKeys = {};
     this.mouse = { x: 0, y: 0, dx: 0, dy: 0, locked: false };
     this.buttons = { left: false, right: false, middle: false };
+    this.gamepadButtons = {};
     this.wheel = 0;
+    this.gamepad = { leftX: 0, leftY: 0, rightX: 0, rightY: 0, connected: false, id: null };
 
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
@@ -38,19 +41,26 @@ class InputManager {
     window.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  isDown(code) { return !!this.keys[code]; }
+  isDown(code) { return !!this.keys[code] || !!this.gamepadKeys[code]; }
   pressed(code) {
-    if (this.keys[code] && !this._prevKeys?.[code]) return true;
-    return false;
+    const kbPressed = this.keys[code] && !this._prevKeys?.[code];
+    const gpPressed = this.gamepadKeys[code] && !this._prevGamepadKeys?.[code];
+    return kbPressed || gpPressed;
   }
 
+  isButtonDown(button) { return !!this.buttons[button] || !!this.gamepadButtons[button]; }
+
   buttonPressed(button) {
-    return !!this.buttons[button] && !this._prevButtons?.[button];
+    const mousePressed = !!this.buttons[button] && !this._prevButtons?.[button];
+    const gamepadPressed = !!this.gamepadButtons[button] && !this._prevGamepadButtons?.[button];
+    return mousePressed || gamepadPressed;
   }
 
   update() {
     this._prevKeys = { ...this.keys };
     this._prevButtons = { ...this.buttons };
+    this._prevGamepadKeys = { ...this.gamepadKeys };
+    this._prevGamepadButtons = { ...this.gamepadButtons };
     this.mouse.dx = 0;
     this.mouse.dy = 0;
     this.wheel = 0;

@@ -127,6 +127,10 @@ export class UIManager {
     this.elSpellingWordlistGrid = document.getElementById('spelling-wordlist-grid');
     this.elSpellingClose = document.getElementById('spelling-close');
     this._bindSpellingEvents();
+
+    // Zone select overlay
+    this.elZoneSelect = document.getElementById('zone-select-overlay');
+    this.elZoneSelectGrid = document.getElementById('zone-select-grid');
     this.elBrightnessSlider.addEventListener('input', (e) => {
       if (this.onBrightnessChange) this.onBrightnessChange(parseFloat(e.target.value));
     });

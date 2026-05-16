@@ -31,6 +31,13 @@ export class SettingsMenu {
     this.elQuality = document.getElementById('settings-quality');
     this.elShadow = document.getElementById('settings-shadow');
     this.elName = document.getElementById('settings-name');
+
+    this.elGamepad = document.getElementById('settings-gamepad-enabled');
+    this.elLook = document.getElementById('settings-look');
+    this.elLookVal = document.getElementById('settings-look-val');
+    this.elDeadzone = document.getElementById('settings-deadzone');
+    this.elDeadzoneVal = document.getElementById('settings-deadzone-val');
+    this.elVibration = document.getElementById('settings-vibration');
   }
 
   _bindEvents() {
@@ -65,6 +72,19 @@ export class SettingsMenu {
     this.elShadow?.addEventListener('change', (e) => settings.set('shadowQuality', e.target.value));
     this.elName?.addEventListener('change', (e) => settings.set('playerName', e.target.value.trim() || 'Player'));
 
+    this.elGamepad?.addEventListener('change', (e) => settings.set('gamepadEnabled', e.target.checked));
+    this.elLook?.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      settings.set('gamepadLookSensitivity', v);
+      this.elLookVal.textContent = v.toFixed(1);
+    });
+    this.elDeadzone?.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      settings.set('gamepadDeadZone', v);
+      this.elDeadzoneVal.textContent = v.toFixed(2);
+    });
+    this.elVibration?.addEventListener('change', (e) => settings.set('gamepadVibration', e.target.checked));
+
     // Listen for external show event
     document.addEventListener('show-settings', () => this.show());
 
@@ -89,6 +109,13 @@ export class SettingsMenu {
     if (this.elQuality) this.elQuality.value = settings.get('graphicsQuality');
     if (this.elShadow) this.elShadow.value = settings.get('shadowQuality');
     if (this.elName) this.elName.value = settings.get('playerName');
+
+    if (this.elGamepad) this.elGamepad.checked = settings.get('gamepadEnabled');
+    if (this.elLook) this.elLook.value = settings.get('gamepadLookSensitivity');
+    if (this.elLookVal) this.elLookVal.textContent = settings.get('gamepadLookSensitivity').toFixed(1);
+    if (this.elDeadzone) this.elDeadzone.value = settings.get('gamepadDeadZone');
+    if (this.elDeadzoneVal) this.elDeadzoneVal.textContent = settings.get('gamepadDeadZone').toFixed(2);
+    if (this.elVibration) this.elVibration.checked = settings.get('gamepadVibration');
   }
 
   _resetDefaults() {

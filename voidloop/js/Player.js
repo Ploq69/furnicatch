@@ -17,6 +17,7 @@ import {
   getKayKitItem,
 } from './KayKitLoadout.js';
 import { WeaponVFXEmitter, getWeaponVFXConfig } from './ElementalVFX.js';
+import { gamepadManager } from './GamepadManager.js';
 
 const TARGET_HEIGHT = 1.6;
 const _anchorOffsetMatrix = new THREE.Matrix4();
@@ -500,6 +501,7 @@ export class Player {
     this.isDodging = true;
     this.dodgeTimer = GAME.DODGE_DURATION;
     this.dodgeDir = { x: dx, z: dz };
+    gamepadManager.vibrate(0.35, 80);
 
     // Choose dodge animation based on direction
     let anim = 'DodgeForward';
@@ -509,6 +511,33 @@ export class Player {
     else if (dx < -0.5) anim = 'DodgeLeft';
 
     this.playAnim(anim, { lock: GAME.DODGE_DURATION, timeScale: 1.3 });
+  }
+
+  /**
+   * Read movement input from gamepad analog stick or keyboard WASD.
+   * Returns { forwardMove, strafeMove } where -1..1.
+   */
+  _readMovement(input) {
+    let forwardMove = 0;
+    let strafeMove = 0;
+
+    // Prefer gamepad analog when active
+    if (input.gamepad && (Math.abs(input.gamepad.leftX) > 0.01 || Math.abs(input.gamepad.leftY) > 0.01)) {
+      forwardMove = -input.gamepad.leftY; // stick up = forward
+      strafeMove = input.gamepad.leftX;
+    } else {
+      if (input.isDown('ArrowUp') || input.isDown('KeyW')) forwardMove += 1;
+      if (input.isDown('ArrowDown') || input.isDown('KeyS')) forwardMove -= 1;
+      if (input.isDown('ArrowLeft') || input.isDown('KeyA')) strafeMove -= 1;
+      if (input.isDown('ArrowRight') || input.isDown('KeyD')) strafeMove += 1;
+    }
+    return { forwardMove, strafeMove };
+  }
+
+  cycleWeapon(delta) {
+    if (this.weapons.length === 0) return;
+    const next = (this.currentSlot + delta + this.weapons.length) % this.weapons.length;
+    this.equipWeapon(next);
   }
 
   update(dt, input) {
@@ -571,18 +600,13 @@ export class Player {
     if (!this.isGrounded && !this.isSwimming && !this.rocketBootsActive) {
       let wsDx = 0, wsDz = 0;
       if (this.controlYaw != null) {
-        let fm = 0, sm = 0;
-        if (input.isDown('ArrowUp') || input.isDown('KeyW')) fm += 1;
-        if (input.isDown('ArrowDown') || input.isDown('KeyS')) fm -= 1;
-        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) sm -= 1;
-        if (input.isDown('ArrowRight') || input.isDown('KeyD')) sm += 1;
+        const { forwardMove: fm, strafeMove: sm } = this._readMovement(input);
         wsDx = Math.sin(this.controlYaw) * fm - Math.cos(this.controlYaw) * sm;
         wsDz = Math.cos(this.controlYaw) * fm + Math.sin(this.controlYaw) * sm;
       } else {
-        if (input.isDown('ArrowUp') || input.isDown('KeyW')) wsDz -= 1;
-        if (input.isDown('ArrowDown') || input.isDown('KeyS')) wsDz += 1;
-        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) wsDx -= 1;
-        if (input.isDown('ArrowRight') || input.isDown('KeyD')) wsDx += 1;
+        const { forwardMove: fm, strafeMove: sm } = this._readMovement(input);
+        wsDz = -fm;
+        wsDx = sm;
       }
       if (wsDx !== 0 || wsDz !== 0) {
         const len = Math.sqrt(wsDx * wsDx + wsDz * wsDz);
@@ -658,18 +682,13 @@ export class Player {
     if (!this.isGrounded && !this.isSwimming && hasRocketBoots) {
       let jetDx = 0, jetDz = 0;
       if (this.controlYaw != null) {
-        let fm = 0, sm = 0;
-        if (input.isDown('ArrowUp') || input.isDown('KeyW')) fm += 1;
-        if (input.isDown('ArrowDown') || input.isDown('KeyS')) fm -= 1;
-        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) sm -= 1;
-        if (input.isDown('ArrowRight') || input.isDown('KeyD')) sm += 1;
+        const { forwardMove: fm, strafeMove: sm } = this._readMovement(input);
         jetDx = Math.sin(this.controlYaw) * fm - Math.cos(this.controlYaw) * sm;
         jetDz = Math.cos(this.controlYaw) * fm + Math.sin(this.controlYaw) * sm;
       } else {
-        if (input.isDown('ArrowUp') || input.isDown('KeyW')) jetDz -= 1;
-        if (input.isDown('ArrowDown') || input.isDown('KeyS')) jetDz += 1;
-        if (input.isDown('ArrowLeft') || input.isDown('KeyA')) jetDx -= 1;
-        if (input.isDown('ArrowRight') || input.isDown('KeyD')) jetDx += 1;
+        const { forwardMove: fm, strafeMove: sm } = this._readMovement(input);
+        jetDz = -fm;
+        jetDx = sm;
       }
       if (jetDx !== 0 || jetDz !== 0) {
         const len = Math.sqrt(jetDx * jetDx + jetDz * jetDz);
@@ -740,6 +759,15 @@ export class Player {
       this.isGrounded = !fallingIntoVoid;
     }
 
+    // Ceiling collision for non-SDF terrain (prevents jumping into low ceilings)
+    if (!terrainResolved && this.world?.isPlayerSpaceClear) {
+      const headY = this.position.y + 1.45;
+      if (!this.world.isPlayerSpaceClear(this.position.x, headY, this.position.z)) {
+        this.position.y -= 0.15;
+        this.velocity.y = Math.min(0, this.velocity.y);
+      }
+    }
+
     if (this.isSwimming) {
       this.isGrounded = false;
       this.landedThisFrame = false;
@@ -774,7 +802,7 @@ export class Player {
     }
 
     // Block input
-    if (input.buttons.right) {
+    if (input.isButtonDown('right')) {
       if (!this.isBlocking) this.startBlock();
     } else {
       if (this.isBlocking) this.endBlock();
@@ -783,19 +811,13 @@ export class Player {
     let dx = 0;
     let dz = 0;
     if (this.controlYaw != null) {
-      let forwardMove = 0;
-      let strafeMove = 0;
-      if (input.isDown('ArrowUp') || input.isDown('KeyW')) forwardMove += 1;
-      if (input.isDown('ArrowDown') || input.isDown('KeyS')) forwardMove -= 1;
-      if (input.isDown('ArrowLeft') || input.isDown('KeyA')) strafeMove -= 1;
-      if (input.isDown('ArrowRight') || input.isDown('KeyD')) strafeMove += 1;
+      const { forwardMove, strafeMove } = this._readMovement(input);
       dx = Math.sin(this.controlYaw) * forwardMove - Math.cos(this.controlYaw) * strafeMove;
       dz = Math.cos(this.controlYaw) * forwardMove + Math.sin(this.controlYaw) * strafeMove;
     } else {
-      if (input.isDown('ArrowUp') || input.isDown('KeyW')) dz -= 1;
-      if (input.isDown('ArrowDown') || input.isDown('KeyS')) dz += 1;
-      if (input.isDown('ArrowLeft') || input.isDown('KeyA')) dx -= 1;
-      if (input.isDown('ArrowRight') || input.isDown('KeyD')) dx += 1;
+      const { forwardMove, strafeMove } = this._readMovement(input);
+      dz = -forwardMove;
+      dx = strafeMove;
     }
 
     if (dx !== 0 || dz !== 0) {
@@ -1026,6 +1048,7 @@ export class Player {
 
     this.hp -= amount;
     if (this.hp < 0) this.hp = 0;
+    gamepadManager.vibrate(Math.min(1, amount / 20), 120);
 
     // Light vs heavy hit reaction
     if (amount >= 15) {
@@ -1130,20 +1153,41 @@ export class Player {
     if (this.world.hasSdfTerrain?.()) {
       return this.world.getGroundHeightAt(px, pz, this.position.y);
     }
-    // Check a 3×3 area around the player's position for the highest ground.
-    // This prevents falling through narrow gaps between tiles or edges.
-    let maxY = -999;
+    // Use the exact cell under the player. The old 3×3 max caused players to
+    // hover over gaps and get snapped up to adjacent tall walls in corridors.
+    // For edge safety we still check the immediate cell and direct neighbors,
+    // but only when the player is very close to the edge.
     const x0 = Math.floor(px);
     const z0 = Math.floor(pz);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dz = -1; dz <= 1; dz++) {
-        const y = this.world.getGroundHeightAt
-          ? this.world.getGroundHeightAt(x0 + dx, z0 + dz, this.position.y)
-          : this.world.getColumnTop(x0 + dx, z0 + dz);
-        if (y > maxY) maxY = y;
-      }
+    const fracX = px - x0;
+    const fracZ = pz - z0;
+
+    const getY = (cx, cz) => {
+      return this.world.getGroundHeightAt
+        ? this.world.getGroundHeightAt(cx, cz, this.position.y)
+        : this.world.getColumnTop(cx, cz);
+    };
+
+    // Primary: exact cell
+    let y = getY(x0, z0);
+    if (y > -999) return y;
+
+    // Fallback: check the cell the player is closer to when straddling an edge
+    const ox = fracX > 0.5 ? 1 : (fracX < 0.5 ? -1 : 0);
+    const oz = fracZ > 0.5 ? 1 : (fracZ < 0.5 ? -1 : 0);
+    if (ox !== 0) {
+      y = getY(x0 + ox, z0);
+      if (y > -999) return y;
     }
-    return maxY;
+    if (oz !== 0) {
+      y = getY(x0, z0 + oz);
+      if (y > -999) return y;
+    }
+    if (ox !== 0 && oz !== 0) {
+      y = getY(x0 + ox, z0 + oz);
+      if (y > -999) return y;
+    }
+    return -999;
   }
 
   _clampToPlayableBounds() {

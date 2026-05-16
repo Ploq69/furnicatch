@@ -30,6 +30,7 @@ import { Enemy } from './Enemy.js';
 import { settings } from './SettingsManager.js';
 import { ResourceInventory, RESOURCE_META } from './ResourceInventory.js';
 import { getBlockProperties } from './BlockProperties.js';
+import { gamepadManager } from './GamepadManager.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -113,8 +114,9 @@ const TOP_DOWN_TARGET_Y = 0.75;
 const MIN_RENDER_SCALE = 0.75;
 
 export class Game {
-  constructor(container) {
+  constructor(container, options = {}) {
     this.container = container;
+    this._startZoneId = options.startZoneId || null;
     this.state = STATES.LOADING;
     this.clock = new THREE.Clock();
 
@@ -353,6 +355,27 @@ export class Game {
     // Touch controls for iPad/tablet
     this.touchControls = new TouchControls();
 
+    // Gamepad manager
+    this.gamepadManager = gamepadManager;
+    this.elGamepadIndicator = document.getElementById('gamepad-indicator');
+    gamepadManager.onConnect = (id) => {
+      if (this.elGamepadIndicator) {
+        this.elGamepadIndicator.classList.add('active');
+        this.elGamepadIndicator.title = `Controller: ${id}`;
+      }
+      this.ui?.showFloatingText?.('🎮 Controller connected', 0x4ade80);
+    };
+    gamepadManager.onDisconnect = () => {
+      if (this.elGamepadIndicator) {
+        this.elGamepadIndicator.classList.remove('active');
+      }
+      this.ui?.showFloatingText?.('Controller disconnected', 0xf87171);
+    };
+    // Initial state
+    if (gamepadManager.connected && this.elGamepadIndicator) {
+      this.elGamepadIndicator.classList.add('active');
+    }
+
     // Pause state
     this.paused = false;
     this._pauseBind = null;
@@ -423,7 +446,7 @@ export class Game {
     if (this.playtestKey) {
       await this._loadPlaytestLevel();
     } else {
-      await this._generateZones(this._worldSeed);
+      await this._generateZones(this._worldSeed, this._startZoneId);
     }
 
     // Create remote player for multiplayer
@@ -533,6 +556,9 @@ export class Game {
 
     // Independent levels: only generate the active zone
     const targetZoneId = zoneId || this.zoneManager.currentZoneId;
+    if (zoneId) {
+      this.zoneManager.setCurrentZone(targetZoneId);
+    }
     const zone = getZoneById(targetZoneId);
     if (!zone) throw new Error(`Unknown zone: ${targetZoneId}`);
 
@@ -671,6 +697,10 @@ export class Game {
 
   _loop() {
     const dt = Math.min(this.clock.getDelta(), 0.05);
+
+    // Poll gamepad input at the very start of the frame so all systems see it
+    gamepadManager.update(dt);
+
     this._perfFrame = {
       worldMs: 0,
       renderMs: 0,
@@ -814,6 +844,7 @@ export class Game {
     if (this.player.landedThisFrame) {
       const pos = this.player.position.clone().add(new THREE.Vector3(0, 0.04, 0));
       this.particles.dust(pos, 4);
+      gamepadManager.vibrate(0.25, 60);
     }
 
     // Rocket boots VFX
@@ -997,6 +1028,7 @@ export class Game {
             this.particles.dust(blockPos, isFloat ? 10 : 8);
             this.particles.spark(blockPos, isFloat ? 8 : 6);
             this._screenShake(isFloat ? 0.8 : 0.5, 0.25);
+            gamepadManager.vibrate(isFloat ? 0.5 : 0.3, 80);
 
             if (!miningTarget.isTerrain) {
               this.world.mineBlock(nearestBlock, this.particles, audio);
@@ -1706,9 +1738,16 @@ export class Game {
     const tune = this.tpCameraTuning;
     const sensitivity = 0.0022;
     const mouseMoved = input.mouse.locked && (Math.abs(input.mouse.dx) > 0.01 || Math.abs(input.mouse.dy) > 0.01);
+    const gamepadLook = Math.abs(input.gamepad?.rightX) > 0.01 || Math.abs(input.gamepad?.rightY) > 0.01;
     if (mouseMoved) {
       rig.desiredYaw -= input.mouse.dx * sensitivity;
       rig.pitch += input.mouse.dy * sensitivity;
+      rig.pitch = Math.max(tune.pitchMin, Math.min(tune.pitchMax, rig.pitch));
+      rig.manualRecenteringTimer = tune.recenterDelay;
+    } else if (gamepadLook) {
+      const lookSpeed = 2.2;
+      rig.desiredYaw -= input.gamepad.rightX * lookSpeed;
+      rig.pitch += input.gamepad.rightY * lookSpeed;
       rig.pitch = Math.max(tune.pitchMin, Math.min(tune.pitchMax, rig.pitch));
       rig.manualRecenteringTimer = tune.recenterDelay;
     } else {
@@ -1722,10 +1761,15 @@ export class Game {
 
     let forwardMove = 0;
     let strafeMove = 0;
-    if (input.isDown('KeyW') || input.isDown('ArrowUp')) forwardMove += 1;
-    if (input.isDown('KeyS') || input.isDown('ArrowDown')) forwardMove -= 1;
-    if (input.isDown('KeyA') || input.isDown('ArrowLeft')) strafeMove -= 1;
-    if (input.isDown('KeyD') || input.isDown('ArrowRight')) strafeMove += 1;
+    if (input.gamepad && (Math.abs(input.gamepad.leftX) > 0.01 || Math.abs(input.gamepad.leftY) > 0.01)) {
+      forwardMove = -input.gamepad.leftY;
+      strafeMove = input.gamepad.leftX;
+    } else {
+      if (input.isDown('KeyW') || input.isDown('ArrowUp')) forwardMove += 1;
+      if (input.isDown('KeyS') || input.isDown('ArrowDown')) forwardMove -= 1;
+      if (input.isDown('KeyA') || input.isDown('ArrowLeft')) strafeMove -= 1;
+      if (input.isDown('KeyD') || input.isDown('ArrowRight')) strafeMove += 1;
+    }
 
     if (rig.manualRecenteringTimer <= 0 && (forwardMove !== 0 || strafeMove !== 0)) {
       const moveYaw = Math.atan2(

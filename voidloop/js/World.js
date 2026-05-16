@@ -773,13 +773,47 @@ export class World {
       player.velocity.y = 0;
     }
 
-    // Stuck recovery: if still inside terrain after vertical resolve, push up until free
-    let stuckIter = 0;
-    while (this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45) && stuckIter < 20) {
-      player.position.y += 0.25;
-      stuckIter++;
-      if (stuckIter >= 20) {
-        player.position.y += 1.0; // emergency pop
+    // Stuck recovery: if still inside terrain after vertical resolve
+    const blockedAfterResolve = this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45);
+    if (blockedAfterResolve) {
+      // 1. Try pushing DOWN first — the player might be inside a ceiling
+      let pushedDown = false;
+      for (let i = 0; i < 6; i++) {
+        player.position.y -= 0.15;
+        if (!this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45)) {
+          pushedDown = true;
+          break;
+        }
+      }
+
+      // 2. If still stuck, push UP with a limit
+      if (!pushedDown) {
+        let stuckIter = 0;
+        while (this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45) && stuckIter < 10) {
+          player.position.y += 0.25;
+          stuckIter++;
+        }
+      }
+
+      // 3. After pushing out, find a floor and snap to it so they don't immediately fall back in
+      const stillBlocked = this.terrainMesh.isCapsuleBlockedAt(player.position.x, player.position.y, player.position.z, radius, 1.45);
+      if (!stillBlocked) {
+        const rescueFloor = this.findFloorBelow(player.position.x, player.position.z, player.position.y, 3.0);
+        if (rescueFloor > -999) {
+          player.position.y = rescueFloor;
+        }
+        player.velocity.y = 0;
+        player.isGrounded = true;
+      }
+
+      // 4. Emergency: teleport to nearest safe spawn if still stuck
+      if (stillBlocked) {
+        const safe = this.getNearestSafeSpawn(player.position);
+        if (safe) {
+          player.position.copy(safe);
+          player.velocity.y = 0;
+          player.isGrounded = true;
+        }
       }
     }
 
@@ -790,13 +824,25 @@ export class World {
       [0, radius],
       [0, -radius],
     ];
+    let allSidesBlocked = true;
     for (const [dx, dz] of pushSamples) {
       const sx = player.position.x + dx;
       const sy = player.position.y + 0.75;
       const sz = player.position.z + dz;
-      if (!this.terrainMesh.isSolidAt(sx, sy, sz)) continue;
+      if (!this.terrainMesh.isSolidAt(sx, sy, sz)) {
+        allSidesBlocked = false;
+        continue;
+      }
       player.position.x -= dx * 0.45;
       player.position.z -= dz * 0.45;
+    }
+
+    // If trapped in a 1-block-wide pit where pushes cancel out, try stepping up.
+    if (allSidesBlocked && player.isGrounded) {
+      const stepY = player.position.y + 0.35;
+      if (!this.terrainMesh.isCapsuleBlockedAt(player.position.x, stepY, player.position.z, radius, 1.45)) {
+        player.position.y = stepY;
+      }
     }
 
     return true;

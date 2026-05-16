@@ -1400,21 +1400,39 @@ export class TerrainMesh {
     return -999;
   }
 
-  findFloorBelow(x, z, footY, maxDistance = 0.25) {
+  /**
+   * Check if there is enough vertical clearance above a given floor position.
+   * Used to distinguish actual floors from ceilings.
+   */
+  hasClearanceAbove(cellX, floorY, cellZ, height = 1.65) {
+    const startY = Math.floor(floorY);
+    const endY = Math.floor(floorY + height);
+    for (let y = startY; y <= endY; y++) {
+      if (this.isCellSolid(cellX, y, cellZ)) return false;
+    }
+    return true;
+  }
+
+  findFloorBelow(x, z, footY, maxDistance = 0.25, minClearance = 1.45) {
     const zoneEntry = this._findZoneEntry(x, z);
     if (!zoneEntry) return -999;
 
     const cellX = Math.floor(x);
     const cellZ = Math.floor(z);
     const minFloorY = footY - Math.max(0.01, maxDistance);
-    const maxFloorY = footY + 2.5;
-    const startY = Math.floor(clamp(maxFloorY, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
+    const startY = Math.floor(clamp(footY + 2.5, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
     const endY = Math.floor(clamp(minFloorY - 3, TERRAIN_MIN_Y, TERRAIN_MAX_Y));
 
     for (let y = startY; y >= endY; y--) {
       if (!this.isCellSolid(cellX, y, cellZ)) continue;
       const floorY = y + 1;
-      if (floorY <= maxFloorY && floorY >= minFloorY) return floorY;
+      // Reject floors that are above the player's feet — that's a ceiling, not a floor.
+      if (floorY > footY + 0.35) continue;
+      if (floorY < minFloorY) continue;
+      // Reject candidates that don't have enough headroom above them.
+      // This prevents snapping to ceiling tops when the player is above a tunnel.
+      if (!this.hasClearanceAbove(cellX, floorY, cellZ, minClearance)) continue;
+      return floorY;
     }
     return -999;
   }
