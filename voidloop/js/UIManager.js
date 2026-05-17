@@ -63,20 +63,10 @@ export class UIManager {
     this.elCrosshair = document.getElementById('crosshair');
     this.elHotbar = document.getElementById('hotbar');
     this.elCamp = document.getElementById('camp-ui');
-    this.elSunIntensity = document.getElementById('sun-intensity-control');
-    this.elSunIntensityVal = document.getElementById('sun-intensity-val');
-    this.elSunIntensityMinus = document.getElementById('sun-intensity-minus');
-    this.elSunIntensityPlus = document.getElementById('sun-intensity-plus');
-    this.elSunSize = document.getElementById('sun-size-control');
-    this.elSunSizeVal = document.getElementById('sun-size-val');
-    this.elSunSizeMinus = document.getElementById('sun-size-minus');
-    this.elSunSizePlus = document.getElementById('sun-size-plus');
-    this.elSunLock = document.getElementById('sun-lock-btn');
-    this.elSunLockControl = document.getElementById('sun-lock-control');
-    this.elAurora = document.getElementById('aurora-control');
-    this.elAuroraToggle = document.getElementById('aurora-toggle');
     this.elZoom = document.getElementById('zoom-control');
-    this.elZoomSlider = document.getElementById('zoom-slider');
+    this.elZoomVal = document.getElementById('zoom-val');
+    this.elZoomMinus = document.getElementById('zoom-minus');
+    this.elZoomPlus = document.getElementById('zoom-plus');
     this.elFps = document.getElementById('fps-display');
     this.elLoadout = document.getElementById('loadout-ui');
     this.elLoadoutPreview = document.getElementById('loadout-preview');
@@ -91,11 +81,7 @@ export class UIManager {
     this.elCalibrationReset = document.getElementById('calibration-reset');
     this.elCalibrationReadout = document.getElementById('calibration-readout');
     this.elCalibrationScaleSlider = document.getElementById('calibration-scale-slider');
-    this.onSunIntensityChange = null;
-    this.onSunSizeChange = null;
-    this.onAuroraToggle = null;
     this.onCameraZoomChange = null;
-    this.onSunLock = null;
 
     // Pet UI elements
     this.elPetHud = document.getElementById('pet-hud');
@@ -144,28 +130,7 @@ export class UIManager {
     // Zone select overlay
     this.elZoneSelect = document.getElementById('zone-select-overlay');
     this.elZoneSelectGrid = document.getElementById('zone-select-grid');
-    this._bindNudgeControl(this.elSunIntensityMinus, this.elSunIntensityPlus, this.elSunIntensityVal, 0.5, 10.0, 0.5, 'onSunIntensityChange');
-    this._bindNudgeControl(this.elSunSizeMinus, this.elSunSizePlus, this.elSunSizeVal, 0.01, 0.20, 0.01, 'onSunSizeChange');
-    if (this.elSunLock) {
-      this.elSunLock.addEventListener('click', () => {
-        if (this.onSunLock) this.onSunLock();
-        SFXMapper.uiClick();
-      });
-    }
-    if (this.elAuroraToggle) {
-      const savedAurora = this.game?.settings?.get('auroraEnabled');
-      this.elAuroraToggle.textContent = savedAurora !== false ? 'On' : 'Off';
-      this.elAuroraToggle.addEventListener('click', () => {
-        const current = this.elAuroraToggle.textContent === 'On';
-        const next = !current;
-        this.elAuroraToggle.textContent = next ? 'On' : 'Off';
-        if (this.onAuroraToggle) this.onAuroraToggle(next);
-        SFXMapper.uiClick();
-      });
-    }
-    this.elZoomSlider.addEventListener('input', (e) => {
-      if (this.onCameraZoomChange) this.onCameraZoomChange(parseFloat(e.target.value));
-    });
+    this._bindNudgeControl(this.elZoomMinus, this.elZoomPlus, this.elZoomVal, 0.3, 3.0, 0.1, 'onCameraZoomChange');
   }
 
   _bindNudgeControl(minusEl, plusEl, valEl, min, max, step, callbackName) {
@@ -502,10 +467,6 @@ export class UIManager {
     this.elHotbar.style.display = 'none';
     this.elFloorIndicator.style.display = 'none';
     if (this.elFps) this.elFps.style.display = 'none';
-    if (this.elSunIntensity) this.elSunIntensity.style.display = 'none';
-    if (this.elSunSize) this.elSunSize.style.display = 'none';
-    if (this.elSunLockControl) this.elSunLockControl.style.display = 'none';
-    if (this.elAurora) this.elAurora.style.display = 'none';
     if (this.elZoom) this.elZoom.style.display = 'none';
   }
 
@@ -517,10 +478,6 @@ export class UIManager {
     this.elFloorIndicator.style.display = 'block';
     this._updatePetHud();
     if (this.elFps) this.elFps.style.display = 'block';
-    if (this.elSunIntensity) this.elSunIntensity.style.display = 'flex';
-    if (this.elSunSize) this.elSunSize.style.display = 'flex';
-    if (this.elSunLockControl) this.elSunLockControl.style.display = 'flex';
-    if (this.elAurora) this.elAurora.style.display = 'flex';
     if (this.elZoom) this.elZoom.style.display = 'flex';
   }
 
@@ -1457,10 +1414,6 @@ export class UIManager {
     this.elCrosshair.style.display = 'none';
     this.elHotbar.style.display = 'none';
     this.elFloorIndicator.style.display = 'none';
-    if (this.elSunIntensity) this.elSunIntensity.style.display = 'none';
-    if (this.elSunSize) this.elSunSize.style.display = 'none';
-    if (this.elSunLockControl) this.elSunLockControl.style.display = 'none';
-    if (this.elAurora) this.elAurora.style.display = 'none';
     if (this.elZoom) this.elZoom.style.display = 'none';
     if (this.elFps) this.elFps.style.display = 'none';
     if (this.elExitOpen) this.elExitOpen.style.display = 'none';
@@ -1478,10 +1431,6 @@ export class UIManager {
     this.elCrosshair.style.display = 'block';
     this.elHotbar.style.display = 'flex';
     this.elFloorIndicator.style.display = 'block';
-    if (this.elSunIntensity) this.elSunIntensity.style.display = 'flex';
-    if (this.elSunSize) this.elSunSize.style.display = 'flex';
-    if (this.elSunLockControl) this.elSunLockControl.style.display = 'flex';
-    if (this.elAurora) this.elAurora.style.display = 'flex';
     if (this.elZoom) this.elZoom.style.display = 'flex';
     if (this.elFps) this.elFps.style.display = 'block';
     this._updatePetHud();
@@ -1720,50 +1669,6 @@ export class UIManager {
     const pickaxePip = Array.from({ length: 4 }, (_, i) => i < current ? '●' : (i < required ? '○' : '·')).join('');
     const icon = status?.reason === 'wrong_weapon' ? '⛏️' : '🔒';
     this.showFloatingText(`${icon} ${pickaxePip}`, 0xff4444);
-  }
-
-  updateObjectiveHud(state) {
-    if (!state) return;
-    if (!this._objectiveHud) {
-      this._objectiveHud = document.createElement('div');
-      this._objectiveHud.className = 'objective-hud';
-      document.body.appendChild(this._objectiveHud);
-    }
-    const lettersDone = state.letters?.done || 0;
-    const lettersTotal = state.letters?.total || 0;
-    const miningCurrent = state.mining?.current || 0;
-    const miningTarget = state.mining?.target || 0;
-    const pips = Array.from({ length: 6 }, (_, i) => i < (state.pickaxeTier || 0) ? '●' : '○').join('');
-    const grenadeText = state.grenade?.unlocked
-      ? `G ${state.grenade.charges}/${state.grenade.cap}${state.grenade.cooldown > 0 ? ` ${state.grenade.cooldown.toFixed(0)}s` : ''}`
-      : 'G locked';
-    const missileText = state.missile?.unlocked
-      ? `Q ${state.missile.charges}/2${state.missile.cooldown > 0 ? ` ${state.missile.cooldown.toFixed(0)}s` : ''}`
-      : 'Q locked';
-    const signature = [
-      state.zoneId,
-      lettersDone,
-      lettersTotal,
-      miningCurrent,
-      miningTarget,
-      state.pickaxeTier || 0,
-      grenadeText,
-      missileText,
-      state.completed ? 1 : 0,
-    ].join('|');
-    if (signature === this._objectiveHudSignature) {
-      return;
-    }
-    this._objectiveHudSignature = signature;
-    this._objectiveHud.innerHTML = `
-      <span title="Letters">🔤 ${lettersDone}/${lettersTotal}</span>
-      <span title="Mining">⛏ ${Math.min(miningCurrent, miningTarget)}/${miningTarget}</span>
-      <span class="pickaxe-tier" title="Pickaxe">⛏ ${pips}</span>
-      <span title="Grenades">${grenadeText}</span>
-      <span title="Missile Strike">${missileText}</span>
-      <span title="Gate">${state.completed ? '🔓' : '🔒'}</span>
-    `;
-    this.updateZoneLetterHud(state.zoneId);
   }
 
   updateZoneLetterHud(zoneId = this.game?.zoneManager?.currentZoneId) {

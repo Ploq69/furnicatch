@@ -2,7 +2,7 @@
 // Voidloop SFX Picker — Sound Effect Assignment Tool
 // ==========================================
 
-const SFX_CATALOG_URL = './js/sfx_catalog.json';
+const SFX_CATALOG_URL = './sfx_catalog.json';
 const CONFIG_STORAGE_KEY = 'voidloop_sfx_config';
 const WAV_BASE = '../'; // sfx-picker.html is in voidloop/, WAVs are at project root
 

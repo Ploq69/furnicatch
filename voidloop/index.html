@@ -267,25 +267,6 @@
       white-space: nowrap;
     }
 
-    .objective-hud {
-      position: fixed;
-      left: 50%;
-      top: 76px;
-      transform: translateX(-50%);
-      z-index: 25;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      padding: 8px 12px;
-      border-radius: 8px;
-      background: rgba(0,0,0,0.55);
-      border: 1px solid rgba(255,255,255,0.16);
-      color: #fff6d5;
-      font-weight: 900;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-      pointer-events: none;
-    }
-    .objective-hud .pickaxe-tier { color: #facc15; }
     .zone-letter-hud {
       position: fixed;
       right: 16px;
@@ -2738,32 +2719,13 @@
   <div id="fps-display">-- FPS</div>
 
   <div id="slider-controls">
-    <div class="slider-control" id="sun-intensity-control">
-      <div style="font-size:11px; text-align:center; opacity:0.7;">Sun Intensity</div>
-      <div class="nudge-row">
-        <button class="nudge-btn" id="sun-intensity-minus">-</button>
-        <span class="nudge-val" id="sun-intensity-val">4.0</span>
-        <button class="nudge-btn" id="sun-intensity-plus">+</button>
-      </div>
-    </div>
-    <div class="slider-control" id="sun-size-control">
-      <div style="font-size:11px; text-align:center; opacity:0.7;">Sun Size</div>
-      <div class="nudge-row">
-        <button class="nudge-btn" id="sun-size-minus">-</button>
-        <span class="nudge-val" id="sun-size-val">0.06</span>
-        <button class="nudge-btn" id="sun-size-plus">+</button>
-      </div>
-    </div>
-    <div class="slider-control" id="sun-lock-control">
-      <button class="nudge-btn lock-btn" id="sun-lock-btn">🔒 Lock</button>
-    </div>
-    <div class="slider-control" id="aurora-control">
-      <div style="font-size:11px; text-align:center; opacity:0.7;">Aurora</div>
-      <button class="nudge-btn" id="aurora-toggle">On</button>
-    </div>
     <div class="slider-control" id="zoom-control">
       <div style="font-size:11px; text-align:center; opacity:0.7;">Zoom</div>
-      <input type="range" id="zoom-slider" min="0.3" max="3.0" step="0.1" value="3.0">
+      <div class="nudge-row">
+        <button class="nudge-btn" id="zoom-minus">-</button>
+        <span class="nudge-val" id="zoom-val">3.0</span>
+        <button class="nudge-btn" id="zoom-plus">+</button>
+      </div>
     </div>
   </div>
 

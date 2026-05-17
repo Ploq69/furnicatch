@@ -31,6 +31,14 @@ import { settings } from './SettingsManager.js';
 import { ResourceInventory, RESOURCE_META } from './ResourceInventory.js';
 import { getBlockProperties } from './BlockProperties.js';
 import { gamepadManager } from './GamepadManager.js';
+import { BoundaryEnvironment } from './systems/BoundaryEnvironment.js';
+import { ZoneGatewaySystem } from './systems/ZoneGatewaySystem.js';
+import { MissileStrikeSystem } from './systems/MissileStrikeSystem.js';
+import { ExplosionHandler } from './systems/ExplosionHandler.js';
+import { MiningSystem } from './systems/MiningSystem.js';
+import { SpellingQuizGlue } from './systems/SpellingQuizGlue.js';
+import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
+import { VOXEL_SKY, ZONE_ATMOSPHERE } from './AtmosphereData.js';
 
 const STATES = {
   LOADING: 'loading',
@@ -53,27 +61,6 @@ const ISO_UNDERGROUND_VIEW = {
   FOG_FAR: 56,
 };
 
-const VOXEL_SKY = {
-  TOP: 0x63b8ff,
-  HORIZON: 0xd7f4ff,
-  CLOUD: 0xffffff,
-  FOG_NEAR: 64,
-  FOG_FAR: 260,
-  TP_FOG_NEAR: 30,
-  TP_FOG_FAR: 70,
-};
-
-const ZONE_ATMOSPHERE = {
-  forest: { skyTop: 0x77c7ff, horizon: 0xd8f6ff, fog: 0xbde8d5, sunColor: 0xfff5cf, ambientColor: 0x8abf8a, cloudOpacity: 0.32, hazeStrength: 0.25, groundTint: 0x355f3b, silhouette: 0x17351f },
-  fire: { skyTop: 0x2b1d23, horizon: 0xff8158, fog: 0x5a2a22, sunColor: 0xffb05f, ambientColor: 0xb0694a, cloudOpacity: 0.18, hazeStrength: 0.72, groundTint: 0x4b241c, silhouette: 0x130d0b },
-  ice: { skyTop: 0xa7dbff, horizon: 0xf2fbff, fog: 0xd8f3ff, sunColor: 0xeaffff, ambientColor: 0x9ebfd8, cloudOpacity: 0.42, hazeStrength: 0.38, groundTint: 0xb8dff0, silhouette: 0x47687a },
-  desert: { skyTop: 0x71b7e6, horizon: 0xffdf9b, fog: 0xe8c27e, sunColor: 0xffd17a, ambientColor: 0xc99d62, cloudOpacity: 0.12, hazeStrength: 0.58, groundTint: 0xc28b45, silhouette: 0x6f4720 },
-  steelworks: { skyTop: 0x4f7fa4, horizon: 0xc4d1d4, fog: 0x7b8790, sunColor: 0xffb05c, ambientColor: 0x7f8f9d, cloudOpacity: 0.52, hazeStrength: 0.82, groundTint: 0x4d5961, silhouette: 0x1c2328 },
-  mire: { skyTop: 0x5f8874, horizon: 0xaec6a1, fog: 0x748b6a, sunColor: 0xe8d69a, ambientColor: 0x668b62, cloudOpacity: 0.46, hazeStrength: 0.68, groundTint: 0x314a35, silhouette: 0x142317 },
-  citadel: { skyTop: 0x8fb9de, horizon: 0xf0d3a4, fog: 0xd8b77d, sunColor: 0xffdf9a, ambientColor: 0xb89969, cloudOpacity: 0.24, hazeStrength: 0.34, groundTint: 0x8a7356, silhouette: 0x3f3427 },
-  default: { skyTop: VOXEL_SKY.TOP, horizon: VOXEL_SKY.HORIZON, fog: VOXEL_SKY.HORIZON, sunColor: 0xfff5e6, ambientColor: 0x8888aa, cloudOpacity: 0.28, hazeStrength: 0.3, groundTint: 0x4d6b55, silhouette: 0x263344 },
-};
-
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const smoothstep = (edge0, edge1, value) => {
   const t = clamp01((value - edge0) / Math.max(0.0001, edge1 - edge0));
@@ -90,25 +77,6 @@ const shortestAngle = (from, to) => {
 };
 const dampAngle = (from, to, dt, halfLife) => from + shortestAngle(from, to) * smoothFactor(dt, halfLife);
 
-const TP_FOV = 65;
-const TP_DISTANCE = 4.8;
-const TP_HEIGHT = 1.25;
-const TP_SHOULDER_X = 0.2;
-const TP_SHOULDER_Y = 0.05;
-const TP_PITCH_DEFAULT = 0.22;
-const TP_PITCH_MIN = -0.55;
-const TP_PITCH_MAX = 0.75;
-const TP_LOOKAHEAD = 0.9;
-const TP_VERTICAL_DEAD_ZONE = 0.15;
-const TP_HORIZONTAL_HALF_LIFE = 0.1;
-const TP_VERTICAL_HALF_LIFE = 0.35;
-const TP_LOOKAHEAD_HALF_LIFE = 0.16;
-const TP_POSITION_HALF_LIFE = 0.14;
-const TP_YAW_HALF_LIFE = 0.09;
-const TP_COLLISION_EXTEND_HALF_LIFE = 0.24;
-const TP_RECENTER_DELAY = 1.25;
-const TP_COLLISION_REFRESH_MS = 125;
-const TP_COLLISION_MOVE_EPS = 0.35;
 const TOP_DOWN_HEIGHT = 42;
 const TOP_DOWN_TARGET_Y = 0.75;
 const MIN_RENDER_SCALE = 0.75;
@@ -150,64 +118,22 @@ export class Game {
     this.isoCamera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 200);
     this.isoCamera.position.set(20, 20, 20);
     this.isoCamera.lookAt(0, 0, 0);
-    this.thirdPersonCamera = new THREE.PerspectiveCamera(TP_FOV, aspect, 0.05, 450);
+    this.thirdPersonCamera = new THREE.PerspectiveCamera(65, aspect, 0.05, 450);
     this.scene.add(this.thirdPersonCamera);
     this.camera = this.isoCamera;
     this.cameraMode = 'iso';
     this.cameraTarget = new THREE.Vector3();
     this._cameraTargetReady = false;
     this.camYaw = 0;
-    this.camPitch = TP_PITCH_DEFAULT;
+    this.camPitch = 0.22;
     this.camPos = new THREE.Vector3();
-    this.tpCamera = {
-      subjectTarget: new THREE.Vector3(),
-      lookTarget: new THREE.Vector3(),
-      lookahead: new THREE.Vector3(),
-      previousPlayerPos: new THREE.Vector3(),
-      desiredYaw: 0,
-      displayYaw: 0,
-      pitch: TP_PITCH_DEFAULT,
-      distance: TP_DISTANCE,
-      collisionDistance: TP_DISTANCE,
-      manualRecenteringTimer: 0,
-      initialized: false,
-    };
-    this.tpCameraTuning = {
-      fov: TP_FOV,
-      distance: TP_DISTANCE,
-      height: TP_HEIGHT,
-      shoulderX: TP_SHOULDER_X,
-      shoulderY: TP_SHOULDER_Y,
-      pitchDefault: TP_PITCH_DEFAULT,
-      pitchMin: TP_PITCH_MIN,
-      pitchMax: TP_PITCH_MAX,
-      lookahead: TP_LOOKAHEAD,
-      verticalDeadZone: TP_VERTICAL_DEAD_ZONE,
-      horizontalHalfLife: TP_HORIZONTAL_HALF_LIFE,
-      verticalHalfLife: TP_VERTICAL_HALF_LIFE,
-      lookaheadHalfLife: TP_LOOKAHEAD_HALF_LIFE,
-      positionHalfLife: TP_POSITION_HALF_LIFE,
-      yawHalfLife: TP_YAW_HALF_LIFE,
-      collisionExtendHalfLife: TP_COLLISION_EXTEND_HALF_LIFE,
-      recenterDelay: TP_RECENTER_DELAY,
-    };
-    this.tpCameraDebug = false;
+    this.tpCamera = new ThirdPersonCamera(this);
     this._renderScaleMax = Math.min(window.devicePixelRatio || 1, 1.25);
     this._renderScale = Math.min(1, this._renderScaleMax);
     this._renderScaleLowTime = 0;
     this._renderScaleHighTime = 0;
-    this._objectiveHudRefreshTimer = 0;
     this._perfFrame = {};
-    this._rewardFeedbackQueue = [];
-    this._tpCollision = {
-      lastAt: -Infinity,
-      lastDesired: new THREE.Vector3(),
-      lastPivot: new THREE.Vector3(),
-      actualDist: TP_DISTANCE,
-      rayDist: TP_DISTANCE,
-      nearHit: false,
-      initialized: false,
-    };
+
 
     // Lighting
     this.ambient = new THREE.AmbientLight(0xbbccdd, 0.9);
@@ -229,7 +155,7 @@ export class Game {
     this._applyGraphicsSettings();
 
     // Torch lights (added per floor)
-    this.torches = [];
+
 
     // Floor plane (dark ground)
     const floorGeo = new THREE.PlaneGeometry(300, 300);
@@ -239,7 +165,8 @@ export class Game {
     this.floorPlane.position.y = -160;
     this.floorPlane.receiveShadow = false;
     this.scene.add(this.floorPlane);
-    this._createBoundaryEnvironment();
+    this.boundaryEnv = new BoundaryEnvironment(this.scene);
+    this.boundaryEnv.create();
 
     // Progression (needed before timer init)
     this.progression = new ProgressionManager();
@@ -252,49 +179,20 @@ export class Game {
     this.player = new Player(this.scene);
     this.player.world = this.world;
     this.ui = new UIManager(this);
-    // Sync sky button displays with saved settings
-    const savedSunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
-    const savedSunDiscSize = parseFloat(settings.get('sunDiscSize')) || 0.06;
-    if (this.ui.elSunIntensityVal) this.ui.elSunIntensityVal.textContent = savedSunIntensity.toFixed(1);
-    if (this.ui.elSunSizeVal) this.ui.elSunSizeVal.textContent = savedSunDiscSize.toFixed(2);
     this.aimReticle = document.createElement('div');
     this.aimReticle.textContent = '+';
     this.aimReticle.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#e8fff2;text-shadow:0 1px 4px #000;font-size:22px;font-weight:700;z-index:20;pointer-events:none;display:none;';
     document.body.appendChild(this.aimReticle);
-    this.ui.onSunIntensityChange = (val) => {
-      const v = parseFloat(val) || 0.5;
-      if (this.skyGradient) {
-        this.skyGradient.sunStrength = v;
-        this.skyGradient._updateUniforms();
-      }
-      settings.set('sunIntensity', v);
-    };
-    this.ui.onSunSizeChange = (val) => {
-      const v = parseFloat(val) || 0.06;
-      if (this.skyGradient) {
-        this.skyGradient.sunDiscSize = v;
-        this.skyGradient._updateUniforms();
-      }
-      settings.set('sunDiscSize', v);
-    };
-    this.ui.onAuroraToggle = (enabled) => {
-      if (this.skyGradient) {
-        this.skyGradient.auroraEnabled = enabled;
-        this.skyGradient._updateUniforms();
-      }
-      settings.set('auroraEnabled', enabled);
-    };
-    this.ui.onSunLock = () => this._lockSunSettings();
     this.ui.onCameraZoomChange = (val) => {
       this.cameraZoom = val;
       this._updateCameraZoom();
     };
     // Spelling UI callbacks
-    this.ui.onSpellingPlay = () => this._onSpellingPlay();
-    this.ui.onSpellingCheck = (input) => this._onSpellingCheck(input);
-    this.ui.onSpellingReveal = () => this._onSpellingReveal();
-    this.ui.onSpellingClose = () => this._onSpellingClose();
-    this.ui.onSpellingPlayWord = (word) => this._onSpellingPlayWord(word);
+    this.ui.onSpellingPlay = () => this.spellingGlue.onSpellingPlay();
+    this.ui.onSpellingCheck = (input) => this.spellingGlue.onSpellingCheck(input);
+    this.ui.onSpellingReveal = () => this.spellingGlue.onSpellingReveal();
+    this.ui.onSpellingClose = () => this.spellingGlue.onSpellingClose();
+    this.ui.onSpellingPlayWord = (word) => this.spellingGlue.onSpellingPlayWord(word);
 
     // Timer — countdown
     this.floorTimer = this.progression.getRoundStartTime(GAME.COUNTDOWN_BASE);
@@ -311,7 +209,6 @@ export class Game {
     this.letterDrops = new LetterDrop(this.scene);
     this.spellingChallenge = null;
     this.spellingGlyphMesh = null;
-    this.spellingReturnCameraMode = null;
 
     // Pet system
     this.petManager = new PetManager();
@@ -345,27 +242,13 @@ export class Game {
         this.skyGradient.starsEnabled = value;
         this.skyGradient._updateUniforms();
       }
-      if (key === 'sunIntensity' && this.skyGradient) {
-        const v = parseFloat(value) || 0.5;
-        this.skyGradient.sunStrength = v;
-        this.skyGradient._updateUniforms();
-        if (this.sun) this.sun.intensity = v * 0.5;
-        this.world?.terrainMesh?.unifiedRenderer?.setLightIntensity?.(v * 0.5);
-        if (this.ui.elSunIntensityVal) this.ui.elSunIntensityVal.textContent = v.toFixed(1);
-      }
-      if (key === 'sunDiscSize' && this.skyGradient) {
-        const v = parseFloat(value) || 0.06;
-        this.skyGradient.sunDiscSize = v;
-        this.skyGradient._updateUniforms();
-        if (this.ui.elSunSizeVal) this.ui.elSunSizeVal.textContent = v.toFixed(2);
-      }
     });
 
     // Playtest mode detection
     const params = new URLSearchParams(location.search);
     this.playtestKey = params.get('playtest');
     this.isTimedMode = !!this.playtestKey;
-    this.tpCameraDebug = params.has('camdebug') || params.has('cameraDebug');
+    this.tpCamera.debug = params.has('camdebug') || params.has('cameraDebug');
 
     // Score tracking for timed mode
     this.lettersCollected = 0;
@@ -378,26 +261,18 @@ export class Game {
     this.mineComboTimer = 0;
     this._lastCollectSfxAt = 0;
 
-    // Resource floating-text batcher (type → { count, timer, color, displayName })
-    this._resourceTextBatcher = new Map();
-    this._RESOURCE_TEXT_FLUSH_DELAY = 0.8; // seconds of inactivity before flush
-    this._RESOURCE_TEXT_IMMEDIATE_FLUSH = 1000; // flush instantly at this threshold
-
     // Missile strike special attack
-    this.activeMissiles = [];
-    this.missileStrikeCooldown = 0;
+    this.missileSystem = new MissileStrikeSystem(this);
+    this.explosions = new ExplosionHandler(this);
+    this.mining = new MiningSystem(this);
 
     // Zone progression systems
     this.zoneManager = new ZoneManager();
     this.inventory = new Inventory();
     this.resources = new ResourceInventory();
-    this.hazards = null;
     this._blockHazardTimer = 0;
-    this.currentLetterQuiz = null;
-    this.pendingLetterLevelUp = null;
-    this._gatewayMeshes = [];
-    this._gatewayLabels = [];
-    this._isTransitioning = false;
+    this.spellingGlue = new SpellingQuizGlue(this);
+    this.zoneGateway = new ZoneGatewaySystem(this);
 
     // Touch controls for iPad/tablet
     this.touchControls = new TouchControls();
@@ -551,7 +426,6 @@ export class Game {
         this.player.setRocketBootsLevel(this.progression.getRocketBootsFuelLevel());
       }
       this.ui.updateStats();
-      this.ui.updateObjectiveHud?.(this._getObjectiveState());
     }
     return result;
   }
@@ -565,7 +439,6 @@ export class Game {
       this.ui.showFloatingText('Pickaxe reset!', 0xfbbf24);
     }
     this.ui.updateStats();
-    this.ui.updateObjectiveHud?.(this._getObjectiveState());
   }
 
   sellResource(resourceType, amount = 1) {
@@ -636,17 +509,9 @@ export class Game {
 
     const letters = this.letterPool.getCurrentLetters().join(' ');
     this.ui.setFloorText(`ZONE: ${zone?.name?.toUpperCase() || 'UNKNOWN'} — Letters: ${letters}`);
-    this.ui.updateObjectiveHud?.(this._getObjectiveState(zone?.id));
     this.ui.showExitOpen(false);
     this._spawnPet();
-    this._updateTorches();
-    this._createGateways();
-    this._setupHazards();
-  }
-
-  async _generateFloor(floorNum, seed) {
-    // Backward compatibility
-    return this._generateZones(seed);
+    this.zoneGateway.create();
   }
 
   async _loadPlaytestLevel() {
@@ -657,7 +522,7 @@ export class Game {
     if (!draftJson) {
       console.error('[Game] Playtest draft not found:', this.playtestKey);
       // Fall back to procedural
-      await this._generateFloor(1);
+      await this._generateZones(1);
       return;
     }
     let levelDoc;
@@ -665,7 +530,7 @@ export class Game {
       levelDoc = JSON.parse(draftJson);
     } catch (e) {
       console.error('[Game] Failed to parse playtest draft:', e);
-      await this._generateFloor(1);
+      await this._generateZones(1);
       return;
     }
 
@@ -701,14 +566,6 @@ export class Game {
     this._spawnPet();
   }
 
-  _updateTorches() {
-    // Clear old torches
-    for (const t of this.torches) {
-      this.scene.remove(t);
-    }
-    this.torches = [];
-  }
-
   _initAudioOnInteraction() {
     if (this._audioInitialized) return;
     const init = () => {
@@ -732,13 +589,13 @@ export class Game {
       this.player.position.set(0, 0, 0);
       this.killCount = 0;
       this.totalTime = 0;
-      await this._generateFloor(1);
+      await this._generateZones(1);
     } else {
       const nextFloor = this.world.floor + 1;
       if (this.isHost && this.net) {
         this.net.syncEvent('floor_changed', { floorNum: nextFloor, seed: this._worldSeed });
       }
-      await this._generateFloor(nextFloor, this._worldSeed);
+      await this._generateZones(this._worldSeed);
     }
   }
 
@@ -793,7 +650,7 @@ export class Game {
 
     if (this.state === STATES.SPELLING) {
       if (input.pressed('Escape')) {
-        this._onSpellingClose();
+        this.spellingGlue.onSpellingClose();
       }
       // Spelling uses the isometric camera so the glyph is visible.
       this._setCameraMode('iso', false);
@@ -867,7 +724,7 @@ export class Game {
     }
 
     if (this.cameraMode === 'thirdPerson') {
-      this._updateThirdPersonControls(dt);
+      this.tpCamera.updateControls(dt);
     }
 
     // Update shared sun direction for fake shadows
@@ -934,10 +791,10 @@ export class Game {
 
     // Update weapon cooldowns
     for (const w of this.player.weapons) w.update(dt);
-    this.missileStrikeCooldown = Math.max(0, this.missileStrikeCooldown - dt);
+    this.missileSystem.missileStrikeCooldown = Math.max(0, this.missileSystem.missileStrikeCooldown - dt);
 
     if (input.pressed('KeyQ')) {
-      this._tryCallMissileStrike();
+      this.missileSystem.tryFire();
     }
 
     // Contextual J button — mine block or attack enemy
@@ -968,7 +825,7 @@ export class Game {
       } else {
 
       // Check for nearby enemy first (combat priority)
-      const nearestEnemy = this._findNearestEnemy(2.5);
+      const nearestEnemy = this.mining.findNearestEnemy(2.5);
       if (nearestEnemy) {
         const equippedWeapon = this.player.getEquippedWeapon();
         this.player.playAttackAnim();
@@ -988,7 +845,7 @@ export class Game {
         weapon.cooldown = GAME.ATTACK_COOLDOWN;
       } else {
         // Mine nearest block
-        const miningTarget = this._findMiningTarget(GAME.MINE_RANGE);
+        const miningTarget = this.mining.findTarget(GAME.MINE_RANGE);
         const nearestBlock = miningTarget?.block;
         if (miningTarget && !miningTarget.allowed) {
           this.ui.showMiningBlocked(miningTarget, nearestBlock ? BLOCK_TYPES[nearestBlock.typeKey] : null);
@@ -1021,11 +878,11 @@ export class Game {
           if (miningTarget.isTerrain) {
             // ── Terrain block mining ──
             const g = miningTarget.gridPos;
-            const result = this.world.mineTerrainBlock(g.x, g.y, g.z, this._getMiningDamage(nearestBlock), {
+            const result = this.world.mineTerrainBlock(g.x, g.y, g.z, this.mining.getDamage(nearestBlock), {
               center: miningTarget.brushCenter,
               zoneId,
               type: typeKey,
-              radius: this._getTerrainBrushRadius(zoneId),
+              radius: this.mining.getBrushRadius(zoneId),
             });
             terrainResult = result;
             destroyed = result.destroyed;
@@ -1033,7 +890,7 @@ export class Game {
             zoneId = result.cell?.zoneId || zoneId;
           } else {
             // ── Floating block mining ──
-            destroyed = nearestBlock.takeDamage(this._getMiningDamage(nearestBlock));
+            destroyed = nearestBlock.takeDamage(this.mining.getDamage(nearestBlock));
           }
 
           if (destroyed) {
@@ -1082,7 +939,7 @@ export class Game {
             }
 
             if (miningTarget.isTerrain) {
-              this._awardTerrainDigRewards(terrainResult, blockPos, zoneId);
+              this.mining.awardTerrainDigRewards(terrainResult, blockPos, zoneId);
             } else {
               // enemyLoot: spawn loot on enemy death from block table
               const table = BLOCK_LOOT_TABLES[typeKey];
@@ -1101,7 +958,7 @@ export class Game {
               const blockDef = BLOCK_TYPES[typeKey];
               if (blockDef && blockDef.resource) {
                 this.resources.add(blockDef.resource, 1);
-                this.batchResourceText(blockDef.resource, 1, 0x88ccff);
+                this.mining.batchResourceText(blockDef.resource, 1, 0x88ccff);
               }
             }
 
@@ -1112,8 +969,8 @@ export class Game {
             const extraBudget = this.progression.getPickaxeWidth() - 1;
             if (extraBudget > 0) {
               const extraMined = miningTarget.isTerrain
-                ? this._mineExtraTerrainBlocks(miningTarget, zoneId, extraBudget)
-                : this._mineExtraFloatingBlocks(nearestBlock, zoneId, extraBudget);
+                ? this.mining.mineExtraTerrain(miningTarget, zoneId, extraBudget)
+                : this.mining.mineExtraFloating(nearestBlock, zoneId, extraBudget);
               // Pickaxe width bonus applied silently (no floating text spam)
             }
             SFXMapper.collectOre();
@@ -1146,7 +1003,7 @@ export class Game {
       world: this.world,
       game: this,
     });
-    this._updateActiveMissiles(dt);
+    this.missileSystem.update(dt);
 
     // World update (enemies + blocks)
     const worldStart = performance.now();
@@ -1163,7 +1020,6 @@ export class Game {
       this._onLootCollect(type, value, color);
     });
 
-    this._syncCurrentZoneFromPosition();
     this._checkZoneCompletion();
 
     // Letter drops update
@@ -1171,7 +1027,7 @@ export class Game {
     if (collectedLetter) {
       const letter = typeof collectedLetter === 'string' ? collectedLetter : collectedLetter.letter;
       const pickupPosition = typeof collectedLetter === 'string' ? null : collectedLetter.position;
-      this._collectLetterForMastery(letter, pickupPosition);
+      this.spellingGlue.collectLetter(letter, pickupPosition);
     }
 
     // Pet update
@@ -1215,13 +1071,8 @@ export class Game {
     // Check gateways
     this._checkGateways();
 
-    // Update hazards
-    if (this.hazards) {
-      this.hazards.update(dt);
-    }
-
-    this._processRewardFeedbackQueue();
-    this._flushResourceTexts(dt);
+    this.mining.processRewardFeedbackQueue();
+    this.mining.flushResourceTexts(dt);
 
     this._updateZoneAtmosphere(isoDepthFactor);
 
@@ -1233,15 +1084,9 @@ export class Game {
       return;
     }
 
-    // Update UI. Objective/zone-letter HUD work includes DOM mutation, so keep
-    // it responsive without doing it every animation frame.
+    // Update UI
     const uiStart = performance.now();
     this.ui.updateStats();
-    this._objectiveHudRefreshTimer += dt;
-    if (this._objectiveHudRefreshTimer >= 0.2) {
-      this._objectiveHudRefreshTimer = 0;
-      this.ui.updateObjectiveHud?.(this._getObjectiveState());
-    }
     this._perfFrame.uiMs += performance.now() - uiStart;
 
     // FPS counter
@@ -1348,17 +1193,14 @@ export class Game {
     const cycleEnabled = settings.get('skyCycleEnabled');
     const cycleSpeed = settings.get('skyCycleSpeed');
     const starsEnabled = settings.get('starfieldEnabled');
-    const sunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
-    const sunDiscSize = parseFloat(settings.get('sunDiscSize')) || 0.06;
-    const auroraEnabled = settings.get('auroraEnabled') !== false;
     this.skyGradient = new SkyGradient(this.scene, null, {
       scale: 800,
       autoTick: cycleEnabled,
       cycleSpeed: cycleSpeed,
       starsEnabled: starsEnabled,
-      sunStrength: sunIntensity,
-      sunDiscSize: sunDiscSize,
-      auroraEnabled: auroraEnabled,
+      sunStrength: 4.0,
+      sunDiscSize: 0.06,
+      auroraEnabled: false,
     });
     this._createCloudLayer();
   }
@@ -1375,9 +1217,8 @@ export class Game {
       // Sync directional light and terrain lighting with orbiting sun
       const sunDir = this.skyGradient.sunDir;
       const sunFactor = this.skyGradient.getSunIntensityFactor();
-      const userSunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
       const darkness = this.skyGradient.material.uniforms.darkness.value;
-      const adjustedIntensity = userSunIntensity * 0.5 * sunFactor * (1.0 - darkness * 0.5);
+      const adjustedIntensity = 4.0 * 0.5 * sunFactor * (1.0 - darkness * 0.5);
 
       if (this.sun) {
         this.sun.position.set(sunDir.x * 50, sunDir.y * 50, sunDir.z * 50);
@@ -1410,9 +1251,7 @@ export class Game {
     // Sync directional light with sky sun so shadows align with visible sun
     const sunDir = this.skyGradient.getSunDirection();
     const sunFactor = this.skyGradient.getSunIntensityFactor();
-    const userSunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
-    const userSunDiscSize = parseFloat(settings.get('sunDiscSize')) || 0.06;
-    const adjustedIntensity = userSunIntensity * 0.5 * sunFactor * (1.0 - darkness * 0.5);
+    const adjustedIntensity = 4.0 * 0.5 * sunFactor * (1.0 - darkness * 0.5);
     if (this.sun) {
       this.sun.color.copy(sunColor ?? new THREE.Color(preset.sunColor)).lerp(new THREE.Color(0x9fb6ff), darkness * 0.25);
       // Position the directional light so it shines FROM the sun direction
@@ -1422,10 +1261,10 @@ export class Game {
 
     this.skyGradient.setSun({
       color: sunColor ?? new THREE.Color(preset.sunColor),
-      strength: userSunIntensity * sunFactor * (1.0 - darkness * 0.5),
+      strength: 4.0 * sunFactor * (1.0 - darkness * 0.5),
       sharpness: 16.0,
       glowStrength: 0.6,
-      discSize: userSunDiscSize,
+      discSize: 0.06,
     });
     this.world?.terrainMesh?.unifiedRenderer?.setLightDir?.(sunDir.x, sunDir.y, sunDir.z);
     this.world?.terrainMesh?.unifiedRenderer?.setLightIntensity?.(adjustedIntensity);
@@ -1440,26 +1279,7 @@ export class Game {
     if (this.cloudGroup) this.cloudGroup.visible = visible && cloudOpacity > 0.03 && darkness < 0.96;
   }
 
-  _lockSunSettings() {
-    const intensity = settings.get('sunIntensity');
-    const discSize = settings.get('sunDiscSize');
-    fetch('/api/lock-settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sunIntensity: intensity, sunDiscSize: discSize }),
-    })
-      .then(r => r.json())
-      .then((res) => {
-        if (res.ok) {
-          this.ui?.showFloatingText?.(`🔒 Sun locked: ${intensity} / ${discSize}`, 0x4ade80);
-        } else {
-          this.ui?.showFloatingText?.('Lock failed — check server', 0xf87171);
-        }
-      })
-      .catch(() => {
-        this.ui?.showFloatingText?.('Lock failed — check server', 0xf87171);
-      });
-  }
+
 
   _createCloudLayer() {
     const canvas = document.createElement('canvas');
@@ -1504,111 +1324,6 @@ export class Game {
       this.cloudGroup.add(mesh);
     }
     this.scene.add(this.cloudGroup);
-  }
-
-  _createBoundaryEnvironment() {
-    this.boundaryEnvironment = new THREE.Group();
-    this.boundaryEnvironment.name = 'distant_boundary_environment';
-    for (const zone of ZONES) {
-      this._addZoneApron(zone);
-      this._addZoneSilhouettes(zone);
-    }
-    this.scene.add(this.boundaryEnvironment);
-  }
-
-  _addZoneApron(zone) {
-    const preset = ZONE_ATMOSPHERE[zone.id] || ZONE_ATMOSPHERE.default;
-    const b = zone.bounds;
-    const width = 26;
-    const yInner = -0.25;
-    const yOuter = -5.5;
-    const mat = new THREE.MeshLambertMaterial({
-      color: preset.groundTint,
-      transparent: true,
-      opacity: 0.82,
-      fog: true,
-      side: THREE.DoubleSide,
-    });
-    const strips = [
-      [[b.minX, yInner, b.minZ], [b.maxX, yInner, b.minZ], [b.maxX, yOuter, b.minZ - width], [b.minX, yOuter, b.minZ - width]],
-      [[b.maxX, yInner, b.minZ], [b.maxX, yInner, b.maxZ], [b.maxX + width, yOuter, b.maxZ], [b.maxX + width, yOuter, b.minZ]],
-      [[b.maxX, yInner, b.maxZ], [b.minX, yInner, b.maxZ], [b.minX, yOuter, b.maxZ + width], [b.maxX, yOuter, b.maxZ + width]],
-      [[b.minX, yInner, b.maxZ], [b.minX, yInner, b.minZ], [b.minX - width, yOuter, b.minZ], [b.minX - width, yOuter, b.maxZ]],
-    ];
-    for (const points of strips) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(points.flat(), 3));
-      geo.setIndex([0, 1, 2, 0, 2, 3]);
-      geo.computeVertexNormals();
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = `${zone.id}_terrain_apron`;
-      mesh.receiveShadow = false;
-      this.boundaryEnvironment.add(mesh);
-    }
-  }
-
-  _addZoneSilhouettes(zone) {
-    const preset = ZONE_ATMOSPHERE[zone.id] || ZONE_ATMOSPHERE.default;
-    const b = zone.bounds;
-    const mat = new THREE.MeshLambertMaterial({
-      color: preset.silhouette,
-      transparent: true,
-      opacity: zone.id === 'steelworks' ? 0.88 : 0.72,
-      fog: true,
-    });
-    const group = new THREE.Group();
-    group.name = `${zone.id}_horizon_silhouette`;
-    const cx = (b.minX + b.maxX) * 0.5;
-    const cz = (b.minZ + b.maxZ) * 0.5;
-    const longX = b.maxX - b.minX;
-    const longZ = b.maxZ - b.minZ;
-
-    if (zone.id === 'steelworks') {
-      for (let i = 0; i < 7; i++) {
-        const stack = new THREE.Mesh(new THREE.BoxGeometry(2.2, 12 + (i % 3) * 5, 2.2), mat);
-        stack.position.set(b.maxX + 15 + (i % 2) * 7, stack.geometry.parameters.height * 0.5 - 0.5, b.minZ + 12 + i * 14);
-        group.add(stack);
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.4, 4.5), mat);
-        cap.position.set(stack.position.x, stack.position.y + stack.geometry.parameters.height * 0.5 + 0.7, stack.position.z);
-        group.add(cap);
-      }
-      const gantry = new THREE.Mesh(new THREE.BoxGeometry(8, 2.2, longZ * 0.72), mat);
-      gantry.position.set(b.maxX + 20, 8, cz);
-      group.add(gantry);
-    } else if (zone.id === 'citadel') {
-      for (let i = 0; i < 5; i++) {
-        const tower = new THREE.Mesh(new THREE.BoxGeometry(5, 15 + i % 2 * 5, 5), mat);
-        tower.position.set(b.maxX + 14, tower.geometry.parameters.height * 0.5, b.minZ + 14 + i * 24);
-        group.add(tower);
-      }
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(5, 7, longZ * 0.82), mat);
-      wall.position.set(b.maxX + 12, 3.5, cz);
-      group.add(wall);
-    } else if (zone.id === 'forest' || zone.id === 'mire') {
-      const count = zone.id === 'mire' ? 18 : 24;
-      for (let i = 0; i < count; i++) {
-        const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.2, 7 + (i % 4), 1.2), mat);
-        trunk.position.set(b.minX + (i / count) * longX, trunk.geometry.parameters.height * 0.5 - 0.8, b.maxZ + 10 + (i % 3) * 2);
-        const crown = new THREE.Mesh(new THREE.ConeGeometry(4 + (i % 2), 9, 5), mat);
-        crown.position.set(trunk.position.x, trunk.position.y + trunk.geometry.parameters.height * 0.5 + 4, trunk.position.z);
-        group.add(trunk, crown);
-      }
-    } else if (zone.id === 'desert' || zone.id === 'ice') {
-      for (let i = 0; i < 8; i++) {
-        const ridge = new THREE.Mesh(new THREE.ConeGeometry(9 + (i % 3) * 3, 7 + (i % 4) * 2, 4), mat);
-        ridge.position.set(b.minX + 8 + i * (longX / 7), ridge.geometry.parameters.height * 0.5 - 1, b.maxZ + 13 + (i % 2) * 5);
-        ridge.rotation.y = Math.PI * 0.25;
-        group.add(ridge);
-      }
-    } else {
-      for (let i = 0; i < 8; i++) {
-        const rock = new THREE.Mesh(new THREE.BoxGeometry(4 + (i % 3), 5 + (i % 4), 4 + (i % 2)), mat);
-        rock.position.set(b.minX + 8 + i * (longX / 7), rock.geometry.parameters.height * 0.5 - 0.8, b.maxZ + 12);
-        group.add(rock);
-      }
-    }
-
-    this.boundaryEnvironment.add(group);
   }
 
   _syncTerrainFog() {
@@ -1717,7 +1432,7 @@ export class Game {
   _updateCamera(dt, isoOffset, shakeX = 0, shakeY = 0, shakeZ = 0, isoDepthFactor = 0) {
     this.world?.terrainMesh?.setRenderMode?.(this.cameraMode, this._renderScale || 1);
     if (this.cameraMode === 'thirdPerson') {
-      this._updateThirdPersonCamera(dt, shakeX, shakeY, shakeZ);
+      this.tpCamera.update(dt, shakeX, shakeY, shakeZ);
       if (this.player.mesh) this.player.mesh.visible = true;
       this._updateShadowCamera(dt);
       return;
@@ -1801,1104 +1516,143 @@ export class Game {
   }
 
   _updateThirdPersonControls(dt) {
-    const rig = this.tpCamera;
-    const tune = this.tpCameraTuning;
-    const sensitivity = 0.0022;
-    const mouseMoved = input.mouse.locked && (Math.abs(input.mouse.dx) > 0.01 || Math.abs(input.mouse.dy) > 0.01);
-    const gamepadLook = Math.abs(input.gamepad?.rightX) > 0.01 || Math.abs(input.gamepad?.rightY) > 0.01;
-    if (mouseMoved) {
-      rig.desiredYaw -= input.mouse.dx * sensitivity;
-      rig.pitch += input.mouse.dy * sensitivity;
-      rig.pitch = Math.max(tune.pitchMin, Math.min(tune.pitchMax, rig.pitch));
-      rig.manualRecenteringTimer = tune.recenterDelay;
-    } else if (gamepadLook) {
-      const lookSpeed = 2.2;
-      rig.desiredYaw -= input.gamepad.rightX * lookSpeed;
-      rig.pitch += input.gamepad.rightY * lookSpeed;
-      rig.pitch = Math.max(tune.pitchMin, Math.min(tune.pitchMax, rig.pitch));
-      rig.manualRecenteringTimer = tune.recenterDelay;
-    } else {
-      rig.manualRecenteringTimer = Math.max(0, rig.manualRecenteringTimer - dt);
-    }
-
-    if (input.pressed('KeyR')) {
-      rig.desiredYaw = this.player.rotation;
-      rig.manualRecenteringTimer = 0;
-    }
-
-    let forwardMove = 0;
-    let strafeMove = 0;
-    if (input.gamepad && (Math.abs(input.gamepad.leftX) > 0.01 || Math.abs(input.gamepad.leftY) > 0.01)) {
-      forwardMove = -input.gamepad.leftY;
-      strafeMove = input.gamepad.leftX;
-    } else {
-      if (input.isDown('KeyW') || input.isDown('ArrowUp')) forwardMove += 1;
-      if (input.isDown('KeyS') || input.isDown('ArrowDown')) forwardMove -= 1;
-      if (input.isDown('KeyA') || input.isDown('ArrowLeft')) strafeMove -= 1;
-      if (input.isDown('KeyD') || input.isDown('ArrowRight')) strafeMove += 1;
-    }
-
-    if (rig.manualRecenteringTimer <= 0 && (forwardMove !== 0 || strafeMove !== 0)) {
-      const moveYaw = Math.atan2(
-        Math.sin(rig.desiredYaw) * forwardMove - Math.cos(rig.desiredYaw) * strafeMove,
-        Math.cos(rig.desiredYaw) * forwardMove + Math.sin(rig.desiredYaw) * strafeMove
-      );
-      const recenterHalfLife = input.isDown('ShiftLeft') ? 0.42 : 0.75;
-      rig.desiredYaw = dampAngle(rig.desiredYaw, moveYaw, dt, recenterHalfLife);
-    }
-
-    this.camYaw = rig.desiredYaw;
-    this.camPitch = rig.pitch;
-    this.player.controlYaw = rig.desiredYaw;
+    return this.tpCamera.updateControls(dt);
   }
 
   _updateThirdPersonCamera(dt, shakeX = 0, shakeY = 0, shakeZ = 0) {
-    const rig = this.tpCamera;
-    const tune = this.tpCameraTuning;
-    const playerPos = this.player.position;
-    const rawSubject = new THREE.Vector3(playerPos.x, playerPos.y + tune.height, playerPos.z);
-
-    if (!rig.initialized) {
-      rig.subjectTarget.copy(rawSubject);
-      rig.lookTarget.copy(rawSubject);
-      rig.lookahead.set(0, 0, 0);
-      rig.previousPlayerPos.copy(playerPos);
-      rig.desiredYaw = this.camYaw;
-      rig.displayYaw = this.camYaw;
-      rig.pitch = this.camPitch;
-      rig.distance = tune.distance;
-      rig.collisionDistance = tune.distance;
-      this.camPos.copy(this._getThirdPersonDesiredPosition(rawSubject, rig.displayYaw, rig.pitch, tune.distance));
-      rig.initialized = true;
-    }
-
-    rig.distance = tune.distance;
-
-    // Dynamic FOV based on jet speed / rocket boot activity
-    let targetFov = tune.fov;
-    const jetSpeed = this.player.jetVelocity ? Math.sqrt(this.player.jetVelocity.x ** 2 + this.player.jetVelocity.y ** 2) : 0;
-    if (this.player.rocketBootsActive) {
-      targetFov = tune.fov + 5 + Math.min(6, jetSpeed * 1.2);
-    } else if (jetSpeed > 2.5) {
-      targetFov = tune.fov + Math.min(4, (jetSpeed - 2.5) * 0.8);
-    }
-    const fovT = smoothFactor(dt, 0.1);
-    this.thirdPersonCamera.fov += (targetFov - this.thirdPersonCamera.fov) * fovT;
-    if (Math.abs(this.thirdPersonCamera.fov - tune.fov) > 0.01 || this.player.rocketBootsActive) {
-      this.thirdPersonCamera.updateProjectionMatrix();
-    }
-
-    const horizontalT = smoothFactor(dt, tune.horizontalHalfLife);
-    rig.subjectTarget.x += (rawSubject.x - rig.subjectTarget.x) * horizontalT;
-    rig.subjectTarget.z += (rawSubject.z - rig.subjectTarget.z) * horizontalT;
-
-    const verticalDelta = rawSubject.y - rig.subjectTarget.y;
-    if (Math.abs(verticalDelta) > tune.verticalDeadZone) {
-      const targetY = rawSubject.y - Math.sign(verticalDelta) * tune.verticalDeadZone;
-      rig.subjectTarget.y += (targetY - rig.subjectTarget.y) * smoothFactor(dt, tune.verticalHalfLife);
-    }
-
-    const planarDelta = new THREE.Vector3(
-      playerPos.x - rig.previousPlayerPos.x,
-      0,
-      playerPos.z - rig.previousPlayerPos.z
-    );
-    const planarSpeed = dt > 0 ? planarDelta.length() / dt : 0;
-    let desiredLookahead = new THREE.Vector3();
-    if (planarSpeed > 0.08) {
-      desiredLookahead.copy(planarDelta).normalize();
-      const manualScale = rig.manualRecenteringTimer > 0 ? 0.45 : 1;
-      desiredLookahead.multiplyScalar(tune.lookahead * Math.min(1, planarSpeed / GAME.PLAYER_SPEED) * manualScale);
-    }
-    rig.lookahead.lerp(desiredLookahead, smoothFactor(dt, tune.lookaheadHalfLife));
-
-    const desiredLookTarget = rig.subjectTarget.clone().add(rig.lookahead);
-    const lookHorizontalT = smoothFactor(dt, tune.horizontalHalfLife);
-    rig.lookTarget.x += (desiredLookTarget.x - rig.lookTarget.x) * lookHorizontalT;
-    rig.lookTarget.z += (desiredLookTarget.z - rig.lookTarget.z) * lookHorizontalT;
-    rig.lookTarget.y += (desiredLookTarget.y - rig.lookTarget.y) * smoothFactor(dt, tune.verticalHalfLife);
-
-    const yawHalfLife = rig.manualRecenteringTimer > 0 ? 0.04 : tune.yawHalfLife;
-    rig.displayYaw = dampAngle(rig.displayYaw, rig.desiredYaw, dt, yawHalfLife);
-    this.camYaw = rig.desiredYaw;
-    this.camPitch = rig.pitch;
-
-    const fullDistanceDesired = this._getThirdPersonDesiredPosition(rig.lookTarget, rig.displayYaw, rig.pitch, rig.distance);
-    const direction = fullDistanceDesired.clone().sub(rig.lookTarget).normalize();
-    const rayDist = rig.lookTarget.distanceTo(fullDistanceDesired);
-    const actualDist = this._getThirdPersonCameraDistance(rig.lookTarget, fullDistanceDesired, direction, rayDist);
-    if (actualDist < rig.collisionDistance) {
-      rig.collisionDistance = actualDist;
-    } else {
-      rig.collisionDistance += (actualDist - rig.collisionDistance) * smoothFactor(dt, tune.collisionExtendHalfLife);
-    }
-
-    const resolvedDesired = rig.lookTarget.clone().add(direction.multiplyScalar(rig.collisionDistance));
-    const positionT = smoothFactor(dt, tune.positionHalfLife);
-    this.camPos.x += (resolvedDesired.x - this.camPos.x) * positionT;
-    this.camPos.y += (resolvedDesired.y - this.camPos.y) * positionT;
-    this.camPos.z += (resolvedDesired.z - this.camPos.z) * positionT;
-
-    this.thirdPersonCamera.position.set(
-      this.camPos.x + shakeX * 0.2,
-      this.camPos.y + shakeY * 0.2,
-      this.camPos.z + shakeZ * 0.2
-    );
-    this.thirdPersonCamera.lookAt(rig.lookTarget.x, rig.lookTarget.y, rig.lookTarget.z);
-    rig.previousPlayerPos.copy(playerPos);
-    this._updateShadowCamera(dt);
-
-    if (this.tpCameraDebug && typeof window !== 'undefined') {
-      window.__voidloopThirdPersonCameraTuning = tune;
-      window.__voidloopThirdPersonCamera = {
-        desiredYaw: rig.desiredYaw,
-        displayYaw: rig.displayYaw,
-        pitch: rig.pitch,
-        collisionDistance: rig.collisionDistance,
-        subjectTarget: rig.subjectTarget.toArray(),
-        lookTarget: rig.lookTarget.toArray(),
-        lookahead: rig.lookahead.toArray(),
-      };
-    }
+    return this.tpCamera.update(dt, shakeX, shakeY, shakeZ);
   }
 
   _getThirdPersonDesiredPosition(target, yaw, pitch, distance) {
-    const tune = this.tpCameraTuning;
-    const cosYaw = Math.cos(yaw);
-    const sinYaw = Math.sin(yaw);
-    const cosPitch = Math.cos(pitch);
-    const sinPitch = Math.sin(pitch);
-    return target.clone().add(new THREE.Vector3(
-      -sinYaw * distance * cosPitch + cosYaw * tune.shoulderX,
-      sinPitch * distance + tune.shoulderY,
-      -cosYaw * distance * cosPitch - sinYaw * tune.shoulderX
-    ));
+    return this.tpCamera.getDesiredPosition(target, yaw, pitch, distance);
   }
 
   _getThirdPersonCameraDistance(pivot, desired, direction, rayDist) {
-    const start = performance.now();
-    const terrain = this.world?.terrainMesh;
-    let actualDist = rayDist;
-
-    if (!terrain) {
-      this._perfFrame.cameraCollisionMs = performance.now() - start;
-      return actualDist;
-    }
-
-    const now = performance.now();
-    const cache = this._tpCollision;
-    const desiredMoved = !cache.initialized || cache.lastDesired.distanceToSquared(desired) > TP_COLLISION_MOVE_EPS * TP_COLLISION_MOVE_EPS;
-    const pivotMoved = !cache.initialized || cache.lastPivot.distanceToSquared(pivot) > 0.25 * 0.25;
-    const desiredBlocked = terrain.isSolidAt?.(desired.x, desired.y, desired.z);
-    const shouldRefresh = desiredMoved
-      || pivotMoved
-      || desiredBlocked
-      || cache.nearHit
-      || now - cache.lastAt >= TP_COLLISION_REFRESH_MS;
-
-    if (shouldRefresh) {
-      const hit = terrain.raycastVoxel?.(pivot, direction, rayDist + 0.35, { solidOnly: true });
-      actualDist = hit?.point ? Math.max(0.6, pivot.distanceTo(hit.point) - 0.3) : rayDist;
-      if (!hit?.point && desiredBlocked) actualDist = Math.min(actualDist, 1.1);
-      cache.lastAt = now;
-      cache.lastDesired.copy(desired);
-      cache.lastPivot.copy(pivot);
-      cache.actualDist = actualDist;
-      cache.rayDist = rayDist;
-      cache.nearHit = actualDist < rayDist - 0.2;
-      cache.initialized = true;
-    } else {
-      const cachedRatio = cache.rayDist > 0.001 ? cache.actualDist / cache.rayDist : 1;
-      actualDist = Math.min(rayDist, rayDist * cachedRatio);
-    }
-
-    this._perfFrame.cameraCollisionMs = performance.now() - start;
-    return actualDist;
+    return this.tpCamera.getCameraDistance(pivot, desired, direction, rayDist);
   }
 
   _findNearestEnemy(range) {
-    let nearest = null;
-    let nearestDist = range;
-    for (const enemy of this.world.enemies) {
-      if (enemy.dead) continue;
-      const dist = this.player.position.distanceTo(enemy.position);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = enemy;
-      }
-    }
-    return nearest;
+    return this.mining.findNearestEnemy(range);
   }
 
   _findMiningTarget(range) {
-    let nearest = null;
-    let nearestDist = range;
-    const playerPos = this.player.position;
-    const aim = this._getMiningAim();
-    const forward = new THREE.Vector3(aim.direction.x, 0, aim.direction.z);
-    if (forward.lengthSq() < 0.001) forward.set(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation));
-    forward.normalize();
-
-    const weaponId = this.player.weapons[this.player.currentSlot]?.data?.id || 'unknown';
-    const isPickaxe = weaponId === 'pickaxe';
-
-    // ── 1. Floating blocks (original behaviour) ──
-    for (const block of this.world.blocks.values()) {
-      if (block.destroyed) continue;
-
-      const blockIsFloating = block.isFloating === true;
-      if (!blockIsFloating) continue;
-
-      // Forward cone check — only blocks in front of the player
-      const toBlock = block.position.clone().sub(playerPos);
-      toBlock.y = 0;
-      const dist = toBlock.length();
-      if (dist > range) continue;
-
-      toBlock.normalize();
-      const dot = Math.max(-1, Math.min(1, forward.dot(toBlock)));
-      const angle = Math.acos(dot);
-      if (angle > Math.PI / 2.5) continue; // ~72° forward cone
-
-      // Block must be at or above ankle level
-      if (block.position.y + 0.5 < playerPos.y - 0.5) continue;
-
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = block;
-      }
-    }
-
-    if (nearest) {
-      return this._getMiningStatusForBlock(nearest, { isPickaxe });
-    }
-
-    // ── 2. Terrain blocks — raycast against unified mesh ──
-    if (isPickaxe) {
-      const terrainTarget = this._findTerrainMiningTarget(aim, forward, range, isPickaxe);
-      if (terrainTarget) return terrainTarget;
-    }
-
-    return null;
+    return this.mining.findTarget(range);
   }
 
   _findTerrainMiningTarget(aim, forward, range, isPickaxe) {
-    if (!this.world?.terrainMesh?.raycast) return null;
-
-    const playerFocus = this.player.position.clone().add(new THREE.Vector3(0, 0.65, 0));
-    const attempts = [];
-
-    if (this.cameraMode === 'thirdPerson') {
-      // Precision pass: camera/crosshair aim, but long enough to travel from
-      // the camera to the player's reachable mining bubble.
-      const cameraToPlayer = Math.max(0, aim.origin.distanceTo(playerFocus));
-      attempts.push({
-        origin: aim.origin.clone(),
-        dirs: [aim.direction.clone().normalize()],
-        rayRange: cameraToPlayer + range + 2.5,
-        maxPlayerDistance: range + 1.0,
-      });
-
-      // Auto-target pass: swing straight from the player like isometric mode,
-      // with a little vertical fan so walls, ceilings, and floor lips all work.
-      attempts.push({
-        origin: playerFocus,
-        dirs: [
-          forward.clone().setY(0.05).normalize(),
-          forward.clone().setY(0.28).normalize(),
-          forward.clone().setY(-0.35).normalize(),
-          forward.clone().multiplyScalar(0.85).add(new THREE.Vector3(0, -0.65, 0)).normalize(),
-        ],
-        rayRange: range + 1.35,
-        maxPlayerDistance: range + 0.85,
-      });
-    } else {
-      attempts.push({
-        origin: aim.origin,
-        dirs: [
-          aim.direction.clone(),
-          aim.direction.clone().multiplyScalar(0.75).add(new THREE.Vector3(0, -0.65, 0)).normalize(),
-          new THREE.Vector3(0, -1, 0),
-        ],
-        rayRange: range,
-        maxPlayerDistance: range + 0.5,
-      });
-    }
-
-    for (const attempt of attempts) {
-      for (const dir of attempt.dirs) {
-        if (!dir || dir.lengthSq() < 0.001) continue;
-        const raycaster = new THREE.Raycaster(attempt.origin, dir.normalize(), 0.05, attempt.rayRange);
-        const hit = this.world.terrainMesh.raycast(raycaster, attempt.origin, attempt.rayRange + 2);
-        if (!hit?.point) continue;
-        if (hit.point.distanceTo(playerFocus) > attempt.maxPlayerDistance) continue;
-        const target = this._buildTerrainMiningStatusFromHit(hit, isPickaxe);
-        if (target) return target;
-      }
-    }
-
-    if (this.cameraMode === 'iso' || this.cameraMode === 'topDown') {
-      const underfootTarget = this._findUnderfootTerrainMiningTarget(isPickaxe);
-      if (underfootTarget) return underfootTarget;
-    }
-
-    return null;
+    return this.mining.findTerrainTarget(aim, forward, range, isPickaxe);
   }
 
   _findUnderfootTerrainMiningTarget(isPickaxe) {
-    if (!this.world?.terrainMesh) return null;
-    const base = this.player.position;
-    const offsets = [
-      [0, 0],
-      [0.34, 0],
-      [-0.34, 0],
-      [0, 0.34],
-      [0, -0.34],
-    ];
-
-    for (const [ox, oz] of offsets) {
-      const x = base.x + ox;
-      const z = base.z + oz;
-      const zone = getZoneAtPosition(x, z);
-      if (!zone) continue;
-
-      const groundY = this.world.getGroundHeightAt(x, z, base.y + 0.4);
-      if (!Number.isFinite(groundY) || groundY <= -998) continue;
-
-      const center = new THREE.Vector3(x, groundY - 0.45, z);
-      if (!this.world.terrainMesh.isSolidAt(center.x, center.y, center.z)) {
-        center.y = groundY - 0.85;
-      }
-      if (!this.world.terrainMesh.isSolidAt(center.x, center.y, center.z)) continue;
-
-      return this._buildTerrainMiningStatusFromCenter(center, zone.id, isPickaxe);
-    }
-
-    return null;
+    return this.mining.findUnderfootTarget(isPickaxe);
   }
 
   _buildTerrainMiningStatusFromHit(hit, isPickaxe) {
-    const zone = getZoneAtPosition(hit.point.x, hit.point.z);
-    if (!zone) return null;
-    const normal = hit.face?.normal?.clone() || new THREE.Vector3(0, 1, 0);
-    normal.transformDirection(hit.object.matrixWorld).normalize();
-    let brushCenter = hit.point.clone().addScaledVector(normal, -0.45);
-    if (!this.world.terrainMesh.isSolidAt(brushCenter.x, brushCenter.y, brushCenter.z)) {
-      brushCenter = hit.point.clone().addScaledVector(normal, 0.45);
-    }
-    return this._buildTerrainMiningStatusFromCenter(brushCenter, zone.id, isPickaxe, hit.point.clone());
+    return this.mining._buildTerrainMiningStatusFromHit(hit, isPickaxe);
   }
 
   _buildTerrainMiningStatusFromCenter(brushCenter, zoneId, isPickaxe, hitPoint = brushCenter.clone()) {
-    const cellX = Math.floor(brushCenter.x);
-    const cellY = Math.floor(brushCenter.y);
-    const cellZ = Math.floor(brushCenter.z);
-    const cellState = this.world.terrainMesh.getCellState?.(cellX, cellY, cellZ);
-    const typeKey = cellState?.type || 'dirt';
-    const proxy = {
-      typeKey,
-      position: hitPoint.clone(),
-      zoneId,
-      isFloating: false,
-      isTerrain: true,
-      mineable: cellState?.properties?.mineable !== false,
-      destroyed: false,
-      tier: 1,
-    };
-    const status = this._getMiningStatusForBlock(proxy, { isPickaxe });
-    status.isTerrain = true;
-    status.gridPos = { x: brushCenter.x, y: brushCenter.y, z: brushCenter.z };
-    status.hitPoint = hitPoint.clone();
-    status.brushCenter = brushCenter;
-    status.terrainCell = { type: typeKey, zoneId };
-    return status;
+    return this.mining._buildTerrainMiningStatusFromCenter(brushCenter, zoneId, isPickaxe, hitPoint);
   }
 
   _getMiningStatusForBlock(block, options = {}) {
-    const isPickaxe = options.isPickaxe ?? (this.player.weapons[this.player.currentSlot]?.data?.id === 'pickaxe');
-
-    if (block.isFloating && !isPickaxe) {
-      return {
-        allowed: false,
-        block,
-        reason: 'wrong_weapon',
-        icon: '⛏',
-        requiredTier: 1,
-        currentTier: this.progression.getPickaxeWidth(),
-      };
-    }
-
-    const properties = getBlockProperties(block.typeKey);
-    if (block.mineable === false || properties.mineable === false) {
-      return {
-        allowed: false,
-        block,
-        reason: 'not_mineable',
-        icon: '',
-        requiredTier: 1,
-        currentTier: this.progression.getPickaxeWidth(),
-      };
-    }
-
-    return {
-      allowed: true,
-      block,
-      reason: 'ok',
-      requiredTier: 1,
-      currentTier: this.progression.getPickaxeWidth(),
-    };
+    return this.mining.getStatus(block, options);
   }
 
   _getMiningDamage(block) {
-    return 999;
+    return this.mining.getDamage(block);
   }
 
   _getTerrainBrushRadius(zoneId) {
-    const width = this.progression.getPickaxeWidth();
-    // Scale brush radius with pickaxe width — gets ridiculous
-    return Math.min(20, 0.85 + width * 0.25);
+    return this.mining.getBrushRadius(zoneId);
   }
 
   _mineExtraTerrainBlocks(miningTarget, zoneId, budget) {
-    if (!miningTarget?.brushCenter || budget <= 0) return 0;
-    // Cap extra blocks for performance even at ridiculous widths
-    budget = Math.min(budget, 500);
-    const base = miningTarget.brushCenter;
-    const radius = this._getTerrainBrushRadius(zoneId);
-    const brushes = [];
-    for (let i = 0; i < budget; i++) {
-      const angle = (Math.PI * 2 * i) / Math.max(1, budget);
-      const ring = 0.85 + Math.floor(i / 6) * 0.45;
-      const center = base.clone().add(new THREE.Vector3(Math.cos(angle) * ring, 0, Math.sin(angle) * ring));
-      brushes.push({
-        center,
-        zoneId,
-        type: miningTarget.terrainCell?.type || 'dirt',
-        radius,
-      });
-    }
-
-    const batch = this.world.mineTerrainBrushes(brushes, {
-      zoneId,
-      type: miningTarget.terrainCell?.type || 'dirt',
-      radius,
-    });
-
-    let mined = 0;
-    for (const result of batch.brushResults || []) {
-      if (!result?.meaningful) continue;
-      mined++;
-      const hitPos = result.center.clone();
-      this.blocksMined++;
-      this.progression.recordMined(result.zoneId || zoneId || this.zoneManager.currentZoneId, 1);
-      this.particles.dust(hitPos, 4);
-      this._awardTerrainDigRewards(result, hitPos, result.zoneId || zoneId);
-    }
-    if (mined > 0) {
-      this.floorTimer += GAME.TIME_BONUS_MINING * mined;
-    }
-    return mined;
+    return this.mining.mineExtraTerrain(miningTarget, zoneId, budget);
   }
 
   _mineExtraFloatingBlocks(originBlock, zoneId, budget) {
-    if (!originBlock || budget <= 0) return 0;
-    budget = Math.min(budget, 500);
-    const candidates = [];
-    for (const block of this.world.blocks.values()) {
-      if (!block || block === originBlock || block.destroyed || !block.isFloating) continue;
-      const dist = block.position.distanceTo(originBlock.position);
-      if (dist <= 3.25) candidates.push({ block, dist });
-    }
-    candidates.sort((a, b) => a.dist - b.dist);
-
-    let mined = 0;
-    for (const { block } of candidates) {
-      if (mined >= budget) break;
-      const status = this._getMiningStatusForBlock(block, { isPickaxe: true });
-      if (!status.allowed) continue;
-      if (!block.takeDamage(999)) continue;
-
-      const blockPos = block.position.clone();
-      blockPos.y += 0.3;
-      const typeKey = block.typeKey;
-      const blockZoneId = block.zoneId || zoneId || this.zoneManager.currentZoneId;
-      this.world.mineBlock(block, this.particles, audio);
-      this.blocksMined++;
-      this.progression.recordMined(blockZoneId, 1);
-      mined++;
-
-      this.particles.dust(blockPos, 8);
-      this.particles.spark(blockPos, 5);
-      const table = BLOCK_LOOT_TABLES[typeKey];
-      if (table) this.loot.spawnFromTable(blockPos, table);
-
-      if (Math.random() < this.progression.getLetterDropChance('floating')) {
-        const letter = this._pickLetterForZone(blockZoneId);
-        if (letter) {
-          this.letterDrops.spawn(blockPos, letter);
-          this.ui.showFloatingText(`Letter ${letter}!`, 0xfacc15);
-        }
-      }
-
-      const blockDef = BLOCK_TYPES[typeKey];
-      if (blockDef?.resource) {
-        this.resources.add(blockDef.resource, 1);
-      }
-    }
-    if (mined > 0) {
-      this.floorTimer += GAME.TIME_BONUS_MINING * mined;
-    }
-    return mined;
+    return this.mining.mineExtraFloating(originBlock, zoneId, budget);
   }
 
   _awardTerrainDigRewards(result, hitPos, zoneId) {
-    if (!result?.meaningful) return;
-
-    const width = this.progression.getPickaxeWidth();
-    const depth = result.depth || 0;
-    const luck = this.progression.state.letterDropLevel || 0;
-    const volumeBonus = Math.min(3, Math.floor((result.removedVolume || 0) / 10));
-    const amount = Math.max(1, Math.min(4, 1 + Math.floor((width - 1) / 2) + volumeBonus));
-    const resourceType = this._pickDigJunkResource(depth, width, luck);
-
-    if (this.resources.add(resourceType, amount)) {
-      this.batchResourceText(resourceType, amount, 0x9bd47a);
-    }
-
-    for (const node of result.revealedLetters || []) {
-      const spawnPos = node.position.clone();
-      this._enqueueRewardFeedback({ kind: 'letterDrop', position: spawnPos, letter: node.letter });
-      this._enqueueRewardFeedback({ kind: 'text', text: `Letter ${node.letter}!`, color: 0xfacc15 });
-    }
-
-    if (Math.random() < this.progression.getLetterDropChance('terrain')) {
-      const letter = this._pickLetterForZone(zoneId || result.zoneId || this.zoneManager.currentZoneId);
-      if (letter) {
-        this._enqueueRewardFeedback({ kind: 'letterDrop', position: hitPos.clone(), letter });
-        this._enqueueRewardFeedback({ kind: 'text', text: `Letter ${letter}!`, color: 0xfacc15 });
-      }
-    }
+    return this.mining.awardTerrainDigRewards(result, hitPos, zoneId);
   }
 
   _enqueueRewardFeedback(job) {
-    if (!job) return;
-    const readyAt = (performance.now?.() || Date.now()) + 45;
-    this._rewardFeedbackQueue.push({ ...job, readyAt });
-    if (this._rewardFeedbackQueue.length > 32) {
-      this._rewardFeedbackQueue.splice(0, this._rewardFeedbackQueue.length - 32);
-    }
+    return this.mining.enqueueRewardFeedback(job);
   }
 
   _processRewardFeedbackQueue(maxJobs = 3) {
-    if (!this._rewardFeedbackQueue.length) return;
-    const now = performance.now?.() || Date.now();
-    let processed = 0;
-    for (let i = 0; i < this._rewardFeedbackQueue.length && processed < maxJobs;) {
-      const job = this._rewardFeedbackQueue[i];
-      if (job.readyAt > now) {
-        i++;
-        continue;
-      }
-      this._rewardFeedbackQueue.splice(i, 1);
-      processed++;
-      if (job.kind === 'text') {
-        this.ui.showFloatingText(job.text, job.color);
-      } else if (job.kind === 'letterDrop') {
-        this.letterDrops.spawn(job.position, job.letter);
-      }
-    }
+    return this.mining.processRewardFeedbackQueue(maxJobs);
   }
 
   batchResourceText(type, amount = 1, color = 0x88ccff, displayName = null) {
-    const entry = this._resourceTextBatcher.get(type);
-    if (entry) {
-      entry.count += amount;
-      entry.timer = this._RESOURCE_TEXT_FLUSH_DELAY;
-      if (entry.count >= this._RESOURCE_TEXT_IMMEDIATE_FLUSH) {
-        this._flushResourceType(type);
-      }
-    } else {
-      this._resourceTextBatcher.set(type, {
-        count: amount,
-        timer: this._RESOURCE_TEXT_FLUSH_DELAY,
-        color,
-        displayName,
-      });
-    }
+    return this.mining.batchResourceText(type, amount, color, displayName);
   }
 
   _flushResourceType(type) {
-    const entry = this._resourceTextBatcher.get(type);
-    if (!entry) return;
-    const name = entry.displayName || entry.count + ' ' + type.replace(/_/g, ' ');
-    const text = entry.displayName ? `+${entry.count} ${entry.displayName}` : `+${name}`;
-    this.ui.showFloatingText(text, entry.color);
-    this._resourceTextBatcher.delete(type);
+    return this.mining.flushResourceType(type);
   }
 
   _flushResourceTexts(dt) {
-    for (const [type, entry] of this._resourceTextBatcher) {
-      entry.timer -= dt;
-      if (entry.timer <= 0) {
-        this._flushResourceType(type);
-      }
-    }
+    return this.mining.flushResourceTexts(dt);
   }
 
   _explodeGrenade(position, config = {}) {
-    return this._explodeBlast(position, {
-      kind: 'grenade',
-      radius: config.radius || GAME.GRENADE_RADIUS,
-      damage: config.damage || GAME.GRENADE_DAMAGE,
-      attackerWeaponId: config.attackerWeaponId || 'grenade',
-      remote: !!config.remote,
-      syncEventType: 'grenade_exploded',
-      maxTerrainCells: GAME.GRENADE_MAX_TERRAIN_CELLS,
-      floatingBlockCap: GAME.GRENADE_FLOATING_BLOCK_CAP,
-      terrainCenterOffsetY: 0,
-      terrainMinedCap: 12,
-      lootBudget: 5,
-      letterBudget: 2,
-    });
+    return this.explosions.grenade(position, config);
   }
 
   _explodeMissile(position, config = {}) {
-    return this._explodeBlast(position, {
-      kind: 'missile',
-      radius: config.radius || GAME.MISSILE_STRIKE_RADIUS,
-      damage: config.damage || GAME.MISSILE_STRIKE_DAMAGE,
-      attackerWeaponId: config.attackerWeaponId || 'missile_strike',
-      remote: !!config.remote,
-      maxTerrainCells: GAME.MISSILE_STRIKE_MAX_TERRAIN_CELLS,
-      floatingBlockCap: GAME.MISSILE_STRIKE_FLOATING_BLOCK_CAP,
-      terrainCenterOffsetY: -0.85,
-      terrainMinedCap: 24,
-      lootBudget: 7,
-      letterBudget: 2,
-    });
+    return this.explosions.missile(position, config);
   }
 
   _explodeBlast(position, config = {}) {
-    const radius = config.radius || GAME.GRENADE_RADIUS;
-    const damage = config.damage || GAME.GRENADE_DAMAGE;
-    const radiusSq = radius * radius;
-    const isRemote = !!config.remote;
-    const attackerWeaponId = config.attackerWeaponId || 'grenade';
-    const isMissile = config.kind === 'missile';
-
-    if (isMissile) {
-      SFXMapper.missileImpact();
-      this.particles.burst(position, 0xff8a00, 40);
-      this.particles.spark(position, 26);
-      this.particles.spawn({ pos: position, count: 34, color: 0x4f453c, speed: 7.5, life: 1.1, size: 0.52, texture: 'smoke' });
-      this.particles.spawn({ pos: position, count: 24, color: 0x9a6b35, speed: 7, life: 0.9, size: 0.36, texture: 'dirt' });
-      this.flipbooks.spawn({ ...FLIPBOOK_EFFECTS.explosion, pos: position.clone().add(new THREE.Vector3(0, 0.35, 0)), scale: 5.6, fps: 20 });
-      this._spawnShockwave(position, radius, 0xffaa33);
-      this._spawnImpactLight(position, 0xff8a33, 4.8, 0.28);
-      this._screenShake(2.35, 0.56);
-    } else {
-      SFXMapper.grenadeExplosion();
-      this.particles.burst(position, 0xff6600, 22);
-      this.particles.spark(position, 14);
-      this.particles.spawn({ pos: position, count: 18, color: 0x6f6254, speed: 5, life: 0.75, size: 0.34, texture: 'smoke' });
-      this.flipbooks.spawn({ pos: position.clone().add(new THREE.Vector3(0, 0.2, 0)), ...FLIPBOOK_EFFECTS.explosion });
-      this._screenShake(1.15, 0.32);
-    }
-
-    if (this.isMultiplayer && this.net && !isRemote && config.syncEventType) {
-      this.net.syncEvent(config.syncEventType, {
-        x: position.x,
-        y: position.y,
-        z: position.z,
-        radius,
-        damage,
-        attackerWeaponId,
-      });
-    }
-
-    for (const enemy of this.world.enemies) {
-      if (enemy.dead) continue;
-      const hitPos = enemy.position.clone().add(new THREE.Vector3(0, 0.45, 0));
-      const distSq = hitPos.distanceToSquared(position);
-      if (distSq > radiusSq) continue;
-      const dist = Math.sqrt(distSq);
-      const falloff = Math.max(0.25, 1 - dist / radius);
-      enemy.takeDamage(Math.round(damage * falloff), attackerWeaponId);
-      this.particles.spark(hitPos, 3);
-    }
-
-    const zone = getZoneAtPosition(position.x, position.z);
-    const terrainCenter = position.clone();
-    terrainCenter.y += config.terrainCenterOffsetY || 0;
-    const depth = Math.max(0, 1 - terrainCenter.y);
-    const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
-    const terrainResult = this.world.explodeTerrain(terrainCenter, {
-      radius,
-      zoneId: zone?.id || null,
-      type: typeKey,
-      maxCells: config.maxTerrainCells || GAME.GRENADE_MAX_TERRAIN_CELLS,
-    });
-    if (terrainResult.meaningful && !isRemote) {
-      this.blocksMined += Math.max(1, Math.min(config.terrainMinedCap || 12, Math.round((terrainResult.removedCells || 1) / 24)));
-      this._awardTerrainDigRewards(terrainResult, terrainCenter, terrainResult.zoneId);
-    }
-
-    const candidates = [];
-    for (const block of this.world.floatingBlocks) {
-      if (!block || block.destroyed) continue;
-      const blockCenter = block.position.clone().add(new THREE.Vector3(0.5, 0.5, 0.5));
-      const distSq = blockCenter.distanceToSquared(position);
-      if (distSq <= radiusSq) candidates.push({ block, distSq, blockCenter });
-    }
-    candidates.sort((a, b) => a.distSq - b.distSq);
-
-    let destroyedFloating = 0;
-    let lootBudget = config.lootBudget ?? 5;
-    let letterBudget = config.letterBudget ?? 2;
-    const resourceRewards = new Map();
-    const maxFloating = config.floatingBlockCap || GAME.GRENADE_FLOATING_BLOCK_CAP;
-
-    for (const { block, blockCenter } of candidates) {
-      if (destroyedFloating >= maxFloating) break;
-      const status = this._getMiningStatusForBlock(block, { isPickaxe: true });
-      if (!status.allowed) continue;
-
-      const blockType = block.typeKey;
-      const blockZoneId = block.zoneId;
-      this.world.mineBlock(block, this.particles, audio);
-      destroyedFloating++;
-
-      if (isRemote) continue;
-
-      if (lootBudget > 0) {
-        const table = BLOCK_LOOT_TABLES[blockType];
-        if (table) {
-          this.loot.spawnFromTable(blockCenter, table);
-          lootBudget--;
-        }
-      }
-
-      if (letterBudget > 0 && Math.random() < 0.18) {
-        const letter = this._pickLetterForZone(blockZoneId || this.zoneManager.currentZoneId);
-        if (letter) {
-          this.letterDrops.spawn(blockCenter, letter);
-          letterBudget--;
-        }
-      }
-
-      const blockDef = BLOCK_TYPES[blockType];
-      if (blockDef?.resource) {
-        resourceRewards.set(blockDef.resource, (resourceRewards.get(blockDef.resource) || 0) + 1);
-      }
-    }
-
-    if (!isRemote && destroyedFloating > 0) {
-      this.blocksMined += destroyedFloating;
-      this.ui.showFloatingText(`${isMissile ? 'Strike' : 'Blast'} broke ${destroyedFloating}`, 0xffaa00);
-      for (const [resource, amount] of resourceRewards) {
-        if (this.resources.add(resource, amount)) {
-          this.batchResourceText(resource, amount, 0x88ccff);
-        }
-      }
-    }
-  }
-
-  _tryCallMissileStrike() {
-    if (!this.progression.state.missile.unlocked) {
-      this.ui.showFloatingText('Unlock missile strike first', 0xffaa00);
-      SFXMapper.swingMiss();
-      return false;
-    }
-    if (this.missileStrikeCooldown > 0) {
-      if (!this.progression.spendMissileCharge()) {
-        this.ui.showFloatingText(`${this.missileStrikeCooldown.toFixed(1)}s`, 0xffaa00);
-        SFXMapper.swingMiss();
-        return false;
-      }
-    }
-
-    const payload = this._buildMissileStrikePayload();
-    if (!payload) {
-      this.ui.showFloatingText('No strike target', 0xff4444);
-      SFXMapper.swingMiss();
-      return false;
-    }
-
-    this.missileStrikeCooldown = this.progression.getMissileCooldown();
-    this._callMissileStrike(payload, { sync: true });
-    this.ui.showFloatingText('Missile strike', 0xffaa00);
-    return true;
-  }
-
-  _buildMissileStrikePayload() {
-    const center = this._getMissileStrikeCenter();
-    if (!center) return null;
-
-    const range = this.progression.getMissileCountRange();
-    const min = range.min || GAME.MISSILE_STRIKE_MIN || 3;
-    const max = range.max || GAME.MISSILE_STRIKE_MAX || min;
-    const count = min + Math.floor(Math.random() * (max - min + 1));
-    const missiles = [];
-
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const spread = i === 0 ? Math.random() * 0.8 : 1.9 + Math.random() * 4.3;
-      const x = center.x + Math.cos(angle) * spread;
-      const z = center.z + Math.sin(angle) * spread;
-      const target = this._getGroundedStrikePoint(x, z, center.y);
-      const start = target.clone().add(new THREE.Vector3(
-        -5 + Math.random() * 10,
-        28 + Math.random() * 12,
-        -5 + Math.random() * 10
-      ));
-
-      missiles.push({
-        sx: start.x,
-        sy: start.y,
-        sz: start.z,
-        tx: target.x,
-        ty: target.y,
-        tz: target.z,
-        delay: i * 0.14 + Math.random() * 0.12,
-        duration: 0.42 + Math.random() * 0.18,
-      });
-    }
-
-    return {
-      radius: this.progression.getMissileRadius(),
-      damage: GAME.MISSILE_STRIKE_DAMAGE,
-      missiles,
-    };
-  }
-
-  _getMissileStrikeCenter() {
-    const aim = this._getMiningAim();
-    const terrain = this.world?.terrainMesh;
-    if (terrain?.raycast) {
-      const dirs = this.cameraMode === 'thirdPerson'
-        ? [aim.direction.clone()]
-        : [
-          aim.direction.clone().normalize(),
-          aim.direction.clone().multiplyScalar(0.75).add(new THREE.Vector3(0, -0.55, 0)).normalize(),
-          new THREE.Vector3(0, -1, 0),
-        ];
-      for (const dir of dirs) {
-        const raycaster = new THREE.Raycaster(aim.origin, dir, 0.05, 70);
-        const hit = terrain.raycast(raycaster);
-        if (hit?.point) return hit.point.clone();
-      }
-    }
-
-    const forward = aim.direction.clone();
-    forward.y = 0;
-    if (forward.lengthSq() < 0.001) forward.set(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation));
-    forward.normalize();
-    const fallback = this.player.position.clone().addScaledVector(forward, 7.5);
-    return this._getGroundedStrikePoint(fallback.x, fallback.z, fallback.y);
-  }
-
-  _getGroundedStrikePoint(x, z, fallbackY = 0) {
-    const groundY = this.world?.getGroundHeightAt?.(x, z, 80);
-    const y = Number.isFinite(groundY) && groundY > -998 ? groundY + 0.12 : fallbackY;
-    return new THREE.Vector3(x, y, z);
-  }
-
-  _callMissileStrike(payload, options = {}) {
-    if (!payload?.missiles?.length) return;
-
-    if (this.isMultiplayer && this.net && options.sync) {
-      this.net.syncEvent('missile_strike', payload);
-    }
-
-    for (const spec of payload.missiles) {
-      const start = new THREE.Vector3(spec.sx, spec.sy, spec.sz);
-      const target = new THREE.Vector3(spec.tx, spec.ty, spec.tz);
-      const visual = this._createMissileVisual(start, target);
-      this.activeMissiles.push({
-        ...spec,
-        start,
-        target,
-        mesh: visual.mesh,
-        marker: visual.marker,
-        age: 0,
-        trailTimer: 0,
-        started: false,
-        remote: !!options.remote,
-        radius: payload.radius || GAME.MISSILE_STRIKE_RADIUS,
-        damage: payload.damage || GAME.MISSILE_STRIKE_DAMAGE,
-      });
-    }
-  }
-
-  _createMissileVisual(start, target) {
-    const group = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x2f3338,
-      metalness: 0.45,
-      roughness: 0.42,
-      emissive: 0x331100,
-      emissiveIntensity: 0.55,
-    });
-    const noseMat = new THREE.MeshStandardMaterial({
-      color: 0xff6a22,
-      emissive: 0xff3b00,
-      emissiveIntensity: 1.4,
-    });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.82, 10), bodyMat);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.32, 10), noseMat);
-    nose.position.y = -0.56;
-    nose.rotation.x = Math.PI;
-    group.add(body, nose);
-    group.position.copy(start);
-    const dir = target.clone().sub(start).normalize();
-    group.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
-    group.visible = false;
-    this.scene.add(group);
-
-    const markerMat = new THREE.MeshBasicMaterial({
-      color: 0xff3b00,
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-    });
-    const marker = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.025, 8, 48), markerMat);
-    marker.rotation.x = Math.PI / 2;
-    marker.position.copy(target).add(new THREE.Vector3(0, 0.05, 0));
-    this.scene.add(marker);
-
-    return { mesh: group, marker };
-  }
-
-  _updateActiveMissiles(dt) {
-    for (let i = this.activeMissiles.length - 1; i >= 0; i--) {
-      const missile = this.activeMissiles[i];
-      missile.age += dt;
-
-      if (missile.marker) {
-        const pulse = 1 + Math.sin(missile.age * 18) * 0.12;
-        missile.marker.scale.setScalar(pulse);
-        missile.marker.material.opacity = 0.35 + Math.max(0, Math.sin(missile.age * 18)) * 0.28;
-      }
-
-      if (missile.age < missile.delay) continue;
-
-      if (!missile.started) {
-        missile.started = true;
-        missile.mesh.visible = true;
-        SFXMapper.missileIncoming();
-      }
-
-      const rawT = Math.min(1, (missile.age - missile.delay) / Math.max(0.05, missile.duration));
-      const t = 1 - Math.pow(1 - rawT, 2.4);
-      missile.mesh.position.lerpVectors(missile.start, missile.target, t);
-
-      missile.trailTimer -= dt;
-      if (missile.trailTimer <= 0) {
-        missile.trailTimer = 0.035;
-        const trailPos = missile.mesh.position.clone();
-        this.particles.spawn({ pos: trailPos, count: 2, color: 0x3b352f, speed: 1.1, life: 0.45, size: 0.32, texture: 'smoke' });
-        this.particles.spawn({ pos: trailPos, count: 1, color: 0xff7a18, speed: 0.8, life: 0.24, size: 0.2, texture: 'flare' });
-      }
-
-      if (rawT >= 1) {
-        const impact = this._getGroundedStrikePoint(missile.target.x, missile.target.z, missile.target.y);
-        this._removeMissileVisual(missile);
-        this._explodeMissile(impact, {
-          radius: missile.radius,
-          damage: missile.damage,
-          remote: missile.remote,
-        });
-        this.activeMissiles.splice(i, 1);
-      }
-    }
-  }
-
-  _removeMissileVisual(missile) {
-    for (const obj of [missile.mesh, missile.marker]) {
-      if (!obj) continue;
-      this.scene.remove(obj);
-      obj.traverse?.((child) => {
-        child.geometry?.dispose?.();
-        if (Array.isArray(child.material)) {
-          child.material.forEach(mat => mat.dispose?.());
-        } else {
-          child.material?.dispose?.();
-        }
-      });
-      obj.geometry?.dispose?.();
-      obj.material?.dispose?.();
-    }
+    return this.explosions.blast(position, config);
   }
 
   _spawnShockwave(position, radius, color = 0xffaa33) {
-    const mat = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.72,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.035, 8, 64), mat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.copy(position).add(new THREE.Vector3(0, 0.08, 0));
-    this.scene.add(ring);
-
-    const start = performance.now();
-    const duration = 360;
-    const animate = () => {
-      const t = Math.min(1, (performance.now() - start) / duration);
-      ring.scale.setScalar(1 + t * radius * 1.15);
-      mat.opacity = 0.72 * (1 - t);
-      if (t < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        this.scene.remove(ring);
-        ring.geometry.dispose();
-        mat.dispose();
-      }
-    };
-    animate();
+    return this.explosions.shockwave(position, radius, color);
   }
 
   _spawnImpactLight(position, color = 0xff8a33, intensity = 4, duration = 0.25) {
-    const light = new THREE.PointLight(color, intensity, 18, 2);
-    light.position.copy(position).add(new THREE.Vector3(0, 1.2, 0));
-    this.scene.add(light);
-    const start = performance.now();
-    const total = duration * 1000;
-    const animate = () => {
-      const t = Math.min(1, (performance.now() - start) / total);
-      light.intensity = intensity * (1 - t);
-      if (t < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        this.scene.remove(light);
-      }
-    };
-    animate();
+    return this.explosions.impactLight(position, color, intensity, duration);
+  }
+
+  _tryCallMissileStrike() {
+    return this.missileSystem.tryFire();
+  }
+
+  _buildMissileStrikePayload() {
+    return this.missileSystem._buildMissileStrikePayload();
+  }
+
+  _getMissileStrikeCenter() {
+    return this.missileSystem._getMissileStrikeCenter();
+  }
+
+  _getGroundedStrikePoint(x, z, fallbackY = 0) {
+    return this.missileSystem._getGroundedStrikePoint(x, z, fallbackY);
+  }
+
+  _callMissileStrike(payload, options = {}) {
+    return this.missileSystem.call(payload, options);
+  }
+
+  _createMissileVisual(start, target) {
+    return this.missileSystem._createMissileVisual(start, target);
+  }
+
+  _updateActiveMissiles(dt) {
+    return this.missileSystem.update(dt);
+  }
+
+  _removeMissileVisual(missile) {
+    return this.missileSystem._removeMissileVisual(missile);
   }
 
   _pickDigJunkResource(depth, tier, luck) {
-    const roll = Math.random() + luck * 0.02 + tier * 0.015;
-    if (depth > 12 && roll > 0.82) return 'old_junk';
-    if (depth > 5 && roll > 0.55) return 'scrap_stone';
-    if (roll > 0.45) return 'gravel_bits';
-    return 'loose_dirt';
-  }
-
-  _findMineableBlock(range) {
-    // Deprecated: kept for compatibility, delegates to two-stage mining target.
-    const result = this._findMiningTarget(range);
-    return result?.allowed ? result.block : null;
-  }
-
-  _findNearestBlock(range) {
-    return this._findMineableBlock(range);
-  }
-
-  _syncCurrentZoneFromPosition() {
-    // With independent levels, zone is managed by gateway transitions, not position.
-    // Keep this as a no-op to avoid accidental zone switching.
+    return this.mining._pickDigJunkResource(depth, tier, luck);
   }
 
   _checkZoneCompletion() {
@@ -2913,38 +1667,8 @@ export class Game {
       this.ui.showExitOpen(true);
       this.ui.showFloatingText('Zone mastered', 0x4ade80);
       SFXMapper.floorComplete();
-      this._createGateways();
-      this.ui.updateObjectiveHud?.(this._getObjectiveState(zone.id));
+      this.zoneGateway.create();
     }
-  }
-
-  _getObjectiveState(zoneId = this.zoneManager.currentZoneId) {
-    const zone = getZoneById(zoneId);
-    if (!zone) return null;
-    const width = this.progression.getPickaxeWidth();
-    const mined = this.progression.getZoneMined(zone.id);
-    const miningTarget = this.progression.getZoneMiningTarget(zone);
-    const aliveEnemies = this.world.enemies.filter(e => e.zoneId === zone.id && !e.dead).length;
-    const passedLetters = (zone.letters || []).filter(letter => this.progression.hasPassedLetter(letter)).length;
-    return {
-      zoneId: zone.id,
-      letters: { done: passedLetters, total: zone.letters.length },
-      enemies: { done: true, remaining: 0, optionalRemaining: aliveEnemies },
-      mining: { done: mined >= miningTarget, current: mined, target: miningTarget },
-      grenade: {
-        unlocked: this.progression.state.grenade.unlocked,
-        charges: this.progression.state.grenade.charges,
-        cap: this.progression.getGrenadeChargeCap(),
-        cooldown: this.player.weapons[3]?.cooldown || 0,
-      },
-      missile: {
-        unlocked: this.progression.state.missile.unlocked,
-        charges: this.progression.state.missile.charges,
-        cooldown: this.missileStrikeCooldown || 0,
-      },
-      pickaxeTier: width,
-      completed: this.zoneManager.isZoneCompleted(zone.id),
-    };
   }
 
   _clearExitPortal() {
@@ -2954,181 +1678,26 @@ export class Game {
     }
   }
 
-  _spawnExitPortal() {
-    this._clearExitPortal();
-    if (!this.world.exitPosition) return;
-    const geo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x22ff22,
-      emissive: 0x22ff22,
-      emissiveIntensity: 0.8,
-      transparent: true,
-      opacity: 0.7,
-    });
-    this.exitMesh = new THREE.Mesh(geo, mat);
-    this.exitMesh.position.copy(this.world.exitPosition);
-    this.exitMesh.position.y = 0.6;
-    this.scene.add(this.exitMesh);
-
-    // Animate
-    const animate = () => {
-      if (!this.exitMesh) return;
-      this.exitMesh.rotation.y += 0.02;
-      this.exitMesh.position.y = 0.6 + Math.sin(Date.now() * 0.003) * 0.2;
-      requestAnimationFrame(animate);
-    };
-    animate();
-  }
-
   // ===== Zone Gateway System =====
 
   _createGateways() {
-    this._clearGateways();
-    const currentZone = this.zoneManager.getCurrentZone();
-    if (!currentZone || !currentZone.exitGateway) return;
-
-    const gw = currentZone.exitGateway;
-    const targetZone = getZoneById(gw.targetZone);
-    if (!targetZone) return;
-
-    // Create barrier mesh
-    const geo = new THREE.PlaneGeometry(4, 4);
-    const isUnlocked = this.zoneManager.isZoneUnlocked(targetZone.id);
-    const color = isUnlocked ? 0x44ff44 : 0xff4444;
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 0.5,
-      transparent: true,
-      opacity: 0.3,
-      side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(gw.x, 2, gw.z);
-    mesh.rotation.y = Math.PI / 2;
-    this.scene.add(mesh);
-    this._gatewayMeshes.push(mesh);
-
-    // Floating label
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 512;
-    canvas.height = 128;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.beginPath();
-    ctx.roundRect(0, 0, 512, 128, 16);
-    ctx.fill();
-    ctx.fillStyle = isUnlocked ? '#4ade80' : '#f87171';
-    ctx.font = 'bold 36px sans-serif';
-    ctx.textAlign = 'center';
-    const label = isUnlocked ? `✅ ${targetZone.name}` : `🔒 ${targetZone.name}`;
-    ctx.fillText(label, 256, 80);
-    const tex = new THREE.CanvasTexture(canvas);
-    const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-    const sprite = new THREE.Sprite(spriteMat);
-    sprite.scale.set(4, 1, 1);
-    sprite.position.set(gw.x, 5, gw.z);
-    this.scene.add(sprite);
-    this._gatewayLabels.push(sprite);
+    return this.zoneGateway.create();
   }
 
   _clearGateways() {
-    for (const m of this._gatewayMeshes) {
-      this.scene.remove(m);
-      if (m.geometry) m.geometry.dispose();
-      if (m.material) m.material.dispose();
-    }
-    for (const s of this._gatewayLabels) {
-      this.scene.remove(s);
-      if (s.material && s.material.map) s.material.map.dispose();
-      if (s.material) s.material.dispose();
-    }
-    this._gatewayMeshes = [];
-    this._gatewayLabels = [];
+    return this.zoneGateway.clear();
   }
 
   _checkGateways() {
-    const currentZone = this.zoneManager.getCurrentZone();
-    if (!currentZone || !currentZone.exitGateway) return;
-
-    const gw = currentZone.exitGateway;
-    const targetZone = getZoneById(gw.targetZone);
-    if (!targetZone) return;
-
-    const dist = this.player.position.distanceTo(new THREE.Vector3(gw.x, this.player.position.y, gw.z));
-    if (dist < 5) {
-      const isUnlocked = this.zoneManager.isZoneUnlocked(targetZone.id);
-      if (isUnlocked) {
-        // Zone is unlocked — offer transition
-        this._transitionToZone(targetZone.id);
-        return;
-      }
-
-      const previousZoneId = this.zoneManager.getPreviousZoneId(targetZone.id);
-      const canEnter = !previousZoneId || this.zoneManager.isZoneCompleted(previousZoneId);
-      if (canEnter) {
-        this.zoneManager.unlockZone(targetZone.id);
-        this.ui.showFloatingText(`${targetZone.name} unlocked!`, 0x4ade80);
-        this._createGateways();
-        this._transitionToZone(targetZone.id);
-      } else {
-        this.ui.showGatewayIndicator(targetZone.name, true, ['ABC', '⛏']);
-        this.ui.showFloatingText('Master this zone first', 0xff4444);
-      }
-    }
+    return this.zoneGateway.check();
   }
 
-  async _transitionToZone(targetZoneId) {
-    if (this._isTransitioning) return;
-    this._isTransitioning = true;
-
-    const targetZone = getZoneById(targetZoneId);
-    this.ui.showLoading(`Entering ${targetZone?.name || 'Unknown Zone'}...`);
-
-    // Small delay to let the loading screen render
-    await new Promise(r => setTimeout(r, 150));
-
-    this.zoneManager.setCurrentZone(targetZoneId);
-    await this._generateZones(this._worldSeed, targetZoneId);
-
-    this.ui.hideLoading();
-    this._isTransitioning = false;
+  _transitionToZone(targetZoneId) {
+    return this.zoneGateway.transition(targetZoneId);
   }
 
   _respawnZoneEnemies(zoneId) {
-    // Enemies for newly unlocked zone are spawned on unlock
-    // This is handled by regenerating the zone with enemies
-    const zone = getZoneById(zoneId);
-    if (!zone) return;
-    const seed = this._worldSeed + zone.order * 7919;
-    // We can't easily regenerate just enemies, so we'll spawn them manually
-    const rng = { random: () => Math.random(), choice: (arr) => arr[Math.floor(Math.random() * arr.length)] };
-    const b = zone.bounds;
-    const size = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2;
-    const enemyCount = Math.min(Math.floor(5 + size / 8), 25);
-    const enemyTypes = zone.enemyTypes;
-    const sp = zone.spawnPoint;
-    for (let i = 0; i < enemyCount; i++) {
-      const et = rng.choice(enemyTypes);
-      let ex, ez, attempts = 0;
-      do {
-        const angle = rng.random() * Math.PI * 2;
-        const dist = 4 + rng.random() * (size - 7);
-        ex = sp.x + Math.cos(angle) * dist;
-        ez = sp.z + Math.sin(angle) * dist;
-        attempts++;
-      } while ((this.world.getBlock(ex, 0, ez) || this.world._hasGround(ex, ez)) && attempts < 20);
-      const enemy = new Enemy(et, ex, ez);
-      enemy.world = this.world;
-      enemy._netId = this.world._nextEnemyId++;
-      enemy.spawn(this.scene).then(() => {
-        this.world.enemies.push(enemy);
-      });
-    }
-  }
-
-  _setupHazards() {
-    this.hazards = null;
+    return this.zoneGateway.respawnEnemies(zoneId);
   }
 
   _updateCameraZoom() {
@@ -3158,12 +1727,12 @@ export class Game {
     this.cameraMode = mode;
     if (mode === 'thirdPerson') {
       this.camera = this.thirdPersonCamera;
-      const tune = this.tpCameraTuning;
+      const tune = this.tpCamera.tuning;
       this.camYaw = this.player.rotation;
       this.camPitch = tune.pitchDefault;
       this.thirdPersonCamera.fov = tune.fov;
       this.thirdPersonCamera.updateProjectionMatrix();
-      const rig = this.tpCamera;
+      const rig = this.tpCamera.rig;
       const subject = new THREE.Vector3(this.player.position.x, this.player.position.y + tune.height, this.player.position.z);
       rig.subjectTarget.copy(subject);
       rig.lookTarget.copy(subject);
@@ -3176,11 +1745,11 @@ export class Game {
       rig.collisionDistance = tune.distance;
       rig.manualRecenteringTimer = 0;
       rig.initialized = true;
-      this.camPos.copy(this._getThirdPersonDesiredPosition(subject, rig.displayYaw, rig.pitch, rig.distance));
+      this.camPos.copy(this.tpCamera.getDesiredPosition(subject, rig.displayYaw, rig.pitch, rig.distance));
       this.thirdPersonCamera.position.copy(this.camPos);
       this.thirdPersonCamera.lookAt(subject.x, subject.y, subject.z);
-      this._tpCollision.initialized = false;
-      this._tpCollision.nearHit = false;
+      this.tpCamera.collision.initialized = false;
+      this.tpCamera.collision.nearHit = false;
       this.renderer.domElement.requestPointerLock?.();
       if (this.aimReticle) this.aimReticle.style.display = 'block';
       if (showToast) this.ui.showFloatingText('Third-person view', 0x7dd3fc);
@@ -3321,18 +1890,18 @@ export class Game {
         enemy.justDied = true;
       }
     } else if (type === 'grenade_exploded') {
-      this._explodeGrenade(new THREE.Vector3(data.x, data.y, data.z), {
+      this.explosions.grenade(new THREE.Vector3(data.x, data.y, data.z), {
         radius: data.radius || GAME.GRENADE_RADIUS,
         damage: data.damage || GAME.GRENADE_DAMAGE,
         attackerWeaponId: data.attackerWeaponId || 'grenade',
         remote: true,
       });
     } else if (type === 'missile_strike') {
-      this._callMissileStrike(data, { remote: true });
+      this.missileSystem.call(data, { remote: true });
     } else if (type === 'floor_changed') {
       if (!this.isHost && data.floorNum && data.seed != null) {
         this._worldSeed = data.seed;
-        this._generateFloor(data.floorNum, this._worldSeed);
+        this._generateZones(this._worldSeed);
       }
     }
   }
@@ -3348,7 +1917,7 @@ export class Game {
       // Coin/gem/ore
       if (value > 0) {
         this.player.coins += value;
-        this.batchResourceText(type, value, color, '💰');
+        this.mining.batchResourceText(type, value, color, '💰');
       }
     }
     const now = performance.now?.() || Date.now();
@@ -3374,360 +1943,67 @@ export class Game {
   // ==========================================
 
   _collectLetterForMastery(letter, pickupPosition = null) {
-    const result = this.progression.collectLetter(letter);
-    const state = result.state;
-    if (!state) return;
-    const effectPos = pickupPosition || this.player.position.clone();
-    SFXMapper.letterPickup();
-    const needed = this.progression.getQuizThreshold(letter);
-    const progress = Number.isFinite(needed) ? `${state.dropsTowardQuiz}/${needed}` : 'mastered';
-    this.lettersCollected++;
-    this.ui.updateZoneLetterHud?.(this.zoneManager.currentZoneId);
-    const pickupAnimMs = this.ui.animateLetterPickup?.(state.letter, effectPos, this.zoneManager.currentZoneId) || 0;
-    this.ui.showFloatingText(`${state.letter} ${progress}`, result.queued ? 0x4ade80 : 0xfacc15);
-    if (result.queued && pickupAnimMs > 0) {
-      setTimeout(() => this._tryStartQueuedLetterQuiz(), pickupAnimMs + 120);
-    } else {
-      this._tryStartQueuedLetterQuiz();
-    }
+    return this.spellingGlue.collectLetter(letter, pickupPosition);
   }
 
   _tryStartQueuedLetterQuiz() {
-    if (this.state !== STATES.PLAYING || this.currentLetterQuiz) return false;
-    const queued = this.progression.peekQuiz();
-    if (!queued) return false;
-    const zone = this.zoneManager.getCurrentZone();
-    this._enterLetterSoundQuiz(
-      queued.letter,
-      this.progression.makeQuizChoices(queued.letter, zone?.letters || undefined)
-    );
-    return true;
+    return this.spellingGlue.tryStartQuiz();
   }
 
   _enterLetterSoundQuiz(letter, choices) {
-    this._rememberSpellingCameraMode();
-    this.state = STATES.SPELLING;
-    this.currentLetterQuiz = { letter, choices };
-
-    if (this.spellingGlyphMesh) {
-      this.scene.remove(this.spellingGlyphMesh);
-      this.spellingGlyphMesh = null;
-    }
-
-    const glyph = glyph3D.createGlyph(letter, 'reward');
-    if (glyph) {
-      glyph.scale.setScalar(1.2);
-      glyph.position.set(this.player.position.x, 1.5, this.player.position.z);
-      this.scene.add(glyph);
-      this.spellingGlyphMesh = glyph;
-    }
-
-    const zoneLetters = this.zoneManager.getCurrentZone()?.letters || [];
-    const progressText = zoneLetters
-      .map(l => {
-        const passed = this.progression.hasPassedLetter(l);
-        const state = this.progression.getLetter(l);
-        return `<span class="${passed ? 'spelled' : 'pending'}">${l}${passed ? '✓' : ` Lv${state?.level || 1}`}</span>`;
-      })
-      .join(' ');
-
-    const state = this.progression.getLetter(letter);
-    const threshold = this.progression.getQuizThreshold(letter);
-    const subtitle = `Listen, then choose ${letter}. Meter ${state?.dropsTowardQuiz || 0}/${threshold}.`;
-    this.ui.showSoundQuiz(letter, choices, progressText, subtitle);
-    setTimeout(() => this._onSpellingPlay(), 250);
+    return this.spellingGlue.enterLetterSoundQuiz(letter, choices);
   }
 
   _resolveLetterSoundQuiz(choice) {
-    if (!this.currentLetterQuiz) return;
-    const target = this.currentLetterQuiz.letter;
-    const correct = String(choice || '').toUpperCase() === target;
-
-    if (!correct) {
-      this.progression.resolveQuiz(target, false);
-      this.ui.setSpellingFeedback('Listen again and try one more time.', false);
-      SFXMapper.swingMiss();
-      this._speakLetter(target);
-      return;
-    }
-
-    const result = this.progression.resolveQuiz(target, true);
-    this.letterPool.markSpelled(target);
-    this.petManager.recordMastery?.(target, result.state);
-    if (result.levelUp) {
-      const levelUpPos = new THREE.Vector3();
-      if (this.spellingGlyphMesh) {
-        this.spellingGlyphMesh.getWorldPosition(levelUpPos);
-      } else {
-        levelUpPos.copy(this.player.position).add(new THREE.Vector3(0, 0.75, 0));
-      }
-      this.pendingLetterLevelUp = {
-        letter: target,
-        oldLevel: result.oldLevel,
-        newLevel: result.newLevel,
-        position: levelUpPos,
-      };
-    }
-    if (this.pet?.letter === target && result.levelUp) {
-      this.pet.setLevel(result.newLevel);
-      this.pet.playLevelUp();
-    }
-    this.player.coins += 10;
-    this.floorTimer += 3;
-    this.ui.setSpellingFeedback(`Correct! +${result.xpGained} XP`, true);
-    if (!result.levelUp) {
-      this.ui.showFloatingText(`${target} Lv.${result.newLevel}`, 0xfacc15);
-    }
-    this.batchResourceText('coins', 10, 0xfacc15, '💰');
-    this.ui.showTimeBonus('+3s LETTER!');
-    if (!result.levelUp) SFXMapper.collectOre();
-    this.ui.updateZoneLetterHud?.(this.zoneManager.currentZoneId);
-    setTimeout(() => this._exitLetterSoundQuiz(), 650);
+    return this.spellingGlue.resolveLetterSoundQuiz(choice);
   }
 
   _exitLetterSoundQuiz() {
-    this.currentLetterQuiz = null;
-    if (this.spellingGlyphMesh) {
-      this.scene.remove(this.spellingGlyphMesh);
-      this.spellingGlyphMesh.traverse((child) => {
-        if (child.isMesh && child.material && child.material.dispose) child.material.dispose();
-      });
-      this.spellingGlyphMesh = null;
-    }
-    this.ui.hideSpellingChallenge();
-    this.state = STATES.PLAYING;
-    this._restoreSpellingCameraMode();
-    this.ui.updateObjectiveHud?.(this._getObjectiveState());
-    this._playPendingLetterLevelUp();
-    this._checkZoneCompletion();
-    this._tryStartQueuedLetterQuiz();
+    return this.spellingGlue.exitLetterSoundQuiz();
   }
 
   _rememberSpellingCameraMode() {
-    if (this.spellingReturnCameraMode) return;
-    this.spellingReturnCameraMode = this.cameraMode;
+    return this.spellingGlue._rememberCameraMode();
   }
 
   _restoreSpellingCameraMode() {
-    const mode = this.spellingReturnCameraMode;
-    this.spellingReturnCameraMode = null;
-    if (mode && mode !== this.cameraMode) {
-      this._setCameraMode(mode, false);
-    }
+    return this.spellingGlue._restoreCameraMode();
   }
 
   _playPendingLetterLevelUp() {
-    if (!this.pendingLetterLevelUp) return;
-    const event = this.pendingLetterLevelUp;
-    this.pendingLetterLevelUp = null;
-    this.shaderFX.playLetterLevelUp(event.letter, event.position, event.oldLevel, event.newLevel);
-    this.ui.showFloatingText(`${event.letter} Lv.${event.newLevel}!`, 0x4ade80);
-    SFXMapper.levelUp();
+    return this.spellingGlue.playPendingLevelUp();
   }
 
   _speakLetter(letter) {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(`Letter ${letter}`);
-      utterance.rate = 0.8;
-      utterance.pitch = 1.05;
-      window.speechSynthesis.speak(utterance);
-    }
+    return this.spellingGlue.speakLetter(letter);
   }
 
   _enterSpellingChallenge(letter) {
-    if (this.state === STATES.SPELLING) return;
-    const wordObj = this.letterPool.pickWordForLetter(letter);
-    if (!wordObj) return;
-
-    this._rememberSpellingCameraMode();
-    this.state = STATES.SPELLING;
-    this.spellingChallenge = new SpellingChallenge(wordObj);
-
-    // Spawn a 3D glyph floating above the player
-    if (this.spellingGlyphMesh) {
-      this.scene.remove(this.spellingGlyphMesh);
-      this.spellingGlyphMesh = null;
-    }
-    const glyph = glyph3D.createGlyph(letter, 'reward');
-    if (glyph) {
-      glyph.scale.setScalar(1.2);
-      glyph.position.set(this.player.position.x, 1.5, this.player.position.z);
-      this.scene.add(glyph);
-      this.spellingGlyphMesh = glyph;
-    }
-
-    // Build progress text
-    const progressText = this.letterPool.getProgressText()
-      .split(' ')
-      .map(token => {
-        const isSpelled = token.includes('✓');
-        return `<span class="${isSpelled ? 'spelled' : 'pending'}">${token}</span>`;
-      })
-      .join(' ');
-
-    // Build word list for current level (all words for current letters)
-    const currentLetters = this.letterPool.getCurrentLetters();
-    const wordList = [];
-    for (const l of currentLetters) {
-      const words = SPELLING_WORDS[l];
-      if (words) {
-        for (const w of words) wordList.push(w.word);
-      }
-    }
-
-    this.ui.showSpellingChallenge(letter, wordObj, progressText, wordList);
-
-    // Auto-play audio after short delay
-    setTimeout(() => {
-      this._onSpellingPlay();
-    }, 400);
+    return this.spellingGlue.enterSpellingChallenge(letter);
   }
 
-  async _onSpellingPlay() {
-    if (this.currentLetterQuiz) {
-      this._speakLetter(this.currentLetterQuiz.letter);
-      return;
-    }
-    if (!this.spellingChallenge) return;
-    this.ui.elSpellingPlayBtn.disabled = true;
-    await this.spellingChallenge.playAudio();
-    this.ui.elSpellingPlayBtn.disabled = false;
-    this.ui.enableSpellingInput();
+  _onSpellingPlay() {
+    return this.spellingGlue.onSpellingPlay();
   }
 
   _onSpellingPlayWord(word) {
-    // Play audio for a specific word from the preview list
-    const path = `audio/spelling/${word.toLowerCase().replace(/[^a-z0-9]/g, '_')}_en_word.wav`;
-    const player = new Audio(path);
-    player.play().catch(() => {
-      if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance(word);
-        u.rate = 0.9;
-        window.speechSynthesis.speak(u);
-      }
-    });
+    return this.spellingGlue.onSpellingPlayWord(word);
   }
 
   _onSpellingCheck(input) {
-    if (this.currentLetterQuiz) {
-      this._resolveLetterSoundQuiz(input);
-      return;
-    }
-    if (!this.spellingChallenge) return;
-    const correct = this.spellingChallenge.checkAnswer(input);
-    if (correct) {
-      this.ui.setSpellingFeedback('Correct! 🎉', true);
-      this.ui.setSpellingRevealVisible(false);
-      SFXMapper.collectOre(); // reuse positive sound
-      // Confetti / floating text
-      this.ui.showFloatingText('SPELLED!', 0x4ade80);
-      setTimeout(() => this._exitSpellingChallenge(true), 1200);
-    } else {
-      this.ui.setSpellingFeedback('Try again!', false);
-      SFXMapper.swingMiss(); // reuse negative sound
-      const hintLevel = this.spellingChallenge.getCurrentHintLevel();
-      if (hintLevel >= 1) {
-        this.ui.updateSpellingHint(
-          this.spellingChallenge.getHintDisplay(),
-          this.spellingChallenge.getLetterCountHint()
-        );
-        this.ui.setSpellingRevealVisible(this.spellingChallenge.canRevealMore());
-      }
-      // Shake the input
-      this.ui.elSpellingInput.style.animation = 'none';
-      this.ui.elSpellingInput.offsetHeight;
-      this.ui.elSpellingInput.style.animation = 'shake 0.3s';
-    }
+    return this.spellingGlue.onSpellingCheck(input);
   }
 
   _onSpellingReveal() {
-    if (!this.spellingChallenge) return;
-    const revealed = this.spellingChallenge.revealNextLetter();
-    if (revealed) {
-      this.ui.updateSpellingHint(
-        this.spellingChallenge.getHintDisplay(),
-        this.spellingChallenge.getLetterCountHint()
-      );
-      this.ui.setSpellingRevealVisible(this.spellingChallenge.canRevealMore());
-    }
+    return this.spellingGlue.onSpellingReveal();
   }
 
   _onSpellingClose() {
-    if (this.currentLetterQuiz) {
-      this.currentLetterQuiz = null;
-      if (this.spellingGlyphMesh) {
-        this.scene.remove(this.spellingGlyphMesh);
-        this.spellingGlyphMesh.traverse((child) => {
-          if (child.isMesh && child.material && child.material.dispose) child.material.dispose();
-        });
-        this.spellingGlyphMesh = null;
-      }
-      this.ui.hideSpellingChallenge();
-      this.state = STATES.PLAYING;
-      this._restoreSpellingCameraMode();
-      this.ui.updateObjectiveHud?.(this._getObjectiveState());
-      return;
-    }
-    if (!this.spellingChallenge) return;
-    this._exitSpellingChallenge(false);
+    return this.spellingGlue.onSpellingClose();
   }
 
   _exitSpellingChallenge(success) {
-    if (this.spellingChallenge) {
-      this.spellingChallenge.stopAudio();
-      if (success) {
-        const letter = this.spellingChallenge.word[0].toUpperCase();
-        this.letterPool.markSpelled(letter);
-        // Pet spelling progress
-        const result = this.petManager.recordSpelling(letter, true);
-        if (result.unlocked && !result.wasUnlocked) {
-          // First time unlock — big celebration!
-          this.ui.showFloatingText(`Pet ${letter} Joined You!`, 0xfacc15);
-          this.particles.spark(this.player.position.clone().add(new THREE.Vector3(0, 1, 0)), 20);
-          SFXMapper.upgradeBuy();
-        } else if (!result.unlocked) {
-          // Show progress
-          const progress = result.spellingsCorrect;
-          const needed = result.spellingsNeeded;
-          this.ui.showFloatingText(`Pet ${letter}: ${progress}/${needed}`, 0x88ccff);
-        } else {
-          // Already unlocked — level up check
-          if (result.levelUp && this.pet && this.pet.letter === letter) {
-            this.pet.setLevel(result.newLevel);
-            this.pet.playLevelUp();
-            this.ui.showFloatingText(`Pet ${letter} ➜ Lv${result.newLevel}!`, 0x4ade80);
-          }
-        }
-        // Bonus rewards
-        this.player.coins += 10;
-        this.floorTimer += 5;
-        this.ui.showTimeBonus('+5s SPELLING!');
-        this.batchResourceText('coins', 10, 0xfacc15, '💰');
-      }
-      this.spellingChallenge = null;
-    }
-
-    if (this.spellingGlyphMesh) {
-      this.scene.remove(this.spellingGlyphMesh);
-      this.spellingGlyphMesh.traverse((child) => {
-        if (child.isMesh && child.material && child.material.dispose) {
-          child.material.dispose();
-        }
-      });
-      this.spellingGlyphMesh = null;
-    }
-
-    this.ui.hideSpellingChallenge();
-    this.state = STATES.PLAYING;
-    this._restoreSpellingCameraMode();
-
-    // Update progress text on HUD if needed
-    if (this.letterPool.allSpelledForLevel()) {
-      this.ui.showFloatingText('All letters found!', 0x4ade80);
-    }
-    this.ui.updateObjectiveHud?.(this._getObjectiveState());
-    this._checkZoneCompletion();
+    return this.spellingGlue.exitSpellingChallenge(success);
   }
 
   _applyGraphicsSettings() {
@@ -3788,10 +2064,6 @@ export class Game {
 
   // ===== Pet System =====
 
-  async _loadEvolvedAlphabet() {
-    // No-op: evolved FBX approach scrapped in favor of rainbow breathing effect at level 7
-  }
-
   _spawnPet() {
     const equipped = this.petManager.getEquippedPet();
     if (!equipped) return;
@@ -3800,7 +2072,7 @@ export class Game {
 
     const pet = new PetLetter(this.scene, equipped.letter, equipped.level, {
       onBlockDestroyed: (block) => this._onPetBlockDestroyed(block),
-      canMineBlock: (block) => this._getMiningStatusForBlock(block).allowed,
+      canMineBlock: (block) => this.mining.getStatus(block).allowed,
       initialPosition: this.player.position.clone().add(new THREE.Vector3(-1.2, 0.5, -1.2)),
       getGroundHeight: (x, z) => this.world?.getGroundHeightAt?.(x, z, this.player.position.y) ?? null,
       sunDirection: this._getSunDirection(),
