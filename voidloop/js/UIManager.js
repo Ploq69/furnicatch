@@ -63,8 +63,18 @@ export class UIManager {
     this.elCrosshair = document.getElementById('crosshair');
     this.elHotbar = document.getElementById('hotbar');
     this.elCamp = document.getElementById('camp-ui');
-    this.elBrightness = document.getElementById('brightness-control');
-    this.elBrightnessSlider = document.getElementById('brightness-slider');
+    this.elSunIntensity = document.getElementById('sun-intensity-control');
+    this.elSunIntensityVal = document.getElementById('sun-intensity-val');
+    this.elSunIntensityMinus = document.getElementById('sun-intensity-minus');
+    this.elSunIntensityPlus = document.getElementById('sun-intensity-plus');
+    this.elSunSize = document.getElementById('sun-size-control');
+    this.elSunSizeVal = document.getElementById('sun-size-val');
+    this.elSunSizeMinus = document.getElementById('sun-size-minus');
+    this.elSunSizePlus = document.getElementById('sun-size-plus');
+    this.elSunLock = document.getElementById('sun-lock-btn');
+    this.elSunLockControl = document.getElementById('sun-lock-control');
+    this.elAurora = document.getElementById('aurora-control');
+    this.elAuroraToggle = document.getElementById('aurora-toggle');
     this.elZoom = document.getElementById('zoom-control');
     this.elZoomSlider = document.getElementById('zoom-slider');
     this.elFps = document.getElementById('fps-display');
@@ -81,8 +91,11 @@ export class UIManager {
     this.elCalibrationReset = document.getElementById('calibration-reset');
     this.elCalibrationReadout = document.getElementById('calibration-readout');
     this.elCalibrationScaleSlider = document.getElementById('calibration-scale-slider');
-    this.onBrightnessChange = null;
+    this.onSunIntensityChange = null;
+    this.onSunSizeChange = null;
+    this.onAuroraToggle = null;
     this.onCameraZoomChange = null;
+    this.onSunLock = null;
 
     // Pet UI elements
     this.elPetHud = document.getElementById('pet-hud');
@@ -131,12 +144,75 @@ export class UIManager {
     // Zone select overlay
     this.elZoneSelect = document.getElementById('zone-select-overlay');
     this.elZoneSelectGrid = document.getElementById('zone-select-grid');
-    this.elBrightnessSlider.addEventListener('input', (e) => {
-      if (this.onBrightnessChange) this.onBrightnessChange(parseFloat(e.target.value));
-    });
+    this._bindNudgeControl(this.elSunIntensityMinus, this.elSunIntensityPlus, this.elSunIntensityVal, 0.5, 10.0, 0.5, 'onSunIntensityChange');
+    this._bindNudgeControl(this.elSunSizeMinus, this.elSunSizePlus, this.elSunSizeVal, 0.01, 0.20, 0.01, 'onSunSizeChange');
+    if (this.elSunLock) {
+      this.elSunLock.addEventListener('click', () => {
+        if (this.onSunLock) this.onSunLock();
+        SFXMapper.uiClick();
+      });
+    }
+    if (this.elAuroraToggle) {
+      const savedAurora = this.game?.settings?.get('auroraEnabled');
+      this.elAuroraToggle.textContent = savedAurora !== false ? 'On' : 'Off';
+      this.elAuroraToggle.addEventListener('click', () => {
+        const current = this.elAuroraToggle.textContent === 'On';
+        const next = !current;
+        this.elAuroraToggle.textContent = next ? 'On' : 'Off';
+        if (this.onAuroraToggle) this.onAuroraToggle(next);
+        SFXMapper.uiClick();
+      });
+    }
     this.elZoomSlider.addEventListener('input', (e) => {
       if (this.onCameraZoomChange) this.onCameraZoomChange(parseFloat(e.target.value));
     });
+  }
+
+  _bindNudgeControl(minusEl, plusEl, valEl, min, max, step, callbackName) {
+    if (!minusEl || !plusEl || !valEl) {
+      console.warn('[UI] Nudge control missing elements:', callbackName, { minusEl, plusEl, valEl });
+      return;
+    }
+    let intervalId = null;
+    let timeoutId = null;
+    const getVal = () => parseFloat(valEl.textContent) || min;
+    const setVal = (v) => {
+      v = Math.max(min, Math.min(max, Math.round(v / step) * step));
+      v = Math.round(v * 1000) / 1000; // avoid float noise
+      valEl.textContent = v.toFixed(step < 0.1 ? 2 : 1);
+      const cb = this[callbackName];
+      if (cb) cb(v);
+    };
+    const startRepeating = (delta) => {
+      setVal(getVal() + delta);
+      timeoutId = setTimeout(() => {
+        intervalId = setInterval(() => setVal(getVal() + delta), 120);
+      }, 300);
+    };
+    const stopRepeating = () => {
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
+      intervalId = null;
+      timeoutId = null;
+    };
+    const bindBtn = (btn, delta) => {
+      let didMousedown = false;
+      btn.addEventListener('mousedown', () => {
+        didMousedown = true;
+        startRepeating(delta);
+      });
+      btn.addEventListener('click', () => {
+        if (!didMousedown) setVal(getVal() + delta);
+        didMousedown = false;
+      });
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); startRepeating(delta); });
+      btn.addEventListener('mouseup', stopRepeating);
+      btn.addEventListener('mouseleave', () => { didMousedown = false; stopRepeating(); });
+      btn.addEventListener('touchend', stopRepeating);
+      btn.addEventListener('touchcancel', stopRepeating);
+    };
+    bindBtn(minusEl, -step);
+    bindBtn(plusEl, step);
   }
 
   _bindLoadout() {
@@ -426,7 +502,10 @@ export class UIManager {
     this.elHotbar.style.display = 'none';
     this.elFloorIndicator.style.display = 'none';
     if (this.elFps) this.elFps.style.display = 'none';
-    if (this.elBrightness) this.elBrightness.style.display = 'none';
+    if (this.elSunIntensity) this.elSunIntensity.style.display = 'none';
+    if (this.elSunSize) this.elSunSize.style.display = 'none';
+    if (this.elSunLockControl) this.elSunLockControl.style.display = 'none';
+    if (this.elAurora) this.elAurora.style.display = 'none';
     if (this.elZoom) this.elZoom.style.display = 'none';
   }
 
@@ -438,7 +517,10 @@ export class UIManager {
     this.elFloorIndicator.style.display = 'block';
     this._updatePetHud();
     if (this.elFps) this.elFps.style.display = 'block';
-    if (this.elBrightness) this.elBrightness.style.display = 'flex';
+    if (this.elSunIntensity) this.elSunIntensity.style.display = 'flex';
+    if (this.elSunSize) this.elSunSize.style.display = 'flex';
+    if (this.elSunLockControl) this.elSunLockControl.style.display = 'flex';
+    if (this.elAurora) this.elAurora.style.display = 'flex';
     if (this.elZoom) this.elZoom.style.display = 'flex';
   }
 
@@ -1375,7 +1457,10 @@ export class UIManager {
     this.elCrosshair.style.display = 'none';
     this.elHotbar.style.display = 'none';
     this.elFloorIndicator.style.display = 'none';
-    if (this.elBrightness) this.elBrightness.style.display = 'none';
+    if (this.elSunIntensity) this.elSunIntensity.style.display = 'none';
+    if (this.elSunSize) this.elSunSize.style.display = 'none';
+    if (this.elSunLockControl) this.elSunLockControl.style.display = 'none';
+    if (this.elAurora) this.elAurora.style.display = 'none';
     if (this.elZoom) this.elZoom.style.display = 'none';
     if (this.elFps) this.elFps.style.display = 'none';
     if (this.elExitOpen) this.elExitOpen.style.display = 'none';
@@ -1393,7 +1478,10 @@ export class UIManager {
     this.elCrosshair.style.display = 'block';
     this.elHotbar.style.display = 'flex';
     this.elFloorIndicator.style.display = 'block';
-    if (this.elBrightness) this.elBrightness.style.display = 'flex';
+    if (this.elSunIntensity) this.elSunIntensity.style.display = 'flex';
+    if (this.elSunSize) this.elSunSize.style.display = 'flex';
+    if (this.elSunLockControl) this.elSunLockControl.style.display = 'flex';
+    if (this.elAurora) this.elAurora.style.display = 'flex';
     if (this.elZoom) this.elZoom.style.display = 'flex';
     if (this.elFps) this.elFps.style.display = 'block';
     this._updatePetHud();

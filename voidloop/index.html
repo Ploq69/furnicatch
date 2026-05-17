@@ -466,7 +466,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      z-index: 10;
+      z-index: 30;
     }
     .slider-control {
       background: rgba(0,0,0,0.55);
@@ -481,6 +481,67 @@
     .slider-control input[type=range] {
       width: 100%;
       accent-color: #a855f7;
+    }
+    .nudge-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .nudge-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .nudge-btn:hover {
+      background: rgba(168,85,247,0.25);
+      border-color: rgba(168,85,247,0.5);
+    }
+    .nudge-btn:active {
+      background: rgba(168,85,247,0.4);
+      transform: scale(0.92);
+    }
+    .nudge-val {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fbbf24;
+      min-width: 36px;
+      text-align: center;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .lock-btn {
+      width: auto;
+      height: auto;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 800;
+      border-radius: 6px;
+      background: rgba(74,222,128,0.12);
+      border-color: rgba(74,222,128,0.35);
+      color: #4ade80;
+      gap: 4px;
+    }
+    .lock-btn:hover {
+      background: rgba(74,222,128,0.25);
+      border-color: rgba(74,222,128,0.6);
+    }
+    .lock-btn.locked {
+      background: rgba(74,222,128,0.3);
+      border-color: #4ade80;
+      color: #fff;
     }
 
     /* Loadout UI */
@@ -2677,9 +2738,28 @@
   <div id="fps-display">-- FPS</div>
 
   <div id="slider-controls">
-    <div class="slider-control" id="brightness-control">
-      <div style="font-size:11px; text-align:center; opacity:0.7;">Brightness</div>
-      <input type="range" id="brightness-slider" min="0.2" max="3.0" step="0.1" value="1.0">
+    <div class="slider-control" id="sun-intensity-control">
+      <div style="font-size:11px; text-align:center; opacity:0.7;">Sun Intensity</div>
+      <div class="nudge-row">
+        <button class="nudge-btn" id="sun-intensity-minus">-</button>
+        <span class="nudge-val" id="sun-intensity-val">4.0</span>
+        <button class="nudge-btn" id="sun-intensity-plus">+</button>
+      </div>
+    </div>
+    <div class="slider-control" id="sun-size-control">
+      <div style="font-size:11px; text-align:center; opacity:0.7;">Sun Size</div>
+      <div class="nudge-row">
+        <button class="nudge-btn" id="sun-size-minus">-</button>
+        <span class="nudge-val" id="sun-size-val">0.06</span>
+        <button class="nudge-btn" id="sun-size-plus">+</button>
+      </div>
+    </div>
+    <div class="slider-control" id="sun-lock-control">
+      <button class="nudge-btn lock-btn" id="sun-lock-btn">🔒 Lock</button>
+    </div>
+    <div class="slider-control" id="aurora-control">
+      <div style="font-size:11px; text-align:center; opacity:0.7;">Aurora</div>
+      <button class="nudge-btn" id="aurora-toggle">On</button>
     </div>
     <div class="slider-control" id="zoom-control">
       <div style="font-size:11px; text-align:center; opacity:0.7;">Zoom</div>
@@ -3027,6 +3107,26 @@
           <option value="ultra">Ultra</option>
         </select>
       </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-row">
+        <div class="settings-toggle">
+          <label>Sky Day/Night Cycle</label>
+          <input type="checkbox" id="settings-skycycle" checked>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>Cycle Speed <span class="val" id="settings-skyspeed-val">1.0x</span></label>
+        <input type="range" id="settings-skyspeed" min="0" max="5.0" step="0.5" value="1.0">
+      </div>
+      <div class="settings-row">
+        <div class="settings-toggle">
+          <label>Starfield</label>
+          <input type="checkbox" id="settings-stars" checked>
+        </div>
+      </div>
+
       <div class="settings-row">
         <label>Touch Controls</label>
         <select id="settings-touch">

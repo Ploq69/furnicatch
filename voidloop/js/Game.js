@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Sky } from 'three/addons/objects/Sky.js';
+import { SkyGradient, createSkyGradientPreset } from './SkyGradient.js';
 import { assetLoader } from './AssetLoader.js';
 import { input } from './InputManager.js';
 import { audio } from './AudioManager.js';
@@ -136,10 +136,7 @@ export class Game {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0a0a);
     this.renderer.setClearColor(this.scene.background);
-    this.skyMesh = null;
-    this.skyMaterial = null;
-    this.horizonMesh = null;
-    this.horizonMaterial = null;
+    this.skyGradient = null;
     this.cloudGroup = null;
     this.cloudMaterial = null;
     this.boundaryEnvironment = null;
@@ -213,10 +210,10 @@ export class Game {
     };
 
     // Lighting
-    this.ambient = new THREE.AmbientLight(0x8888aa, 0.6);
+    this.ambient = new THREE.AmbientLight(0xbbccdd, 0.9);
     this.scene.add(this.ambient);
 
-    this.sun = new THREE.DirectionalLight(0xfff5e6, 1.2);
+    this.sun = new THREE.DirectionalLight(0xfff5e6, 2.2);
     this.sun.position.set(10, 30, 10);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(512, 512);
@@ -255,13 +252,39 @@ export class Game {
     this.player = new Player(this.scene);
     this.player.world = this.world;
     this.ui = new UIManager(this);
+    // Sync sky button displays with saved settings
+    const savedSunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
+    const savedSunDiscSize = parseFloat(settings.get('sunDiscSize')) || 0.06;
+    if (this.ui.elSunIntensityVal) this.ui.elSunIntensityVal.textContent = savedSunIntensity.toFixed(1);
+    if (this.ui.elSunSizeVal) this.ui.elSunSizeVal.textContent = savedSunDiscSize.toFixed(2);
     this.aimReticle = document.createElement('div');
     this.aimReticle.textContent = '+';
     this.aimReticle.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#e8fff2;text-shadow:0 1px 4px #000;font-size:22px;font-weight:700;z-index:20;pointer-events:none;display:none;';
     document.body.appendChild(this.aimReticle);
-    this.ui.onBrightnessChange = (val) => {
-      this.renderer.toneMappingExposure = 1.5 * val;
+    this.ui.onSunIntensityChange = (val) => {
+      const v = parseFloat(val) || 0.5;
+      if (this.skyGradient) {
+        this.skyGradient.sunStrength = v;
+        this.skyGradient._updateUniforms();
+      }
+      settings.set('sunIntensity', v);
     };
+    this.ui.onSunSizeChange = (val) => {
+      const v = parseFloat(val) || 0.06;
+      if (this.skyGradient) {
+        this.skyGradient.sunDiscSize = v;
+        this.skyGradient._updateUniforms();
+      }
+      settings.set('sunDiscSize', v);
+    };
+    this.ui.onAuroraToggle = (enabled) => {
+      if (this.skyGradient) {
+        this.skyGradient.auroraEnabled = enabled;
+        this.skyGradient._updateUniforms();
+      }
+      settings.set('auroraEnabled', enabled);
+    };
+    this.ui.onSunLock = () => this._lockSunSettings();
     this.ui.onCameraZoomChange = (val) => {
       this.cameraZoom = val;
       this._updateCameraZoom();
@@ -311,6 +334,30 @@ export class Game {
       if (key === 'graphicsQuality' || key === 'shadowQuality') this._applyGraphicsSettings();
       if (key === 'masterVolume' || key === 'sfxVolume' || key === 'musicVolume') {
         settings.applyToAudio(audio);
+      }
+      if (key === 'skyCycleEnabled' && this.skyGradient) {
+        this.skyGradient.autoTick = value;
+      }
+      if (key === 'skyCycleSpeed' && this.skyGradient) {
+        this.skyGradient.cycleSpeed = value;
+      }
+      if (key === 'starfieldEnabled' && this.skyGradient) {
+        this.skyGradient.starsEnabled = value;
+        this.skyGradient._updateUniforms();
+      }
+      if (key === 'sunIntensity' && this.skyGradient) {
+        const v = parseFloat(value) || 0.5;
+        this.skyGradient.sunStrength = v;
+        this.skyGradient._updateUniforms();
+        if (this.sun) this.sun.intensity = v * 0.5;
+        this.world?.terrainMesh?.unifiedRenderer?.setLightIntensity?.(v * 0.5);
+        if (this.ui.elSunIntensityVal) this.ui.elSunIntensityVal.textContent = v.toFixed(1);
+      }
+      if (key === 'sunDiscSize' && this.skyGradient) {
+        const v = parseFloat(value) || 0.06;
+        this.skyGradient.sunDiscSize = v;
+        this.skyGradient._updateUniforms();
+        if (this.ui.elSunSizeVal) this.ui.elSunSizeVal.textContent = v.toFixed(2);
       }
     });
 
@@ -772,7 +819,7 @@ export class Game {
     this.ui.update(dt);
     this._perfFrame.uiMs += performance.now() - uiStart;
     const renderStart = performance.now();
-    this._updateSkyPosition();
+    this._updateSky(dt);
     // Render terrain first (writes depth + color), then THREE.js scene on top
     this.renderer.autoClear = false;
     this.renderer.clear();
@@ -1298,68 +1345,47 @@ export class Game {
   }
 
   _createSky() {
-    this.skyMesh = new Sky();
-    this.skyMesh.scale.setScalar(900);
-    this.skyMesh.name = 'voxel_sky';
-    this.skyMesh.frustumCulled = false;
-    this.skyMesh.renderOrder = -1000;
-    this.skyMaterial = this.skyMesh.material;
-    this.scene.add(this.skyMesh);
-
-    const hazeGeo = new THREE.SphereGeometry(185, 32, 16);
-    this.horizonMaterial = new THREE.ShaderMaterial({
-      side: THREE.BackSide,
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      fog: false,
-      uniforms: {
-        topColor: { value: new THREE.Color(VOXEL_SKY.TOP) },
-        horizonColor: { value: new THREE.Color(VOXEL_SKY.HORIZON) },
-        fogColor: { value: new THREE.Color(VOXEL_SKY.HORIZON) },
-        darkness: { value: 0 },
-        hazeStrength: { value: 0.3 },
-      },
-      vertexShader: `
-        varying vec3 vLocalPos;
-        void main() {
-          vLocalPos = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        precision highp float;
-        uniform vec3 topColor;
-        uniform vec3 horizonColor;
-        uniform vec3 fogColor;
-        uniform float darkness;
-        uniform float hazeStrength;
-        varying vec3 vLocalPos;
-        void main() {
-          vec3 dir = normalize(vLocalPos);
-          float heightT = smoothstep(-0.10, 0.70, dir.y);
-          float horizonBand = 1.0 - smoothstep(-0.05, 0.34, abs(dir.y));
-          vec3 color = mix(horizonColor, topColor, heightT);
-          color = mix(color, fogColor, horizonBand * hazeStrength);
-          color = mix(color, vec3(0.025, 0.035, 0.055), clamp(darkness, 0.0, 1.0));
-          float alpha = clamp(0.22 + horizonBand * 0.52 + darkness * 0.34, 0.0, 0.82);
-          gl_FragColor = vec4(color, alpha);
-        }
-      `,
+    const cycleEnabled = settings.get('skyCycleEnabled');
+    const cycleSpeed = settings.get('skyCycleSpeed');
+    const starsEnabled = settings.get('starfieldEnabled');
+    const sunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
+    const sunDiscSize = parseFloat(settings.get('sunDiscSize')) || 0.06;
+    const auroraEnabled = settings.get('auroraEnabled') !== false;
+    this.skyGradient = new SkyGradient(this.scene, null, {
+      scale: 800,
+      autoTick: cycleEnabled,
+      cycleSpeed: cycleSpeed,
+      starsEnabled: starsEnabled,
+      sunStrength: sunIntensity,
+      sunDiscSize: sunDiscSize,
+      auroraEnabled: auroraEnabled,
     });
-    this.horizonMesh = new THREE.Mesh(hazeGeo, this.horizonMaterial);
-    this.horizonMesh.name = 'zone_horizon_haze';
-    this.horizonMesh.frustumCulled = false;
-    this.horizonMesh.renderOrder = -995;
-    this.scene.add(this.horizonMesh);
-
     this._createCloudLayer();
   }
 
-  _updateSkyPosition() {
-    if (!this.skyMesh || !this.camera) return;
-    this.skyMesh.position.copy(this.camera.position);
-    if (this.horizonMesh) this.horizonMesh.position.copy(this.camera.position);
+  _updateSky(dt) {
+    if (this.skyGradient) {
+      this.skyGradient.mesh.position.copy(this.camera.position);
+      // Use fixed scale similar to old horizonMesh (185) — within far plane
+      // and close enough that nearby terrain occludes the sky
+      this.skyGradient.mesh.scale.setScalar(185);
+      // Update star twinkle / minor animations even when autoTick is off
+      this.skyGradient.update(Math.min(dt, 0.1));
+
+      // Sync directional light and terrain lighting with orbiting sun
+      const sunDir = this.skyGradient.sunDir;
+      const sunFactor = this.skyGradient.getSunIntensityFactor();
+      const userSunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
+      const darkness = this.skyGradient.material.uniforms.darkness.value;
+      const adjustedIntensity = userSunIntensity * 0.5 * sunFactor * (1.0 - darkness * 0.5);
+
+      if (this.sun) {
+        this.sun.position.set(sunDir.x * 50, sunDir.y * 50, sunDir.z * 50);
+        this.sun.intensity = adjustedIntensity;
+      }
+      this.world?.terrainMesh?.unifiedRenderer?.setLightDir?.(sunDir.x, sunDir.y, sunDir.z);
+      this.world?.terrainMesh?.unifiedRenderer?.setLightIntensity?.(adjustedIntensity);
+    }
     if (this.cloudGroup) {
       this.cloudGroup.position.x = this.camera.position.x;
       this.cloudGroup.position.z = this.camera.position.z;
@@ -1367,31 +1393,72 @@ export class Game {
   }
 
   _setSkyAtmosphere({ visible = true, topColor, horizonColor, fogColor, sunColor, cloudOpacity = 0.32, darkness = 0, hazeStrength = 0.3 }) {
-    if (!this.skyMesh || !this.skyMaterial) return;
-    this.skyMesh.visible = visible;
-    const uniforms = this.skyMaterial.uniforms;
-    if (uniforms) {
-      uniforms.turbidity.value = 3.5 + hazeStrength * 6 + darkness * 3;
-      uniforms.rayleigh.value = Math.max(0.35, 1.8 - darkness * 1.1);
-      uniforms.mieCoefficient.value = 0.004 + hazeStrength * 0.018;
-      uniforms.mieDirectionalG.value = 0.74;
-      const sun = new THREE.Vector3(0.22, 0.56 - darkness * 0.35, 0.78).normalize().multiplyScalar(450000);
-      uniforms.sunPosition.value.copy(sun);
+    if (!this.skyGradient) return;
+    this.skyGradient.setVisible(visible);
+    this.skyGradient.setDarkness(darkness);
+
+    // Build gradient preset from current zone colors
+    const preset = ZONE_ATMOSPHERE[this.zoneManager?.currentZoneId] || ZONE_ATMOSPHERE.default;
+    const builders = createSkyGradientPreset({
+      skyTop: topColor ?? preset.skyTop,
+      horizon: horizonColor ?? preset.horizon,
+      fog: fogColor ?? preset.fog,
+      sunColor: sunColor ?? preset.sunColor,
+    });
+    this.skyGradient.setBuilders(builders);
+
+    // Sync directional light with sky sun so shadows align with visible sun
+    const sunDir = this.skyGradient.getSunDirection();
+    const sunFactor = this.skyGradient.getSunIntensityFactor();
+    const userSunIntensity = parseFloat(settings.get('sunIntensity')) || 4.0;
+    const userSunDiscSize = parseFloat(settings.get('sunDiscSize')) || 0.06;
+    const adjustedIntensity = userSunIntensity * 0.5 * sunFactor * (1.0 - darkness * 0.5);
+    if (this.sun) {
+      this.sun.color.copy(sunColor ?? new THREE.Color(preset.sunColor)).lerp(new THREE.Color(0x9fb6ff), darkness * 0.25);
+      // Position the directional light so it shines FROM the sun direction
+      this.sun.position.set(sunDir.x * 50, sunDir.y * 50, sunDir.z * 50);
+      this.sun.intensity = adjustedIntensity;
     }
-    if (sunColor && this.sun) this.sun.color.copy(sunColor).lerp(new THREE.Color(0x9fb6ff), darkness * 0.25);
-    if (this.horizonMaterial) {
-      this.horizonMesh.visible = visible;
-      this.horizonMaterial.uniforms.topColor.value.copy(topColor);
-      this.horizonMaterial.uniforms.horizonColor.value.copy(horizonColor);
-      this.horizonMaterial.uniforms.fogColor.value.copy(fogColor || horizonColor);
-      this.horizonMaterial.uniforms.darkness.value = darkness;
-      this.horizonMaterial.uniforms.hazeStrength.value = hazeStrength;
-    }
+
+    this.skyGradient.setSun({
+      color: sunColor ?? new THREE.Color(preset.sunColor),
+      strength: userSunIntensity * sunFactor * (1.0 - darkness * 0.5),
+      sharpness: 16.0,
+      glowStrength: 0.6,
+      discSize: userSunDiscSize,
+    });
+    this.world?.terrainMesh?.unifiedRenderer?.setLightDir?.(sunDir.x, sunDir.y, sunDir.z);
+    this.world?.terrainMesh?.unifiedRenderer?.setLightIntensity?.(adjustedIntensity);
+
+    // Tick the gradient once so colors update immediately
+    this.skyGradient.update(0);
+
     if (this.cloudMaterial) {
       this.cloudMaterial.opacity = cloudOpacity * (1 - darkness);
       this.cloudMaterial.color.copy(new THREE.Color(VOXEL_SKY.CLOUD).lerp(fogColor || horizonColor, hazeStrength * 0.28));
     }
     if (this.cloudGroup) this.cloudGroup.visible = visible && cloudOpacity > 0.03 && darkness < 0.96;
+  }
+
+  _lockSunSettings() {
+    const intensity = settings.get('sunIntensity');
+    const discSize = settings.get('sunDiscSize');
+    fetch('/api/lock-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sunIntensity: intensity, sunDiscSize: discSize }),
+    })
+      .then(r => r.json())
+      .then((res) => {
+        if (res.ok) {
+          this.ui?.showFloatingText?.(`🔒 Sun locked: ${intensity} / ${discSize}`, 0x4ade80);
+        } else {
+          this.ui?.showFloatingText?.('Lock failed — check server', 0xf87171);
+        }
+      })
+      .catch(() => {
+        this.ui?.showFloatingText?.('Lock failed — check server', 0xf87171);
+      });
   }
 
   _createCloudLayer() {

@@ -18,6 +18,12 @@ const DEFAULTS = {
   gamepadLookSensitivity: 1.0,
   gamepadDeadZone: 0.12,
   gamepadVibration: true,
+  skyCycleEnabled: true,
+  skyCycleSpeed: 1.0,
+  starfieldEnabled: true,
+  sunIntensity: 4.0,
+  sunDiscSize: 0.06,
+  auroraEnabled: true,
 };
 
 export class SettingsManager {

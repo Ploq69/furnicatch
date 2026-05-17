@@ -381,6 +381,7 @@ export class TerrainMesh {
     this.unifiedRenderer.setAtlasTexture(this.tileAtlas);
     this.unifiedRenderer.setAtlasRects(this.atlasRects);
     this.unifiedRenderer.setLightDir(0.35, 0.85, 0.32);
+    this.unifiedRenderer.setLightIntensity(1.0);
 
     // Build tile index map texture for shader lookups
     this._buildTileIndexMapTexture(gl);

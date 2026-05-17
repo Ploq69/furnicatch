@@ -32,6 +32,11 @@ export class SettingsMenu {
     this.elShadow = document.getElementById('settings-shadow');
     this.elName = document.getElementById('settings-name');
 
+    this.elSkyCycle = document.getElementById('settings-skycycle');
+    this.elSkySpeed = document.getElementById('settings-skyspeed');
+    this.elSkySpeedVal = document.getElementById('settings-skyspeed-val');
+    this.elStars = document.getElementById('settings-stars');
+
     this.elGamepad = document.getElementById('settings-gamepad-enabled');
     this.elLook = document.getElementById('settings-look');
     this.elLookVal = document.getElementById('settings-look-val');
@@ -63,6 +68,11 @@ export class SettingsMenu {
       this.elSfxVal.textContent = v + '%';
       settings.applyToAudio(audio);
     });
+    this.elSkySpeed?.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      settings.set('skyCycleSpeed', v);
+      this.elSkySpeedVal.textContent = v.toFixed(1) + 'x';
+    });
 
     // Toggles
     this.elTouch?.addEventListener('change', (e) => settings.set('touchControls', e.target.value));
@@ -71,6 +81,8 @@ export class SettingsMenu {
     this.elQuality?.addEventListener('change', (e) => settings.set('graphicsQuality', e.target.value));
     this.elShadow?.addEventListener('change', (e) => settings.set('shadowQuality', e.target.value));
     this.elName?.addEventListener('change', (e) => settings.set('playerName', e.target.value.trim() || 'Player'));
+    this.elSkyCycle?.addEventListener('change', (e) => settings.set('skyCycleEnabled', e.target.checked));
+    this.elStars?.addEventListener('change', (e) => settings.set('starfieldEnabled', e.target.checked));
 
     this.elGamepad?.addEventListener('change', (e) => settings.set('gamepadEnabled', e.target.checked));
     this.elLook?.addEventListener('input', (e) => {
@@ -109,6 +121,11 @@ export class SettingsMenu {
     if (this.elQuality) this.elQuality.value = settings.get('graphicsQuality');
     if (this.elShadow) this.elShadow.value = settings.get('shadowQuality');
     if (this.elName) this.elName.value = settings.get('playerName');
+
+    if (this.elSkyCycle) this.elSkyCycle.checked = settings.get('skyCycleEnabled');
+    if (this.elSkySpeed) this.elSkySpeed.value = settings.get('skyCycleSpeed');
+    if (this.elSkySpeedVal) this.elSkySpeedVal.textContent = settings.get('skyCycleSpeed').toFixed(1) + 'x';
+    if (this.elStars) this.elStars.checked = settings.get('starfieldEnabled');
 
     if (this.elGamepad) this.elGamepad.checked = settings.get('gamepadEnabled');
     if (this.elLook) this.elLook.value = settings.get('gamepadLookSensitivity');

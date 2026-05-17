@@ -70,6 +70,7 @@ uniform float time;
 uniform float renderMode;
 uniform float shaderQuality;
 uniform vec3 lightDir;
+uniform float lightIntensity;
 uniform vec3 cutawayCenter;
 uniform vec2 cutawayForward;
 uniform float cutawayRadius;
@@ -243,7 +244,7 @@ void main() {
   // Lighting & shadows
   vec3 viewLightDir = normalize(mat3(uViewMatrix) * lightDir);
   float NdotL = max(dot(vNormal, viewLightDir), 0.0);
-  float diffuse = mix(0.38, 1.0, NdotL);
+  float diffuse = mix(0.38, 1.0, NdotL) * lightIntensity;
   float shadow = voxelShadow(vWorldPos, normalize(cross(dFdx(vWorldPos), dFdy(vWorldPos))), lightDir, zoneBlockDataOrigin);
   color *= diffuse * shadow;
 
@@ -323,6 +324,7 @@ export class UnifiedTerrainRenderer {
     this.uRenderMode = this.gl.getUniformLocation(this.program, 'renderMode');
     this.uShaderQuality = this.gl.getUniformLocation(this.program, 'shaderQuality');
     this.uLightDir = this.gl.getUniformLocation(this.program, 'lightDir');
+    this.uLightIntensity = this.gl.getUniformLocation(this.program, 'lightIntensity');
     this.uCutawayCenter = this.gl.getUniformLocation(this.program, 'cutawayCenter');
     this.uCutawayForward = this.gl.getUniformLocation(this.program, 'cutawayForward');
     this.uCutawayRadius = this.gl.getUniformLocation(this.program, 'cutawayRadius');
@@ -403,6 +405,7 @@ export class UnifiedTerrainRenderer {
       amount: 0,
     };
     this._lightDir = new Float32Array([0.35, 0.85, 0.32]);
+    this._lightIntensity = 1.0;
     this._pointLight = {
       pos: new Float32Array([0, -1000, 0]),
       color: new Float32Array([1, 1, 1]),
@@ -619,6 +622,10 @@ export class UnifiedTerrainRenderer {
     this._lightDir[2] = z;
   }
 
+  setLightIntensity(v) {
+    this._lightIntensity = v;
+  }
+
   setPointLight(x, y, z, color, intensity, distance) {
     this._pointLight.pos[0] = x;
     this._pointLight.pos[1] = y;
@@ -730,6 +737,7 @@ export class UnifiedTerrainRenderer {
     gl.uniform1f(this.uRenderMode, this._renderMode);
     gl.uniform1f(this.uShaderQuality, this._shaderQuality);
     gl.uniform3f(this.uLightDir, this._lightDir[0], this._lightDir[1], this._lightDir[2]);
+    gl.uniform1f(this.uLightIntensity, this._lightIntensity);
     gl.uniform3f(this.uPointLightPos, this._pointLight.pos[0], this._pointLight.pos[1], this._pointLight.pos[2]);
     gl.uniform3f(this.uPointLightColor, this._pointLight.color[0], this._pointLight.color[1], this._pointLight.color[2]);
     gl.uniform1f(this.uPointLightIntensity, this._pointLight.intensity);
