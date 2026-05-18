@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { assetLoader } from './AssetLoader.js';
+import { DropInstancer } from './DropInstancer.js';
 
 // Loot type → glTF model path mapping
 const LOOT_MODELS = {
@@ -36,91 +38,102 @@ const LOOT_CONFIG = {
 
 const GRAVITY = -15;
 const BOUNCE_REST = 0.4;
-const MAGNET_RANGE = 4.0; // magnetRange for loot hoover
+const MAGNET_RANGE = 4.0;
 const MAGNET_ACCEL = 15;
 const MAGNET_MAX_SPEED = 12;
 const COLLECT_DIST = 0.8;
-const DESPAWN_TIME = 10; // despawn timer in seconds
-const MAX_ACTIVE = 100;
-const POOL_SIZE = 50;
+const DESPAWN_TIME = 10;
+const CAPACITY_PER_TYPE = 120; // was POOL_SIZE=50 — now much higher
+const MAX_ACTIVE = 600;        // was 100 — now supports 500+
+
+const _tmpDir = new THREE.Vector3();
+const _tmpQuat = new THREE.Quaternion();
+const _tmpScale = new THREE.Vector3();
+const _tmpPos = new THREE.Vector3();
+const _upAxis = new THREE.Vector3(0, 1, 0);
+
+function extractGeometryAndMaterial(scene) {
+  scene.updateMatrixWorld(true);
+  const geometries = [];
+  let material = null;
+  scene.traverse((child) => {
+    if (child.isMesh && child.geometry) {
+      const geo = child.geometry.clone();
+      geo.applyMatrix4(child.matrixWorld);
+      geometries.push(geo);
+      if (!material) {
+        material = Array.isArray(child.material) ? child.material[0].clone() : child.material.clone();
+      }
+    }
+  });
+  if (geometries.length === 0) return null;
+  let geometry = geometries[0];
+  if (geometries.length > 1) {
+    try {
+      geometry = mergeGeometries(geometries);
+    } catch (e) {
+      // Fallback: use first geometry if merge fails (attribute mismatch)
+      geometry = geometries[0];
+    }
+  }
+  if (!material) material = new THREE.MeshStandardMaterial();
+  return { geometry, material };
+}
 
 export class LootDrop {
   constructor(scene) {
     this.scene = scene;
     this.drops = [];
-    this.pools = new Map(); // type → array of pooled meshes
-    this.poolCursors = new Map();
-    this._tmpDir = new THREE.Vector3();
-    this._initPools();
-  }
-
-  _initPools() {
-    for (const [type, path] of Object.entries(LOOT_MODELS)) {
-      this.pools.set(type, []);
-      this.poolCursors.set(type, 0);
-    }
+    this.instancer = new DropInstancer(scene);
+    this._preloaded = false;
   }
 
   async preloadModels() {
+    if (this._preloaded) return;
     const promises = Object.entries(LOOT_MODELS).map(async ([type, path]) => {
       try {
         const gltf = await assetLoader.loadGLTF(path);
-        if (!gltf || !gltf.scene) return;
-        // Pre-clone pool meshes
-        const pool = this.pools.get(type);
-        for (let i = 0; i < POOL_SIZE; i++) {
-          const mesh = gltf.scene.clone(true);
-          const cfg = LOOT_CONFIG[type];
-          mesh.scale.setScalar(cfg.scale);
-          mesh.visible = false;
-          this.scene.add(mesh);
-          pool.push({ mesh, inUse: false });
-        }
+        if (!gltf?.scene) return;
+        const extracted = extractGeometryAndMaterial(gltf.scene);
+        if (!extracted) return;
+        const cfg = LOOT_CONFIG[type];
+        // Pre-scale geometry so instance scale stays near 1
+        extracted.geometry.scale(cfg.scale, cfg.scale, cfg.scale);
+        // Optimize geometry
+        extracted.geometry.computeBoundingSphere();
+        this.instancer.registerType(type, extracted.geometry, extracted.material, CAPACITY_PER_TYPE);
       } catch (e) {
         console.warn('[LootDrop] Failed to preload', type, e);
       }
     });
     await Promise.all(promises);
+    this._preloaded = true;
   }
 
   spawn(pos, type, offsetX = 0, offsetZ = 0) {
-    // lootSpawn: spawn a physical loot drop at position
-    const pool = this.pools.get(type);
-    if (!pool) return null;
-
-    // Find free mesh in pool
-    let entry = this._nextFreeEntry(type, pool);
-    if (!entry) {
-      // Pool exhausted — create fallback if under max
-      if (this.drops.length >= MAX_ACTIVE) {
-        // Remove oldest
-        const oldest = this.drops.shift();
-        if (oldest) this._retireDrop(oldest);
-      }
-      // Try to clone from first pool entry
-      if (pool.length > 0) {
-        const mesh = pool[0].mesh.clone(true);
-        const cfg = LOOT_CONFIG[type];
-        mesh.scale.setScalar(cfg.scale);
-        this.scene.add(mesh);
-        entry = { mesh, inUse: true };
-        pool.push(entry);
-      } else {
-        return null;
-      }
+    if (!this._preloaded) return null;
+    if (this.drops.length >= MAX_ACTIVE) {
+      // Remove oldest
+      const oldest = this.drops[0];
+      this._remove(0);
     }
 
-    entry.inUse = true;
-    const mesh = entry.mesh;
-    mesh.visible = true;
-    mesh.position.set(pos.x + offsetX, pos.y + 0.3, pos.z + offsetZ);
+    const index = this.instancer.alloc(type);
+    if (index < 0) return null; // pool full
 
     const cfg = LOOT_CONFIG[type];
+    const x = pos.x + offsetX;
+    const y = pos.y + 0.3;
+    const z = pos.z + offsetZ;
 
-    this.drops.push({
-      mesh,
-      entry,
+    _tmpPos.set(x, y, z);
+    _tmpQuat.identity();
+    _tmpScale.setScalar(1);
+    this.instancer.setTransform(type, index, _tmpPos, _tmpQuat, _tmpScale);
+
+    const drop = {
       type,
+      index,
       value: cfg.value,
       color: cfg.color,
       spinSpeed: cfg.spin,
@@ -133,26 +146,18 @@ export class LootDrop {
       stateTime: 0,
       life: DESPAWN_TIME,
       bobPhase: Math.random() * Math.PI * 2,
-      faded: false,
-    });
-
-    return this.drops[this.drops.length - 1];
-  }
-
-  _nextFreeEntry(type, pool) {
-    if (!pool?.length) return null;
-    const start = this.poolCursors.get(type) || 0;
-    for (let i = 0; i < pool.length; i++) {
-      const index = (start + i) % pool.length;
-      const entry = pool[index];
-      if (entry.inUse) continue;
-      this.poolCursors.set(type, (index + 1) % pool.length);
-      return entry;
-    }
-    return null;
+      position: new THREE.Vector3(x, y, z),
+      rotY: 0,
+      scale: 1,
+    };
+    this.drops.push(drop);
+    return drop;
   }
 
   update(dt, playerPos, onCollect) {
+    if (!this._preloaded) return;
+    let collectedAny = false;
+
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i];
       d.life -= dt;
@@ -162,28 +167,28 @@ export class LootDrop {
         continue;
       }
 
-      // Despawn fade
-      if (d.life < 1.0) {
-        this._setOpacity(d.mesh, d.life);
-        d.faded = true;
+      // Fade out via scale when nearly dead
+      let scaleMul = 1;
+      if (d.life < 0.5) {
+        scaleMul = Math.max(0, d.life / 0.5);
       }
 
       // Spin
-      d.mesh.rotation.y += d.spinSpeed * dt;
+      d.rotY += d.spinSpeed * dt;
 
-      const dx = playerPos.x - d.mesh.position.x;
-      const dy = playerPos.y - d.mesh.position.y;
-      const dz = playerPos.z - d.mesh.position.z;
+      const dx = playerPos.x - d.position.x;
+      const dy = playerPos.y - d.position.y;
+      const dz = playerPos.z - d.position.z;
       const distSq = dx * dx + dy * dy + dz * dz;
 
       if (d.state === 'bounce') {
-        // Physics
         d.velocity.y += GRAVITY * dt;
-        d.mesh.position.addScaledVector(d.velocity, dt);
+        d.position.x += d.velocity.x * dt;
+        d.position.y += d.velocity.y * dt;
+        d.position.z += d.velocity.z * dt;
 
-        // Ground bounce
-        if (d.mesh.position.y < 0.1) {
-          d.mesh.position.y = 0.1;
+        if (d.position.y < 0.1) {
+          d.position.y = 0.1;
           d.velocity.y *= -BOUNCE_REST;
           d.velocity.x *= 0.8;
           d.velocity.z *= 0.8;
@@ -195,83 +200,64 @@ export class LootDrop {
           d.velocity.set(0, 0, 0);
         }
 
-        // Early magnet if very close
         if (distSq < MAGNET_RANGE * MAGNET_RANGE * 0.25 && d.stateTime > 0.1) {
           d.state = 'hover';
         }
       }
 
       if (d.state === 'hover') {
-        // Bob
         d.bobPhase += dt * 3;
-        d.mesh.position.y = 0.2 + Math.sin(d.bobPhase) * 0.1;
+        d.position.y = 0.2 + Math.sin(d.bobPhase) * 0.1;
 
-        // Magnet
         if (distSq < MAGNET_RANGE * MAGNET_RANGE) {
           const dist = Math.sqrt(distSq);
-          const dir = this._tmpDir.set(dx, dy, dz).multiplyScalar(dist > 0.0001 ? 1 / dist : 0);
+          const dir = _tmpDir.set(dx, dy, dz).multiplyScalar(dist > 0.0001 ? 1 / dist : 0);
           const speed = Math.min(MAGNET_MAX_SPEED, MAGNET_ACCEL * (MAGNET_RANGE - dist));
-          d.mesh.position.addScaledVector(dir, speed * dt);
+          d.position.x += dir.x * speed * dt;
+          d.position.y += dir.y * speed * dt;
+          d.position.z += dir.z * speed * dt;
         }
       }
+
+      // Write transform
+      _tmpQuat.setFromAxisAngle(_upAxis, d.rotY);
+      _tmpScale.setScalar(scaleMul);
+      this.instancer.setTransform(d.type, d.index, d.position, _tmpQuat, _tmpScale);
 
       // Collect
       if (distSq < COLLECT_DIST * COLLECT_DIST) {
         if (onCollect) onCollect(d.type, d.value, d.color);
         this._remove(i);
+        collectedAny = true;
       }
     }
+
+    this.instancer.upload();
   }
 
-  _remove(index) {
-    const d = this.drops[index];
-    this._retireDrop(d);
-    const last = this.drops.pop();
-    if (last && last !== d) this.drops[index] = last;
-  }
-
-  _retireDrop(d) {
+  _remove(i) {
+    const d = this.drops[i];
     if (!d) return;
-    if (d.entry) d.entry.inUse = false;
-    if (d.mesh) {
-      d.mesh.visible = false;
-      if (d.faded) this._setOpacity(d.mesh, 1);
-    }
-  }
-
-  _setOpacity(root, opacity) {
-    root.traverse(c => {
-      if (c.isMesh && c.material) {
-        if (Array.isArray(c.material)) {
-          c.material.forEach(m => { m.opacity = opacity; m.transparent = opacity < 1; });
-        } else {
-          c.material.opacity = opacity;
-          c.material.transparent = opacity < 1;
-        }
-      }
-    });
+    this.instancer.free(d.type, d.index);
+    const last = this.drops.pop();
+    if (last && last !== d) this.drops[i] = last;
   }
 
   clear() {
-    for (const d of this.drops) {
-      if (d.entry) d.entry.inUse = false;
-      if (d.mesh) { d.mesh.visible = false; this._setOpacity(d.mesh, 1); }
-    }
+    this.instancer.clear();
     this.drops = [];
   }
 
-  // Spawn multiple loot from a loot table roll
   spawnFromTable(pos, table) {
     const drops = [];
-    // Always drops
     if (table.always) {
       for (const item of table.always) {
         for (let i = 0; i < item.count; i++) {
-          drops.push(this.spawn(pos, item.type, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5));
+          const d = this.spawn(pos, item.type, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5);
+          if (d) drops.push(d);
         }
       }
     }
-    // Roll rarity tiers
     const roll = Math.random();
     let tier = null;
     if (roll < 0.05) tier = table.veryRare;
@@ -282,7 +268,8 @@ export class LootDrop {
     if (tier) {
       for (const item of tier) {
         for (let i = 0; i < item.count; i++) {
-          drops.push(this.spawn(pos, item.type, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5));
+          const d = this.spawn(pos, item.type, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5);
+          if (d) drops.push(d);
         }
       }
     }

@@ -94,6 +94,7 @@ export const WEAPONS = [
   { id: 'sword', name: 'Sword', type: 'melee', slot: 1, damage: 15, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/sword_1handed.gltf', sfx: 'DSGNTonl_MELEE-Sword Critical', icon: '⚔' },
   { id: 'pistol', name: 'Hand Crossbow', type: 'ranged', slot: 2, damage: 12, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/crossbow_1handed.gltf', sfx: 'DSGNImpt_EXPLOSION-Smaller Flare', icon: '🏹' },
   { id: 'grenade', name: 'Smokebomb', type: 'thrown', slot: 3, damage: 40, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/smokebomb.gltf', sfx: 'DSGNImpt_EXPLOSION-Thud', icon: '●' },
+  { id: 'ivy_whip', name: 'Ivy Whip', type: 'grapple', slot: 4, damage: 0, model: 'KayKit_Adventurers_2.0_FREE/Assets/gltf/wand.gltf', sfx: 'DSGNMisc_MOVEMENT-Watery Laser', icon: '🌿' },
 ];
 
 export const BLOCK_TYPES = {

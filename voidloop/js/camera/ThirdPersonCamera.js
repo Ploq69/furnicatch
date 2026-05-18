@@ -18,8 +18,11 @@ const TP_HEIGHT = 1.25;
 const TP_SHOULDER_X = 0.2;
 const TP_SHOULDER_Y = 0.05;
 const TP_PITCH_DEFAULT = 0.22;
-const TP_PITCH_MIN = -0.55;
-const TP_PITCH_MAX = 0.75;
+const TP_PITCH_MIN = -1.35;
+const TP_PITCH_MAX = 1.35;
+const TP_CAMERA_MIN_DIST = 2.5;
+const TP_CAMERA_PLAYER_HIDE_DIST = 3.0;
+const TP_CAMERA_PLAYER_SHOW_DIST = 3.5;
 const TP_LOOKAHEAD = 0.9;
 const TP_VERTICAL_DEAD_ZONE = 0.15;
 const TP_HORIZONTAL_HALF_LIFE = 0.1;
@@ -28,7 +31,7 @@ const TP_LOOKAHEAD_HALF_LIFE = 0.16;
 const TP_POSITION_HALF_LIFE = 0.14;
 const TP_YAW_HALF_LIFE = 0.09;
 const TP_COLLISION_EXTEND_HALF_LIFE = 0.24;
-const TP_RECENTER_DELAY = 1.25;
+const TP_RECENTER_DELAY = 3.0;
 const TP_COLLISION_REFRESH_MS = 125;
 const TP_COLLISION_MOVE_EPS = 0.35;
 
@@ -47,6 +50,13 @@ export class ThirdPersonCamera {
       collisionDistance: TP_DISTANCE,
       manualRecenteringTimer: 0,
       initialized: false,
+      shoulderX: TP_SHOULDER_X,
+      firstPersonBlend: 0,
+      firstPersonLocked: false,
+      firstPersonUnlockDelay: 0,
+      lastForwardMove: 0,
+      lastStrafeMove: 0,
+      actionPressed: false,
     };
     this.tuning = {
       fov: TP_FOV,
@@ -117,14 +127,22 @@ export class ThirdPersonCamera {
       if (input.isDown('KeyD') || input.isDown('ArrowRight')) strafeMove += 1;
     }
 
-    if (rig.manualRecenteringTimer <= 0 && (forwardMove !== 0 || strafeMove !== 0)) {
+    // Auto-recenter: only when moving forward (not strafing/backpedaling) and
+    // only after a long delay. This prevents the camera from fighting the player
+    // while aiming at targets above/below.
+    if (rig.manualRecenteringTimer <= 0 && forwardMove > 0.01 && Math.abs(strafeMove) < 0.6) {
       const moveYaw = Math.atan2(
         Math.sin(rig.desiredYaw) * forwardMove - Math.cos(rig.desiredYaw) * strafeMove,
         Math.cos(rig.desiredYaw) * forwardMove + Math.sin(rig.desiredYaw) * strafeMove
       );
-      const recenterHalfLife = input.isDown('ShiftLeft') ? 0.42 : 0.75;
+      const recenterHalfLife = input.isDown('ShiftLeft') ? 0.65 : 1.2;
       rig.desiredYaw = dampAngle(rig.desiredYaw, moveYaw, dt, recenterHalfLife);
     }
+
+    // Store inputs for first-person lock logic
+    rig.lastForwardMove = forwardMove;
+    rig.lastStrafeMove = strafeMove;
+    rig.actionPressed = input.pressed('KeyJ') || input.buttonPressed?.('left') || input.pressed('Space') || false;
 
     this.game.camYaw = rig.desiredYaw;
     this.game.camPitch = rig.pitch;
@@ -202,6 +220,12 @@ export class ThirdPersonCamera {
     this.game.camYaw = rig.desiredYaw;
     this.game.camPitch = rig.pitch;
 
+    // Dynamic shoulder offset: center the camera when pushed close to walls
+    const targetShoulderX = rig.collisionDistance < TP_CAMERA_PLAYER_HIDE_DIST
+      ? 0
+      : tune.shoulderX;
+    rig.shoulderX += (targetShoulderX - rig.shoulderX) * smoothFactor(dt, 0.18);
+
     const fullDistanceDesired = this.getDesiredPosition(rig.lookTarget, rig.displayYaw, rig.pitch, rig.distance);
     const direction = fullDistanceDesired.clone().sub(rig.lookTarget).normalize();
     const rayDist = rig.lookTarget.distanceTo(fullDistanceDesired);
@@ -212,18 +236,89 @@ export class ThirdPersonCamera {
       rig.collisionDistance += (actualDist - rig.collisionDistance) * smoothFactor(dt, tune.collisionExtendHalfLife);
     }
 
-    const resolvedDesired = rig.lookTarget.clone().add(direction.multiplyScalar(rig.collisionDistance));
-    const positionT = smoothFactor(dt, tune.positionHalfLife);
-    this.game.camPos.x += (resolvedDesired.x - this.game.camPos.x) * positionT;
-    this.game.camPos.y += (resolvedDesired.y - this.game.camPos.y) * positionT;
-    this.game.camPos.z += (resolvedDesired.z - this.game.camPos.z) * positionT;
+    let resolvedDesired = rig.lookTarget.clone().add(direction.multiplyScalar(rig.collisionDistance));
 
-    this.game.thirdPersonCamera.position.set(
+    // ── First-person fallback when camera is blocked ──
+    const terrain = this.game.world?.terrainMesh;
+    const isInsideSolid = terrain?.isSolidAt?.(resolvedDesired.x, resolvedDesired.y, resolvedDesired.z) ?? false;
+    const isTooClose = rig.collisionDistance < TP_CAMERA_MIN_DIST + 0.5;
+    const isBlocked = isInsideSolid || isTooClose;
+
+    // Sticky first-person lock: once blocked or grappling, stay in first-person until player acts
+    const isGrappled = this.game.player?.ivyWhip?.isGrappled;
+    if (isBlocked || isGrappled) {
+      rig.firstPersonLocked = true;
+      rig.firstPersonUnlockDelay = 0;
+    }
+
+    let targetBlend = 0;
+    if (rig.firstPersonLocked || rig.firstPersonUnlockDelay > 0) {
+      targetBlend = 1;
+      if (!isBlocked && !isGrappled) {
+        rig.firstPersonUnlockDelay = Math.max(0, rig.firstPersonUnlockDelay - dt);
+        const isMoving = Math.abs(rig.lastForwardMove) > 0.01 || Math.abs(rig.lastStrafeMove) > 0.01;
+        if ((isMoving || rig.actionPressed) && rig.firstPersonUnlockDelay <= 0) {
+          rig.firstPersonLocked = false;
+        }
+      }
+    }
+    rig.firstPersonBlend += (targetBlend - rig.firstPersonBlend) * smoothFactor(dt, 0.06);
+    const blend = clamp01(rig.firstPersonBlend);
+
+    // First-person position: player eye level
+    const firstPersonPos = new THREE.Vector3(playerPos.x, playerPos.y + 1.55, playerPos.z);
+
+    // Aim direction from yaw + pitch (matches player's facing direction)
+    const aimDir = new THREE.Vector3(
+      Math.sin(rig.displayYaw) * Math.cos(rig.pitch),
+      -Math.sin(rig.pitch),
+      Math.cos(rig.displayYaw) * Math.cos(rig.pitch)
+    ).normalize();
+
+    // Blend third-person and first-person positions
+    const blendedPos = new THREE.Vector3().lerpVectors(resolvedDesired, firstPersonPos, blend);
+
+    // Hide player mesh when in first-person
+    const playerMesh = this.game.player?.mesh;
+    if (playerMesh) {
+      const shouldHide = blend > 0.7;
+      const shouldShow = blend < 0.3;
+      if (shouldHide && playerMesh.visible) playerMesh.visible = false;
+      if (shouldShow && !playerMesh.visible) playerMesh.visible = true;
+    }
+
+    const positionT = smoothFactor(dt, tune.positionHalfLife);
+    this.game.camPos.x += (blendedPos.x - this.game.camPos.x) * positionT;
+    this.game.camPos.y += (blendedPos.y - this.game.camPos.y) * positionT;
+    this.game.camPos.z += (blendedPos.z - this.game.camPos.z) * positionT;
+
+    const cam = this.game.thirdPersonCamera;
+    cam.position.set(
       this.game.camPos.x + shakeX * 0.2,
       this.game.camPos.y + shakeY * 0.2,
       this.game.camPos.z + shakeZ * 0.2
     );
-    this.game.thirdPersonCamera.lookAt(rig.lookTarget.x, rig.lookTarget.y, rig.lookTarget.z);
+
+    // ── Orientation: slerp between third-person and first-person ──
+    const up = new THREE.Vector3(0, 1, 0);
+    const targetQuat = new THREE.Quaternion();
+    if (blend < 0.01) {
+      const matrix = new THREE.Matrix4().lookAt(cam.position, rig.lookTarget, up);
+      targetQuat.setFromRotationMatrix(matrix);
+    } else if (blend > 0.99) {
+      const fpTarget = cam.position.clone().add(aimDir);
+      const matrix = new THREE.Matrix4().lookAt(cam.position, fpTarget, up);
+      targetQuat.setFromRotationMatrix(matrix);
+    } else {
+      const tpMatrix = new THREE.Matrix4().lookAt(cam.position, rig.lookTarget, up);
+      const tpQuat = new THREE.Quaternion().setFromRotationMatrix(tpMatrix);
+      const fpTarget = cam.position.clone().add(aimDir);
+      const fpMatrix = new THREE.Matrix4().lookAt(cam.position, fpTarget, up);
+      const fpQuat = new THREE.Quaternion().setFromRotationMatrix(fpMatrix);
+      targetQuat.slerpQuaternions(tpQuat, fpQuat, blend);
+    }
+    cam.quaternion.slerp(targetQuat, smoothFactor(dt, 0.06));
+
     rig.previousPlayerPos.copy(playerPos);
     this.game._updateShadowCamera(dt);
 
@@ -234,6 +329,7 @@ export class ThirdPersonCamera {
         displayYaw: rig.displayYaw,
         pitch: rig.pitch,
         collisionDistance: rig.collisionDistance,
+        firstPersonBlend: rig.firstPersonBlend,
         subjectTarget: rig.subjectTarget.toArray(),
         lookTarget: rig.lookTarget.toArray(),
         lookahead: rig.lookahead.toArray(),
@@ -247,10 +343,11 @@ export class ThirdPersonCamera {
     const sinYaw = Math.sin(yaw);
     const cosPitch = Math.cos(pitch);
     const sinPitch = Math.sin(pitch);
+    const shoulderX = this.rig.shoulderX ?? tune.shoulderX;
     return target.clone().add(new THREE.Vector3(
-      -sinYaw * distance * cosPitch + cosYaw * tune.shoulderX,
+      -sinYaw * distance * cosPitch + cosYaw * shoulderX,
       sinPitch * distance + tune.shoulderY,
-      -cosYaw * distance * cosPitch - sinYaw * tune.shoulderX
+      -cosYaw * distance * cosPitch - sinYaw * shoulderX
     ));
   }
 
@@ -268,7 +365,7 @@ export class ThirdPersonCamera {
     const cache = this.collision;
     const desiredMoved = !cache.initialized || cache.lastDesired.distanceToSquared(desired) > TP_COLLISION_MOVE_EPS * TP_COLLISION_MOVE_EPS;
     const pivotMoved = !cache.initialized || cache.lastPivot.distanceToSquared(pivot) > 0.25 * 0.25;
-    const desiredBlocked = terrain.isSolidAt?.(desired.x, desired.y, desired.z);
+    const desiredBlocked = terrain.isSolidAt?.(desired.x, desired.y, desired.z) ?? false;
     const shouldRefresh = desiredMoved
       || pivotMoved
       || desiredBlocked
@@ -277,8 +374,8 @@ export class ThirdPersonCamera {
 
     if (shouldRefresh) {
       const hit = terrain.raycastVoxel?.(pivot, direction, rayDist + 0.35, { solidOnly: true });
-      actualDist = hit?.point ? Math.max(0.6, pivot.distanceTo(hit.point) - 0.3) : rayDist;
-      if (!hit?.point && desiredBlocked) actualDist = Math.min(actualDist, 1.1);
+      actualDist = hit?.point ? Math.max(TP_CAMERA_MIN_DIST, pivot.distanceTo(hit.point) - 0.3) : rayDist;
+      if (!hit?.point && desiredBlocked) actualDist = Math.min(actualDist, Math.max(TP_CAMERA_MIN_DIST, 1.8));
       cache.lastAt = now;
       cache.lastDesired.copy(desired);
       cache.lastPivot.copy(pivot);

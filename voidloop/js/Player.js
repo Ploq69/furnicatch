@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GAME } from './constants.js';
 import { Weapon } from './Weapon.js';
+import { IvyWhipSystem } from './IvyWhip.js';
 import { assetLoader } from './AssetLoader.js';
 import { SFXMapper } from './SFXMapper.js';
 import { ShadowDecal } from './ShadowDecal.js';
@@ -165,6 +166,7 @@ export class Player {
       new Weapon('sword'),
       new Weapon('pistol'),
       new Weapon('grenade'),
+      new Weapon('ivy_whip'),
     ];
     this.currentSlot = 0;
     this.equipmentHolders = {};
@@ -208,6 +210,9 @@ export class Player {
     // Upgrade-applied stats (set by applyUpgrades)
     this.mineDamage = 1;
     this.mineSpeed = 1.0;
+
+    // Ivy Whip grappling
+    this.ivyWhip = new IvyWhipSystem(scene);
   }
 
   /**
@@ -421,8 +426,13 @@ export class Player {
   }
 
   async equipWeapon(slot) {
+    const prevWeapon = this.weapons[this.currentSlot];
     if (this.currentSlot >= 0 && this.currentSlot < this.weapons.length) {
       this.weapons[this.currentSlot].unequip();
+    }
+    // Release ivy whip grapple when switching away from it
+    if (prevWeapon?.data?.id === 'ivy_whip' && this.ivyWhip?.isGrappled) {
+      this.ivyWhip.release();
     }
     this.currentSlot = slot;
     const weapon = this.weapons[slot];
@@ -571,6 +581,46 @@ export class Player {
     // Stamina regen
     if (this.stamina < this.maxStamina) {
       this.stamina = Math.min(this.maxStamina, this.stamina + GAME.STAMINA_REGEN * dt);
+    }
+
+    // Always tick ivy whip cooldown (it's skipped when not grappled)
+    if (this.ivyWhip) this.ivyWhip.cooldown = Math.max(0, this.ivyWhip.cooldown - dt);
+
+    // Ivy Whip slingshot overrides normal movement physics
+    if (this.ivyWhip?.isGrappled) {
+      const prePos = this.position.clone();
+      this.ivyWhip.update(dt, this, input);
+
+      // Check if grapple released this frame
+      if (this.ivyWhip.shouldRip) {
+        if (this.ivyWhip.ripVelocity) {
+          this.velocity.copy(this.ivyWhip.ripVelocity);
+          this.jetVelocity.set(this.ivyWhip.ripVelocity.x * 0.5, 0);
+        }
+        this.ivyWhip.release();
+        // Keep first-person briefly after wall-release so camera stays still while jumping
+        if (this.game?.tpCamera) {
+          this.game.tpCamera.rig.firstPersonLocked = false;
+          this.game.tpCamera.rig.firstPersonUnlockDelay = 0.35;
+        }
+      } else {
+        this._clampToPlayableBounds();
+        // If we clipped into solid terrain, revert position and dampen momentum
+        if (this.world?.isPlayerSpaceClear && !this.world.isPlayerSpaceClear(this.position.x, this.position.y, this.position.z)) {
+          this.position.copy(prePos);
+          this.ivyWhip.momentum.x *= 0.2;
+          this.ivyWhip.momentum.z *= 0.2;
+        }
+        // Only recover if fell below kill plane; skip the normal "stuck" recovery
+        const killPlaneY = this.world?.getKillPlaneY?.() ?? -34;
+        if (this.position.y < killPlaneY) {
+          this._recoverToSafePosition();
+        }
+        this._updateMesh();
+        this.recordSafePosition();
+        if (this.shadowDecal) this.shadowDecal.update(dt, this.sunDirection);
+      }
+      return;
     }
 
     this.landedThisFrame = false;
@@ -909,6 +959,11 @@ export class Player {
       this.playAnim('Idle');
     }
 
+    // Sync body rotation with camera yaw so 3rd person mesh always faces camera direction
+    if (this.controlYaw != null) {
+      this.rotation = this.controlYaw;
+    }
+
     this._applyVoidSafety();
     this._updateMesh();
     this.recordSafePosition();
@@ -1222,6 +1277,7 @@ export class Player {
   }
 
   _recoverToSafePosition() {
+    if (this.ivyWhip?.isGrappled) this.ivyWhip.release();
     const base = this._lastSafePositionReady
       ? this.lastSafePosition.clone()
       : (this.world?.getNearestSafeSpawn?.(this.position) || this.world?.startPosition?.clone?.() || new THREE.Vector3(0, 1, 0));
@@ -1278,6 +1334,7 @@ export class Player {
   }
 
   _respawnFromVoid() {
+    if (this.ivyWhip?.isGrappled) this.ivyWhip.release();
     // Respawn at level start position
     if (this.world && this.world.startPosition) {
       this.position.copy(this.world.startPosition);

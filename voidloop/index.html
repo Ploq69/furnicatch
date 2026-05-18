@@ -117,6 +117,250 @@
       font-weight: 600;
     }
 
+    /* Backpack HUD */
+    #backpack-hud {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    #backpack-hud.active { display: flex; }
+    #deposit-prompt {
+      display: none;
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(251,191,36,0.5);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fbbf24;
+      text-shadow: 0 0 8px rgba(251,191,36,0.4);
+      pointer-events: none;
+      z-index: 11;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    #deposit-prompt.active { display: block; }
+
+    /* Cash-Out Screen ("The Vacuum") */
+    #cash-out-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0,0,0,0.85);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      pointer-events: auto;
+    }
+    #cash-out-screen.active { display: flex; }
+    .cos-phase {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      inset: 0;
+    }
+    .cos-phase.active { display: flex; }
+    .cos-phase-title {
+      font-size: 28px;
+      font-weight: 900;
+      color: #4ade80;
+      text-shadow: 0 0 20px rgba(74,222,128,0.5);
+      letter-spacing: 4px;
+    }
+    .cos-vortex {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 3px solid rgba(74,222,128,0.4);
+      border-top-color: #4ade80;
+      animation: cos-spin 0.8s linear infinite;
+      box-shadow: 0 0 40px rgba(74,222,128,0.3);
+    }
+    @keyframes cos-spin { to { transform: rotate(360deg); } }
+    .cos-suction-icons {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .cos-suction-icon {
+      position: absolute;
+      font-size: 24px;
+      animation: cos-suck 1s ease-in forwards;
+      opacity: 0;
+    }
+    @keyframes cos-suck {
+      0% { transform: translate(0,0) scale(1); opacity: 1; }
+      100% { transform: translate(calc(50vw - 50%), calc(50vh - 50%)) scale(0.3); opacity: 0; }
+    }
+    .cos-panel {
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 16px;
+      padding: 24px 32px;
+      max-width: 420px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .cos-panel-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fbbf24;
+      text-align: center;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .cos-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .cos-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      transform: translateX(-40px);
+      opacity: 0;
+      transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .cos-row.shown { transform: translateX(0); opacity: 1; }
+    .cos-row-icon { font-size: 20px; }
+    .cos-row-name { flex: 1; font-weight: 600; }
+    .cos-row-count { opacity: 0.7; }
+    .cos-row-arrow { opacity: 0.4; }
+    .cos-row-coins { font-weight: 800; color: #fbbf24; min-width: 50px; text-align: right; }
+    .cos-row-empty { text-align: center; opacity: 0.5; padding: 12px; }
+    .cos-running-total {
+      text-align: right;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fbbf24;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 8px;
+      margin-top: 4px;
+    }
+    .cos-letters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+    .cos-letter-chip {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(251,191,36,0.15);
+      border: 1px solid rgba(251,191,36,0.4);
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fbbf24;
+      transform: scale(0);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .cos-letter-chip.shown { transform: scale(1); }
+    .cos-letters-empty { text-align: center; opacity: 0.5; padding: 12px; }
+    .cos-letters-hint { text-align: center; font-size: 12px; opacity: 0.6; margin-top: 4px; }
+    .cos-grand-total {
+      font-size: 72px;
+      font-weight: 900;
+      color: #fbbf24;
+      text-shadow: 0 0 30px rgba(251,191,36,0.5);
+      line-height: 1;
+    }
+    .cos-grand-label {
+      font-size: 16px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 3px;
+    }
+    .cos-milestone {
+      margin-top: 16px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #4ade80;
+      background: rgba(74,222,128,0.1);
+      border: 1px solid rgba(74,222,128,0.3);
+      border-radius: 8px;
+      padding: 8px 16px;
+      transform: scale(0.8);
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .cos-milestone.shown { transform: scale(1); opacity: 1; }
+    .cos-skip-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .backpack-header {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.7);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .backpack-slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      max-width: 200px;
+    }
+    .backpack-slot {
+      width: 32px;
+      height: 32px;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      position: relative;
+      transition: border-color 0.15s;
+    }
+    .backpack-slot.filled {
+      border-color: rgba(251,191,36,0.4);
+      background: rgba(251,191,36,0.08);
+    }
+    .backpack-slot.full {
+      border-color: rgba(239,68,68,0.5);
+      background: rgba(239,68,68,0.1);
+    }
+    .backpack-slot-count {
+      position: absolute;
+      bottom: 1px;
+      right: 2px;
+      font-size: 9px;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 0 3px rgba(0,0,0,0.8);
+    }
+
     /* Top-center: Floor + Exit */
     .hud-topcenter {
       position: absolute;
@@ -1264,6 +1508,38 @@
       cursor: pointer;
       transition: transform 0.15s, box-shadow 0.15s;
     }
+    #letter-drill-panel { display: none; }
+    #letter-drill-panel.active { display: block; }
+    #letter-drill-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 160px; overflow-y: auto; }
+    .letter-drill-card {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(251,191,36,0.1);
+      border: 1px solid rgba(251,191,36,0.3);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+    .letter-drill-card .drill-letter { font-weight: 800; color: #fbbf24; font-size: 18px; }
+    .letter-drill-card .drill-status { font-size: 11px; opacity: 0.6; }
+    .letter-drill-card .drill-btn {
+      background: #fbbf24; color: #000; border: none; border-radius: 4px;
+      padding: 2px 8px; font-size: 11px; font-weight: 700; cursor: pointer;
+    }
+    #letter-drill-empty { font-size: 13px; opacity: 0.5; text-align: center; padding: 12px; }
+    #letter-drill-blocker {
+      display: none;
+      color: #ef4444;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 12px 0;
+      padding: 8px 16px;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+    }
+    #letter-drill-blocker.active { display: block; }
+
+
     #btn-descend {
       background: linear-gradient(90deg, #a855f7, #7c3aed);
     }
@@ -1834,7 +2110,7 @@
       inset: 0;
       background: rgba(5,5,10,0.92);
       backdrop-filter: blur(6px);
-      z-index: 90;
+      z-index: 150;
       display: none;
       flex-direction: column;
       align-items: center;
@@ -1842,6 +2118,83 @@
       padding: 24px;
       gap: 16px;
       pointer-events: auto;
+    }
+    .quiz-choices {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .quiz-choice-card {
+      width: 160px;
+      border-radius: 16px;
+      border: 2px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      color: #fff;
+    }
+    .quiz-choice-speaker {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid rgba(59,130,246,0.6);
+      background: rgba(59,130,246,0.15);
+      color: #3b82f6;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 0 16px rgba(59,130,246,0.2);
+    }
+    .quiz-choice-speaker:hover {
+      background: rgba(59,130,246,0.3);
+      box-shadow: 0 0 24px rgba(59,130,246,0.4);
+      transform: scale(1.05);
+    }
+    .quiz-choice-speaker:active {
+      transform: scale(0.95);
+    }
+    .quiz-choice-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .quiz-select-btn {
+      width: 100%;
+      padding: 10px 0;
+      border-radius: 10px;
+      border: 2px solid rgba(74,222,128,0.4);
+      background: rgba(74,222,128,0.1);
+      color: #4ade80;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .quiz-select-btn:hover {
+      background: rgba(74,222,128,0.2);
+      border-color: rgba(74,222,128,0.7);
+      transform: translateY(-2px);
+    }
+    .quiz-select-btn:active {
+      transform: translateY(0);
+    }
+    .quiz-hint {
+      font-size: 14px;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      margin-top: 4px;
     }
     #spelling-overlay.active { display: flex; }
     .spelling-shell {
@@ -2691,6 +3044,10 @@
         <span class="pet-hud-letter" id="pet-hud-letter">🐾</span>
         <span class="pet-hud-level" id="pet-hud-level"></span>
       </div>
+      <div id="backpack-hud">
+        <div class="backpack-header">Backpack</div>
+        <div class="backpack-slots" id="backpack-slots"></div>
+      </div>
     </div>
 
     <!-- Top-center: Floor + Exit -->
@@ -2715,6 +3072,7 @@
   </div>
 
   <div class="crosshair" id="crosshair" style="display:none;"></div>
+  <div id="deposit-prompt">Press F to deposit resources</div>
 
   <div id="fps-display">-- FPS</div>
 
@@ -2734,6 +3092,7 @@
     <div class="hotbar-slot" data-slot="1"><span class="slot-key">2</span>⚔</div>
     <div class="hotbar-slot" data-slot="2"><span class="slot-key">3</span>🏹</div>
     <div class="hotbar-slot" data-slot="3"><span class="slot-key">4</span>●</div>
+    <div class="hotbar-slot" data-slot="4"><span class="slot-key">5</span>🌿</div>
   </div>
 
   <div id="loadout-ui">
@@ -2983,7 +3342,13 @@
         <div class="pet-progress-text" id="pet-progress-text"></div>
         <div class="pet-preview-levels" id="pet-preview"></div>
       </div>
+      <div class="camp-panel" id="letter-drill-panel">
+        <h3>🔤 Letter Drill</h3>
+        <div id="letter-drill-list"></div>
+        <div id="letter-drill-empty">No letters captured this run.</div>
+      </div>
     </div>
+    <div id="letter-drill-blocker">⚠️ Drill all captured letters before descending!</div>
     <div style="display:flex;gap:16px;">
       <button id="btn-shop">PROGRESSION</button>
       <button id="btn-descend">DESCEND</button>
@@ -2997,19 +3362,10 @@
       <div class="spelling-letter-box">
         <div class="big-letter" id="spelling-big-letter">?</div>
       </div>
-      <button class="spelling-play-btn" id="spelling-play-btn" title="Listen">▶</button>
       <div class="spelling-hint-count" id="spelling-hint-count"></div>
       <div class="spelling-hint-area" id="spelling-hint-area"></div>
-      <div class="spelling-input-row">
-        <input type="text" id="spelling-input" placeholder="Type the word..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-        <button class="spelling-btn" id="spelling-reveal-btn" style="display:none;">Reveal</button>
-        <button class="spelling-btn primary" id="spelling-check-btn">Check</button>
-      </div>
-      <div class="spelling-feedback" id="spelling-feedback"></div>
-      <div class="spelling-wordlist">
-        <h4>Words this level</h4>
-        <div class="spelling-wordlist-grid" id="spelling-wordlist-grid"></div>
-      </div>
+      <div class="quiz-choices" id="quiz-choices"></div>
+      <div class="quiz-hint" id="quiz-hint"></div>
     </div>
   </div>
 
@@ -3227,6 +3583,7 @@
       <div data-slot="1" style="width:56px;height:56px;border-radius:12px;background:rgba(0,0,0,0.5);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;">2</div>
       <div data-slot="2" style="width:56px;height:56px;border-radius:12px;background:rgba(0,0,0,0.5);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;">3</div>
       <div data-slot="3" style="width:56px;height:56px;border-radius:12px;background:rgba(0,0,0,0.5);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;">4</div>
+      <div data-slot="4" style="width:56px;height:56px;border-radius:12px;background:rgba(0,0,0,0.5);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;">5</div>
     </div>
   </div>
 

@@ -161,9 +161,10 @@ export class ExplosionHandler {
       this.game.blocksMined += destroyedFloating;
       this.game.ui.showFloatingText(`${isMissile ? 'Strike' : 'Blast'} broke ${destroyedFloating}`, 0xffaa00);
       for (const [resource, amount] of resourceRewards) {
-        if (this.game.resources.add(resource, amount)) {
-          this.game.batchResourceText(resource, amount, 0x88ccff);
-        }
+        const pos = position.clone();
+        pos.x += (Math.random() - 0.5) * 2;
+        pos.z += (Math.random() - 0.5) * 2;
+        this.game.iconDrops?.spawn(pos, resource, amount);
       }
     }
   }

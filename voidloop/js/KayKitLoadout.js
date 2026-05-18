@@ -148,6 +148,7 @@ export const HOTBAR_LOADOUTS = {
   sword: { rightHand: 'sword_1handed', leftHand: null, back: null },
   pistol: { rightHand: 'crossbow_1handed', leftHand: null, back: 'arrow_crossbow_bundle' },
   grenade: { rightHand: 'smokebomb', leftHand: null, back: null },
+  ivy_whip: { rightHand: 'wand', leftHand: null, back: null },
 };
 
 export const SLOT_LABELS = {

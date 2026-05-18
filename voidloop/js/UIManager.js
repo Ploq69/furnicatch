@@ -51,6 +51,13 @@ export class UIManager {
     this.elFloor = document.getElementById('floor-display');
     this.elCoin = document.getElementById('coin-display');
     this.elCoinRate = document.getElementById('coin-rate');
+    this.elBackpackHud = document.getElementById('backpack-hud');
+    this.elBackpackSlots = document.getElementById('backpack-slots');
+    this.elDepositPrompt = document.getElementById('deposit-prompt');
+    this.elLetterDrillPanel = document.getElementById('letter-drill-panel');
+    this.elLetterDrillList = document.getElementById('letter-drill-list');
+    this.elLetterDrillEmpty = document.getElementById('letter-drill-empty');
+    this.elLetterDrillBlocker = document.getElementById('letter-drill-blocker');
     this.elFloorIndicator = document.getElementById('floor-indicator');
     this.elExitOpen = document.getElementById('exit-open');
     this.elTimer = document.getElementById('timer-display');
@@ -116,14 +123,11 @@ export class UIManager {
     this.elSpellingOverlay = document.getElementById('spelling-overlay');
     this.elSpellingProgress = document.getElementById('spelling-progress');
     this.elSpellingBigLetter = document.getElementById('spelling-big-letter');
-    this.elSpellingPlayBtn = document.getElementById('spelling-play-btn');
     this.elSpellingHintCount = document.getElementById('spelling-hint-count');
     this.elSpellingHintArea = document.getElementById('spelling-hint-area');
-    this.elSpellingInput = document.getElementById('spelling-input');
-    this.elSpellingRevealBtn = document.getElementById('spelling-reveal-btn');
-    this.elSpellingCheckBtn = document.getElementById('spelling-check-btn');
     this.elSpellingFeedback = document.getElementById('spelling-feedback');
-    this.elSpellingWordlistGrid = document.getElementById('spelling-wordlist-grid');
+    this.elQuizChoices = document.getElementById('quiz-choices');
+    this.elQuizHint = document.getElementById('quiz-hint');
     this.elSpellingClose = document.getElementById('spelling-close');
     this._bindSpellingEvents();
 
@@ -225,129 +229,106 @@ export class UIManager {
 
   _bindSpellingEvents() {
     if (!this.elSpellingOverlay) return;
-
-    this.elSpellingPlayBtn?.addEventListener('click', () => {
-      if (this.onSpellingPlay) this.onSpellingPlay();
-    });
-
-    this.elSpellingCheckBtn?.addEventListener('click', () => {
-      if (this.onSpellingCheck) this.onSpellingCheck(this.elSpellingInput.value);
-    });
-
-    this.elSpellingRevealBtn?.addEventListener('click', () => {
-      if (this.onSpellingReveal) this.onSpellingReveal();
-    });
-
     this.elSpellingClose?.addEventListener('click', () => {
       if (this.onSpellingClose) this.onSpellingClose();
     });
-
-    this.elSpellingInput?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (this.onSpellingCheck) this.onSpellingCheck(this.elSpellingInput.value);
-      }
-    });
   }
 
-  showSpellingChallenge(letter, wordObj, progressText, wordList) {
-    if (!this.elSpellingOverlay) return;
-    this._setTouchControlsVisible(false);
-    this.elSpellingOverlay.classList.add('active');
-    this.elSpellingOverlay.classList.remove('sound-match');
-    this.elSpellingBigLetter.textContent = letter.toUpperCase();
-    this.elSpellingProgress.innerHTML = progressText;
-    this.elSpellingHintCount.textContent = '';
-    this.elSpellingHintArea.textContent = '';
-    this.elSpellingInput.value = '';
-    this.elSpellingFeedback.textContent = '';
-    this.elSpellingFeedback.className = 'spelling-feedback';
-    this.elSpellingRevealBtn.style.display = 'none';
-    this.elSpellingInput.disabled = true;
-    this.elSpellingInput.focus();
-    const inputRow = this.elSpellingInput?.closest('.spelling-input-row');
-    if (inputRow) inputRow.style.display = 'flex';
-    const wordListBox = this.elSpellingWordlistGrid?.closest('.spelling-wordlist');
-    if (wordListBox) wordListBox.style.display = 'block';
-
-    // Render word list chips
-    if (this.elSpellingWordlistGrid) {
-      this.elSpellingWordlistGrid.innerHTML = '';
-      for (const w of wordList || []) {
-        const chip = document.createElement('div');
-        chip.className = 'spelling-word-chip';
-        chip.textContent = w;
-        chip.addEventListener('click', () => {
-          if (this.onSpellingPlayWord) this.onSpellingPlayWord(w);
-        });
-        this.elSpellingWordlistGrid.appendChild(chip);
-      }
-    }
-  }
-
-  showSoundQuiz(letter, choices, progressText, subtitle) {
+  showDrillWordQuiz(q) {
     if (!this.elSpellingOverlay) return;
     this._setTouchControlsVisible(false);
     this.elSpellingOverlay.classList.add('active', 'sound-match');
-    this.elSpellingBigLetter.textContent = '?';
-    this.elSpellingProgress.innerHTML = progressText || '';
-    this.elSpellingHintCount.textContent = subtitle || '';
-    this.elSpellingHintArea.textContent = 'Pick the letter you hear.';
-    this.elSpellingFeedback.textContent = '';
-    this.elSpellingFeedback.className = 'spelling-feedback';
-    const inputRow = this.elSpellingInput?.closest('.spelling-input-row');
-    if (inputRow) inputRow.style.display = 'none';
-    const wordListBox = this.elSpellingWordlistGrid?.closest('.spelling-wordlist');
-    if (wordListBox) wordListBox.style.display = 'block';
+    this.elSpellingBigLetter.textContent = q.targetLetter;
+    this.elSpellingProgress.innerHTML = `Question ${q.index} of ${q.total}`;
+    this.elSpellingHintCount.textContent = q.promptText;
+    this.elSpellingHintArea.textContent = '🔊 Tap a speaker to hear. Tap it again to choose.';
+    this._renderQuizChoices(q, 'word');
 
-    if (this.elSpellingWordlistGrid) {
-      this.elSpellingWordlistGrid.innerHTML = '';
-      for (const choice of choices || []) {
-        const btn = document.createElement('button');
-        btn.className = 'spelling-word-chip sound-choice';
-        btn.type = 'button';
-        btn.textContent = choice;
-        btn.addEventListener('click', () => {
-          if (this.game?._resolveLetterSoundQuiz) this.game._resolveLetterSoundQuiz(choice);
-        });
-        this.elSpellingWordlistGrid.appendChild(btn);
-      }
-    }
+    setTimeout(() => {
+      const promptPlayer = new Audio(q.promptAudio);
+      promptPlayer.play().catch(() => {});
+    }, 400);
+  }
+
+  showIdentifyLetterQuiz(q) {
+    if (!this.elSpellingOverlay) return;
+    this._setTouchControlsVisible(false);
+    this.elSpellingOverlay.classList.add('active', 'sound-match');
+    this.elSpellingBigLetter.textContent = q.targetLetter;
+    this.elSpellingProgress.innerHTML = `Question ${q.index} of ${q.total}`;
+    this.elSpellingHintCount.textContent = q.promptText;
+    this.elSpellingHintArea.textContent = '🔊 Tap a speaker to hear. Tap it again to choose.';
+    this._renderQuizChoices(q, 'letter');
+
+    setTimeout(() => {
+      const promptPlayer = new Audio(q.promptAudio);
+      promptPlayer.play().catch(() => {});
+    }, 400);
+  }
+
+  _renderQuizChoices(q, type) {
+    if (!this.elQuizChoices) return;
+    this.elQuizChoices.innerHTML = '';
+    q.choices.forEach((choice, idx) => {
+      const card = document.createElement('div');
+      card.className = 'quiz-choice-card';
+
+      const speaker = document.createElement('button');
+      speaker.className = 'quiz-choice-speaker';
+      speaker.type = 'button';
+      speaker.textContent = '🔊';
+      speaker.addEventListener('click', () => {
+        if (type === 'word') {
+          const firstLetter = choice.charAt(0).toUpperCase();
+          const path = `audio/drill/words/${firstLetter}/${choice.toLowerCase()}.wav`;
+          const player = new Audio(path);
+          player.play().catch(() => {
+            if ('speechSynthesis' in window) {
+              const u = new SpeechSynthesisUtterance(choice);
+              u.rate = 0.9;
+              window.speechSynthesis.speak(u);
+            }
+          });
+        } else {
+          const path = `audio/drill/letter_choice/${choice}.wav`;
+          const player = new Audio(path);
+          player.play().catch(() => {
+            if ('speechSynthesis' in window) {
+              const u = new SpeechSynthesisUtterance(`Letter ${choice}`);
+              u.rate = 0.9;
+              window.speechSynthesis.speak(u);
+            }
+          });
+        }
+      });
+
+      const label = document.createElement('div');
+      label.className = 'quiz-choice-label';
+      label.textContent = `Choice ${idx + 1}`;
+
+      const selectBtn = document.createElement('button');
+      selectBtn.className = 'quiz-select-btn';
+      selectBtn.type = 'button';
+      selectBtn.textContent = 'Select';
+      selectBtn.addEventListener('click', () => {
+        if (this.game?.spellingGlue?.resolveDrillQuiz) {
+          this.game.spellingGlue.resolveDrillQuiz(choice);
+        }
+      });
+
+      card.appendChild(speaker);
+      card.appendChild(label);
+      card.appendChild(selectBtn);
+      this.elQuizChoices.appendChild(card);
+    });
   }
 
   hideSpellingChallenge() {
     if (!this.elSpellingOverlay) return;
     this.elSpellingOverlay.classList.remove('active');
     this.elSpellingOverlay.classList.remove('sound-match');
+    if (this.elQuizChoices) this.elQuizChoices.innerHTML = '';
     this._setTouchControlsVisible(true);
-  }
-
-  enableSpellingInput() {
-    if (this.elSpellingInput) {
-      this.elSpellingInput.disabled = false;
-      this.elSpellingInput.focus();
-    }
-  }
-
-  updateSpellingHint(hintStr, countStr) {
-    if (this.elSpellingHintArea) this.elSpellingHintArea.textContent = hintStr;
-    if (this.elSpellingHintCount) this.elSpellingHintCount.textContent = countStr || '';
-  }
-
-  setSpellingRevealVisible(visible) {
-    if (this.elSpellingRevealBtn) {
-      this.elSpellingRevealBtn.style.display = visible ? 'inline-block' : 'none';
-    }
-  }
-
-  setSpellingFeedback(text, isCorrect) {
-    if (!this.elSpellingFeedback) return;
-    this.elSpellingFeedback.textContent = text;
-    this.elSpellingFeedback.className = 'spelling-feedback ' + (isCorrect ? 'correct' : 'wrong');
-  }
-
-  updateSpellingProgress(progressText) {
-    if (this.elSpellingProgress) this.elSpellingProgress.innerHTML = progressText;
   }
 
   _bindHotbar() {
@@ -477,6 +458,7 @@ export class UIManager {
     this.elHotbar.style.display = 'flex';
     this.elFloorIndicator.style.display = 'block';
     this._updatePetHud();
+    this.updateBackpack();
     if (this.elFps) this.elFps.style.display = 'block';
     if (this.elZoom) this.elZoom.style.display = 'flex';
   }
@@ -1382,6 +1364,12 @@ export class UIManager {
     }
   }
 
+  showDepositPrompt(show) {
+    if (this.elDepositPrompt) {
+      this.elDepositPrompt.classList.toggle('active', show);
+    }
+  }
+
   setFloorText(text) {
     this.elFloorIndicator.textContent = text;
   }
@@ -1406,6 +1394,24 @@ export class UIManager {
 
   showCamp(fromDeath = false) {
     this._campFromDeath = fromDeath;
+
+    // Forced drill: if pending letters exist, start drill session instead of showing camp
+    const pending = this.game?.pendingLetters;
+    if (pending && pending.size > 0) {
+      if (document.pointerLockElement) document.exitPointerLock();
+      this._setTouchControlsVisible(false);
+      this._setZoneLetterHudVisible(false);
+      this.elHud.style.display = 'none';
+      this.elCrosshair.style.display = 'none';
+      this.elHotbar.style.display = 'none';
+      this.elFloorIndicator.style.display = 'none';
+      if (this.elZoom) this.elZoom.style.display = 'none';
+      if (this.elFps) this.elFps.style.display = 'none';
+      if (this.elExitOpen) this.elExitOpen.style.display = 'none';
+      this.game.spellingGlue.startDrillSession();
+      return;
+    }
+
     if (document.pointerLockElement) document.exitPointerLock();
     this._setTouchControlsVisible(false);
     this._setZoneLetterHudVisible(false);
@@ -1421,6 +1427,7 @@ export class UIManager {
       this.elDescendBtn.textContent = fromDeath ? 'TRY AGAIN' : 'DESCEND';
     }
     this._renderPetDen();
+    this._renderLetterDrill();
   }
 
   hideCamp() {
@@ -1866,6 +1873,41 @@ export class UIManager {
     );
   }
 
+  _renderLetterDrill() {
+    const panel = this.elLetterDrillPanel;
+    const list = this.elLetterDrillList;
+    const empty = this.elLetterDrillEmpty;
+    const blocker = this.elLetterDrillBlocker;
+    const btn = this.elDescendBtn;
+    if (!panel || !list) return;
+
+    const pending = this.game?.pendingLetters;
+    const hasPending = pending && pending.size > 0;
+
+    panel.classList.toggle('active', hasPending);
+    if (blocker) blocker.classList.toggle('active', hasPending);
+    if (btn) btn.disabled = hasPending;
+    if (blocker) blocker.textContent = '⚠️ Complete your drill session before descending!';
+
+    if (!hasPending) {
+      if (empty) empty.style.display = 'block';
+      list.innerHTML = '';
+      return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = '';
+    for (const letter of pending) {
+      const card = document.createElement('div');
+      card.className = 'letter-drill-card';
+      card.innerHTML = `
+        <span class="drill-letter">${letter}</span>
+        <span class="drill-status">Pending</span>
+      `;
+      list.appendChild(card);
+    }
+  }
+
   _renderPetDenOverlay() {
     if (!this.petDenOpen) return;
     this._renderPetPanel(
@@ -2033,5 +2075,42 @@ export class UIManager {
     } else {
       this.elPetHud.classList.remove('active');
     }
+  }
+
+
+
+  updateBackpack() {
+    if (!this.elBackpackHud || !this.elBackpackSlots) return;
+    const bp = this.game?.runBackpack;
+    if (!bp) {
+      this.elBackpackHud.classList.remove('active');
+      return;
+    }
+    this.elBackpackHud.classList.add('active');
+    const slots = bp.slots;
+    const max = bp.maxSlots;
+    const used = slots.length;
+    let html = '';
+    const ICON_EMOJI = {
+      loose_dirt: '🟫', gravel_bits: '⚪', scrap_stone: '🪨', old_junk: '🗑️',
+      moss_chip: '🌿', crystal_shard: '🔷', amber: '🍋', ancient_bark: '🪵',
+      ash: '⚫', magma_shard: '🔶', obsidian_fragment: '💣', ember_essence: '🔥',
+      ice_chunk: '🧊', frost_shard: '❄️', glacial_metal: '⛓️', blizzard_essence: '🌨️',
+      sand: '🍪', desert_shard: '💛', gold_nugget: '🪙', solar_essence: '☀️',
+      rust_chunk: '🟤', gear_shard: '⚙️', alloy_ingot: '🟨', furnace_ember: '🔥',
+      mud_pie: '🥞', moss_clump: '🌿', petrified_bark: '🪵', mire_essence: '💚',
+      brick_chip: '🧱', royal_shard: '❤️', crown_jewel: '👑',
+    };
+    for (let i = 0; i < max; i++) {
+      const slot = slots[i];
+      if (slot) {
+        const emoji = ICON_EMOJI[slot.type] || '❓';
+        const isFull = slot.count >= bp.maxStackSize;
+        html += `<div class="backpack-slot filled ${isFull ? 'full' : ''}">${emoji}<span class="backpack-slot-count">${slot.count}</span></div>`;
+      } else {
+        html += `<div class="backpack-slot"></div>`;
+      }
+    }
+    this.elBackpackSlots.innerHTML = html;
   }
 }

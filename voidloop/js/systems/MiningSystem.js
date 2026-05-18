@@ -339,7 +339,7 @@ export class MiningSystem {
 
       const blockDef = BLOCK_TYPES[typeKey];
       if (blockDef?.resource) {
-        this.game.resources.add(blockDef.resource, 1);
+        this.game.iconDrops?.spawn(blockPos, blockDef.resource, 1);
       }
     }
     if (mined > 0) {
@@ -358,9 +358,7 @@ export class MiningSystem {
     const amount = Math.max(1, Math.min(4, 1 + Math.floor((width - 1) / 2) + volumeBonus));
     const resourceType = this._pickDigJunkResource(depth, width, luck);
 
-    if (this.game.resources.add(resourceType, amount)) {
-      this.batchResourceText(resourceType, amount, 0x9bd47a);
-    }
+    this.game.iconDrops?.spawn(hitPos, resourceType, amount);
 
     for (const node of result.revealedLetters || []) {
       const spawnPos = node.position.clone();

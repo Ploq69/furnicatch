@@ -1,10 +1,11 @@
 // ==========================================
-// Voidloop — 3D Letter Drops from mining
-// Uses Glyph3DManager from the main project
+// Voidloop — 3D Letter Drops (Instanced)
+// Uses Glyph3DManager geometries with InstancedMesh.
 // ==========================================
 
 import * as THREE from 'three';
 import { glyph3D } from '../../js/Glyph3DManager.js';
+import { DropInstancer } from './DropInstancer.js';
 
 const GRAVITY = -15;
 const BOUNCE_REST = 0.4;
@@ -14,45 +15,90 @@ const MAGNET_MAX_SPEED = 12;
 const COLLECT_DIST = 1.6;
 const LETTER_SCALE = 1.5;
 const DESPAWN_TIME = 15;
-const MAX_ACTIVE = 30;
+const CAPACITY_PER_LETTER = 30; // per letter type
+const MAX_ACTIVE = 200;
+
+const _tmpDir = new THREE.Vector3();
+const _tmpQuat = new THREE.Quaternion();
+const _tmpScale = new THREE.Vector3();
+const _tmpPos = new THREE.Vector3();
+const _upAxis = new THREE.Vector3(0, 1, 0);
+
+function extractGeometryAndMaterial(protoGroup) {
+  const geometries = [];
+  let material = null;
+  protoGroup.updateMatrixWorld(true);
+  protoGroup.traverse((child) => {
+    if (child.isMesh && child.geometry) {
+      const geo = child.geometry.clone();
+      geo.applyMatrix4(child.matrixWorld);
+      geometries.push(geo);
+      if (!material && child.material) {
+        material = Array.isArray(child.material) ? child.material[0].clone() : child.material.clone();
+      }
+    }
+  });
+  if (geometries.length === 0) return null;
+  const geometry = geometries[0];
+  if (!material) {
+    material = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xf59e0b, emissiveIntensity: 0.95 });
+  }
+  return { geometry, material };
+}
 
 export class LetterDrop {
   constructor(scene) {
     this.scene = scene;
     this.drops = [];
+    this.instancer = new DropInstancer(scene);
     this.preloaded = false;
-    this._tmpDir = new THREE.Vector3();
+    this._registeredLetters = new Set();
   }
 
   async preload() {
     if (this.preloaded) return;
     await glyph3D.load();
+    if (!glyph3D.ready) {
+      console.warn('[LetterDrop] Glyph3D not ready');
+      return;
+    }
+    for (const [letter, proto] of glyph3D.prototypes) {
+      const extracted = extractGeometryAndMaterial(proto);
+      if (!extracted) continue;
+      extracted.geometry.scale(LETTER_SCALE, LETTER_SCALE, LETTER_SCALE);
+      extracted.geometry.computeBoundingSphere();
+      this.instancer.registerType(letter, extracted.geometry, extracted.material, CAPACITY_PER_LETTER);
+      this._registeredLetters.add(letter);
+    }
     this.preloaded = true;
   }
 
   spawn(pos, letter) {
     if (!this.preloaded || !glyph3D.ready) return null;
+    const key = String(letter).toUpperCase();
+    if (!this._registeredLetters.has(key)) return null;
+
     if (this.drops.length >= MAX_ACTIVE) {
-      // Remove oldest
-      const oldest = this.drops.shift();
-      if (oldest && oldest.mesh) {
-        this.scene.remove(oldest.mesh);
-      }
+      const oldest = this.drops[0];
+      this._remove(0);
     }
 
-    const mesh = glyph3D.createGlyph(letter, 'reward');
-    if (!mesh) return null;
+    const index = this.instancer.alloc(key);
+    if (index < 0) return null;
 
-    mesh.position.copy(pos);
-    mesh.position.y += 0.3;
-    mesh.scale.setScalar(LETTER_SCALE);
-    mesh.castShadow = false;
+    const x = pos.x;
+    const y = pos.y + 0.3;
+    const z = pos.z;
 
-    this.scene.add(mesh);
+    _tmpPos.set(x, y, z);
+    _tmpQuat.identity();
+    _tmpScale.setScalar(1);
+    this.instancer.setTransform(key, index, _tmpPos, _tmpQuat, _tmpScale);
 
     const drop = {
-      mesh,
-      letter: letter.toUpperCase(),
+      key,
+      index,
+      letter: key,
       spinSpeed: 8.0,
       velocity: new THREE.Vector3(
         (Math.random() - 0.5) * 2,
@@ -64,14 +110,18 @@ export class LetterDrop {
       stateTime: 0,
       life: DESPAWN_TIME,
       bobPhase: Math.random() * Math.PI * 2,
+      position: new THREE.Vector3(x, y, z),
+      rotY: 0,
+      scale: 1,
     };
-
     this.drops.push(drop);
     return drop;
   }
 
   update(dt, playerPos) {
+    if (!this.preloaded) return null;
     let collected = null;
+
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i];
       d.life -= dt;
@@ -81,25 +131,26 @@ export class LetterDrop {
         continue;
       }
 
-      // Despawn fade
-      if (d.life < 1.0) {
-        this._setOpacity(d.mesh, d.life);
+      let scaleMul = 1;
+      if (d.life < 0.5) {
+        scaleMul = Math.max(0, d.life / 0.5);
       }
 
-      // Spin
-      d.mesh.rotation.y += d.spinSpeed * dt;
+      d.rotY += d.spinSpeed * dt;
 
-      const dx = playerPos.x - d.mesh.position.x;
-      const dy = playerPos.y - d.mesh.position.y;
-      const dz = playerPos.z - d.mesh.position.z;
+      const dx = playerPos.x - d.position.x;
+      const dy = playerPos.y - d.position.y;
+      const dz = playerPos.z - d.position.z;
       const distSq = dx * dx + dy * dy + dz * dz;
 
       if (d.state === 'bounce') {
         d.velocity.y += GRAVITY * dt;
-        d.mesh.position.addScaledVector(d.velocity, dt);
+        d.position.x += d.velocity.x * dt;
+        d.position.y += d.velocity.y * dt;
+        d.position.z += d.velocity.z * dt;
 
-        if (d.mesh.position.y < d.groundY) {
-          d.mesh.position.y = d.groundY;
+        if (d.position.y < d.groundY) {
+          d.position.y = d.groundY;
           d.velocity.y *= -BOUNCE_REST;
           d.velocity.x *= 0.8;
           d.velocity.z *= 0.8;
@@ -118,54 +169,45 @@ export class LetterDrop {
 
       if (d.state === 'hover') {
         d.bobPhase += dt * 3;
-        d.mesh.position.y = d.groundY + 0.1 + Math.sin(d.bobPhase) * 0.1;
+        d.position.y = d.groundY + 0.1 + Math.sin(d.bobPhase) * 0.1;
 
         if (distSq < MAGNET_RANGE * MAGNET_RANGE) {
           const dist = Math.sqrt(distSq);
-          const dir = this._tmpDir.set(dx, dy, dz).multiplyScalar(dist > 0.0001 ? 1 / dist : 0);
+          const dir = _tmpDir.set(dx, dy, dz).multiplyScalar(dist > 0.0001 ? 1 / dist : 0);
           const speed = Math.min(MAGNET_MAX_SPEED, MAGNET_ACCEL * (MAGNET_RANGE - dist));
-          d.mesh.position.addScaledVector(dir, speed * dt);
+          d.position.x += dir.x * speed * dt;
+          d.position.y += dir.y * speed * dt;
+          d.position.z += dir.z * speed * dt;
         }
       }
 
-      // Collect
+      _tmpQuat.setFromAxisAngle(_upAxis, d.rotY);
+      _tmpScale.setScalar(scaleMul);
+      this.instancer.setTransform(d.key, d.index, d.position, _tmpQuat, _tmpScale);
+
       if (distSq < COLLECT_DIST * COLLECT_DIST) {
         collected = {
           letter: d.letter,
-          position: d.mesh.position.clone(),
+          position: d.position.clone(),
         };
         this._remove(i);
       }
     }
+
+    this.instancer.upload();
     return collected;
   }
 
-  _remove(index) {
-    const d = this.drops[index];
-    if (d.mesh) {
-      this.scene.remove(d.mesh);
-      // Dispose cloned materials to avoid leaks (geometry is shared prototype)
-      d.mesh.traverse((child) => {
-        if (child.isMesh && child.material && child.material.dispose) {
-          child.material.dispose();
-        }
-      });
-    }
-    this.drops.splice(index, 1);
-  }
-
-  _setOpacity(root, opacity) {
-    root.traverse((c) => {
-      if (c.isMesh && c.material) {
-        c.material.opacity = opacity;
-        c.material.transparent = opacity < 1;
-      }
-    });
+  _remove(i) {
+    const d = this.drops[i];
+    if (!d) return;
+    this.instancer.free(d.key, d.index);
+    const last = this.drops.pop();
+    if (last && last !== d) this.drops[i] = last;
   }
 
   clear() {
-    for (let i = this.drops.length - 1; i >= 0; i--) {
-      this._remove(i);
-    }
+    this.instancer.clear();
+    this.drops = [];
   }
 }

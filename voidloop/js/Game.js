@@ -19,9 +19,12 @@ import { ZONES, getZoneById, getZoneAtPosition } from './ZoneData.js';
 import { Inventory } from './Inventory.js';
 import { ProgressionManager } from './ProgressionManager.js';
 import { getKayKitItem, getKayKitPaths, getKayKitCharacter, KAYKIT_ANIMATIONS } from './KayKitLoadout.js';
-import { LetterPool, SPELLING_WORDS } from './SpellingData.js';
-import { SpellingChallenge } from './SpellingEngine.js';
+import { LetterPool } from './SpellingData.js';
 import { LetterDrop } from './LetterDrop.js';
+import { RunBackpack } from './RunBackpack.js';
+import { IconDrop } from './IconDrop.js';
+import { CollectionBeacon } from './CollectionBeacon.js';
+import { CashOutScreen } from './CashOutScreen.js';
 import { glyph3D } from '../../js/Glyph3DManager.js';
 import { PetManager } from './PetManager.js';
 import { PetLetter } from './PetLetter.js';
@@ -187,12 +190,8 @@ export class Game {
       this.cameraZoom = val;
       this._updateCameraZoom();
     };
-    // Spelling UI callbacks
-    this.ui.onSpellingPlay = () => this.spellingGlue.onSpellingPlay();
-    this.ui.onSpellingCheck = (input) => this.spellingGlue.onSpellingCheck(input);
-    this.ui.onSpellingReveal = () => this.spellingGlue.onSpellingReveal();
+    // Drill quiz UI callbacks
     this.ui.onSpellingClose = () => this.spellingGlue.onSpellingClose();
-    this.ui.onSpellingPlayWord = (word) => this.spellingGlue.onSpellingPlayWord(word);
 
     // Timer — countdown
     this.floorTimer = this.progression.getRoundStartTime(GAME.COUNTDOWN_BASE);
@@ -201,14 +200,18 @@ export class Game {
     this.level = 1;
     this.exitOpen = false;
 
-    // Loot
+    // Loot & Resources
     this.loot = new LootDrop(this.scene);
+    this.runBackpack = new RunBackpack();
+    this.iconDrops = new IconDrop(this.scene);
+    this.beacon = new CollectionBeacon(this.scene);
+    this.cashOut = new CashOutScreen();
+    this._cashOutActive = false;
+    this.pendingLetters = new Set();
 
     // Spelling / Letter drops
     this.letterPool = new LetterPool();
     this.letterDrops = new LetterDrop(this.scene);
-    this.spellingChallenge = null;
-    this.spellingGlyphMesh = null;
 
     // Pet system
     this.petManager = new PetManager();
@@ -340,6 +343,8 @@ export class Game {
     await preloadAllTextures();
     // Preload loot models
     await this.loot.preloadModels();
+    // Preload icon drops
+    await this.iconDrops.preload();
     // Preload alphabet glyphs for letter drops
     await glyph3D.load();
     await this.letterDrops.preload();
@@ -487,15 +492,14 @@ export class Game {
     await this.world.buildTerrainMesh();
 
     // Spawn player at current zone's spawn point
-    if (zone) {
-      this.player.position.set(zone.spawnPoint.x, 1, zone.spawnPoint.z);
-    } else {
-      this.player.position.set(0, 1, 0);
-    }
+    this.spawnPoint = zone ? new THREE.Vector3(zone.spawnPoint.x, 1, zone.spawnPoint.z) : new THREE.Vector3(0, 1, 0);
+    this.player.position.copy(this.spawnPoint);
+    this.beacon.setPosition(this.spawnPoint);
     this.player.hp = this.player.maxHp;
     this.exitOpen = false;
     this.floorTimer = GAME.COUNTDOWN_BASE;
     this.killCount = 0;
+    this.pendingLetters.clear();
     this.loot.clear();
     this.letterDrops.clear();
     this.shaderFX.clear();
@@ -537,15 +541,14 @@ export class Game {
     await this.world.loadAuthoredLevel(levelDoc, { scene: this.scene, letterDrop: this.letterDrops });
 
     // Spawn player at authored start position
-    if (this.world.startPosition) {
-      this.player.position.copy(this.world.startPosition);
-    } else {
-      this.player.position.set(0, 0, 0);
-    }
+    this.spawnPoint = this.world.startPosition ? this.world.startPosition.clone() : new THREE.Vector3(0, 0, 0);
+    this.player.position.copy(this.spawnPoint);
+    this.beacon.setPosition(this.spawnPoint);
     this.player.hp = this.player.maxHp;
     this.exitOpen = false;
     this.floorTimer = levelDoc.gameplay?.timerSeconds || 120;
     this.killCount = 0;
+    this.pendingLetters.clear();
     this.loot.clear();
     this.letterDrops.clear();
     this.shaderFX.clear();
@@ -613,7 +616,7 @@ export class Game {
     };
     this.world?.terrainMesh?.resetPerfStats?.();
 
-    if (this.state === STATES.PLAYING) {
+    if (this.state === STATES.PLAYING && !this._cashOutActive) {
       // Escape handling: pause takes priority, then loadout/petden close
       if (input.pressed('Escape')) {
         if (this.ui.progressionOpen) {
@@ -652,20 +655,6 @@ export class Game {
       if (input.pressed('Escape')) {
         this.spellingGlue.onSpellingClose();
       }
-      // Spelling uses the isometric camera so the glyph is visible.
-      this._setCameraMode('iso', false);
-      const offset = 20 / this.cameraZoom;
-      this.isoCamera.position.set(
-        this.player.position.x + offset,
-        this.player.position.y + offset,
-        this.player.position.z + offset
-      );
-      this.isoCamera.lookAt(this.player.position.x, this.player.position.y, this.player.position.z);
-      // Bob the 3D glyph mesh if present
-      if (this.spellingGlyphMesh) {
-        this.spellingGlyphMesh.position.y = 1.5 + Math.sin(Date.now() * 0.003) * 0.15;
-        this.spellingGlyphMesh.rotation.y += dt * 1.5;
-      }
     }
 
     this.particles.update(dt, this.camera);
@@ -674,6 +663,7 @@ export class Game {
     updateWeaponEmitters(dt, this.camera);
     const uiStart = performance.now();
     this.ui.update(dt);
+    this.ui.updateBackpack();
     this._perfFrame.uiMs += performance.now() - uiStart;
     const renderStart = performance.now();
     this._updateSky(dt);
@@ -691,6 +681,8 @@ export class Game {
   }
 
   _updatePlaying(dt) {
+    if (this._cashOutActive) return; // paused during cash-out
+
     // Multiplayer: send player state every 100ms
     if (this.isMultiplayer && this.net) {
       this._syncSendTimer += dt;
@@ -788,6 +780,7 @@ export class Game {
       if (this.shakeDuration <= 0) this.shakeIntensity = 0;
     }
     this._updateCamera(dt, offset, shakeX, shakeY, shakeZ, isoDepthFactor);
+    this._updateReticle();
 
     // Update weapon cooldowns
     for (const w of this.player.weapons) w.update(dt);
@@ -802,7 +795,19 @@ export class Game {
     const activeWeapon = this.player.weapons[this.player.currentSlot];
     if (minePressed && this._canUseWeapon(activeWeapon)) {
       const weapon = activeWeapon;
-      if (weapon.data.type === 'thrown') {
+      if (weapon.data.type === 'grapple') {
+        const aim = this._getMiningAim();
+        const handPos = new THREE.Vector3();
+        this.player.equipmentHolders.rightHand?.getWorldPosition(handPos);
+        const fired = this.player.ivyWhip.fire(handPos, aim.direction, this.world);
+        if (fired) {
+          this.player.playAttackAnim();
+          SFXMapper.meleeSwing('sword');
+        } else {
+          SFXMapper.swingMiss();
+        }
+        weapon.cooldown = 0.35;
+      } else if (weapon.data.type === 'thrown') {
         const prep = this._prepareGrenadeThrow(weapon);
         if (!prep.allowed) {
           this.ui.showFloatingText(prep.message, 0xffaa00);
@@ -957,8 +962,7 @@ export class Game {
               }
               const blockDef = BLOCK_TYPES[typeKey];
               if (blockDef && blockDef.resource) {
-                this.resources.add(blockDef.resource, 1);
-                this.mining.batchResourceText(blockDef.resource, 1, 0x88ccff);
+                this.iconDrops?.spawn(blockPos, blockDef.resource, 1);
               }
             }
 
@@ -987,7 +991,7 @@ export class Game {
     }
 
     // Hotbar
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < this.player.weapons.length; i++) {
       if (input.pressed(`Digit${i + 1}`)) {
         this.player.equipWeapon(i);
         this.ui.setHotbarSlot(i);
@@ -1019,6 +1023,14 @@ export class Game {
     this.loot.update(dt, this.player.position, (type, value, color) => {
       this._onLootCollect(type, value, color);
     });
+
+    // Icon drops update (resources into backpack)
+    this.iconDrops.update(dt, this.player.position, (type, amount) => {
+      this._onIconDropCollect(type, amount);
+    });
+
+    // Collection Beacon update + interact
+    this._updateBeacon(dt);
 
     this._checkZoneCompletion();
 
@@ -1076,11 +1088,10 @@ export class Game {
 
     this._updateZoneAtmosphere(isoDepthFactor);
 
-    // Check death
+    // Check death / timer expiry → cash-out → camp
     if (this.player.hp <= 0) {
       SFXMapper.playerDeath();
-      this.state = STATES.CAMP;
-      this.ui.showCamp(true);
+      this._triggerCashOut();
       return;
     }
 
@@ -1433,7 +1444,6 @@ export class Game {
     this.world?.terrainMesh?.setRenderMode?.(this.cameraMode, this._renderScale || 1);
     if (this.cameraMode === 'thirdPerson') {
       this.tpCamera.update(dt, shakeX, shakeY, shakeZ);
-      if (this.player.mesh) this.player.mesh.visible = true;
       this._updateShadowCamera(dt);
       return;
     }
@@ -1743,6 +1753,9 @@ export class Game {
       rig.pitch = this.camPitch;
       rig.distance = tune.distance;
       rig.collisionDistance = tune.distance;
+      rig.firstPersonBlend = 0;
+      rig.firstPersonLocked = false;
+      rig.firstPersonUnlockDelay = 0;
       rig.manualRecenteringTimer = 0;
       rig.initialized = true;
       this.camPos.copy(this.tpCamera.getDesiredPosition(subject, rig.displayYaw, rig.pitch, rig.distance));
@@ -1751,7 +1764,10 @@ export class Game {
       this.tpCamera.collision.initialized = false;
       this.tpCamera.collision.nearHit = false;
       this.renderer.domElement.requestPointerLock?.();
-      if (this.aimReticle) this.aimReticle.style.display = 'block';
+      if (this.aimReticle) {
+        this.aimReticle.style.display = 'block';
+        this.aimReticle.style.opacity = '1';
+      }
       if (showToast) this.ui.showFloatingText('Third-person view', 0x7dd3fc);
     } else if (mode === 'topDown') {
       this.camera = this.isoCamera;
@@ -1788,6 +1804,69 @@ export class Game {
       origin: this.player.position.clone().add(new THREE.Vector3(0, 0.65, 0)),
       direction: new THREE.Vector3(Math.sin(this.player.rotation), 0, Math.cos(this.player.rotation)),
     };
+  }
+
+  _updateReticle() {
+    if (this.cameraMode !== 'thirdPerson' || !this.aimReticle) return;
+
+    const cam = this.thirdPersonCamera;
+    const origin = cam.position.clone();
+    const direction = new THREE.Vector3();
+    cam.getWorldDirection(direction);
+
+    let targetPoint = null;
+
+    // Raycast against terrain
+    const terrain = this.world?.terrainMesh;
+    if (terrain?.raycastVoxel) {
+      const hit = terrain.raycastVoxel(origin, direction, 40, { solidOnly: true });
+      if (hit?.point) {
+        targetPoint = hit.point.clone();
+      }
+    }
+
+    // Fallback: raycast against floating blocks
+    if (!targetPoint && this.world?.blocks) {
+      let nearestBlock = null;
+      let nearestDist = 40;
+      for (const block of this.world.blocks.values()) {
+        if (block.destroyed) continue;
+        const toBlock = block.position.clone().sub(origin);
+        const proj = toBlock.dot(direction);
+        if (proj < 0.5 || proj > nearestDist) continue;
+        const closest = origin.clone().addScaledVector(direction, proj);
+        const distToCenter = closest.distanceTo(block.position);
+        if (distToCenter < 0.8 && proj < nearestDist) {
+          nearestDist = proj;
+          nearestBlock = block;
+        }
+      }
+      if (nearestBlock) {
+        targetPoint = nearestBlock.position.clone();
+      }
+    }
+
+    // If nothing hit, project to a point along the aim ray
+    if (!targetPoint) {
+      targetPoint = origin.clone().addScaledVector(direction, 25);
+    }
+
+    // Project 3D point to screen space
+    const projected = targetPoint.clone().project(cam);
+
+    // Check if behind camera
+    if (projected.z > 1 || projected.z < 0) {
+      this.aimReticle.style.opacity = '0';
+      return;
+    }
+
+    const x = (projected.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-projected.y * 0.5 + 0.5) * window.innerHeight;
+
+    this.aimReticle.style.left = `${x}px`;
+    this.aimReticle.style.top = `${y}px`;
+    this.aimReticle.style.transform = 'translate(-50%, -50%)';
+    this.aimReticle.style.opacity = '1';
   }
 
   _togglePause() {
@@ -1927,6 +2006,78 @@ export class Game {
     }
   }
 
+  _onIconDropCollect(type, amount) {
+    const result = this.runBackpack.add(type, amount);
+    if (result.success && result.added > 0) {
+      const meta = RESOURCE_META[type];
+      const label = meta?.name || type;
+      this.mining.batchResourceText(label, result.added, 0xfacc15, '🎒');
+      const now = performance.now?.() || Date.now();
+      if (now - this._lastCollectSfxAt > 70) {
+        this._lastCollectSfxAt = now;
+        SFXMapper.collectOre();
+      }
+    }
+    if (!result.success) {
+      this.ui.showFloatingText('Backpack full!', 0xff4444);
+      return false; // Don't remove the drop — let it stay on the ground
+    }
+    return true;
+  }
+
+  _updateBeacon(dt) {
+    this.beacon.update(dt);
+    const nearBeacon = this.beacon.isPlayerNear(this.player.position, 3);
+    const hasItems = this.runBackpack.getTotalItems() > 0;
+    this.ui.showDepositPrompt(nearBeacon && hasItems);
+
+    if (nearBeacon && hasItems && input.pressed('KeyE')) {
+      this._triggerCashOut();
+    }
+  }
+
+  _triggerCashOut() {
+    if (this._cashOutActive) return;
+    this._cashOutActive = true;
+
+    // Deposit backpack resources
+    const result = this.runBackpack.depositAll(this.resources);
+    if (result.totalCoins > 0) {
+      this.player.coins += result.totalCoins;
+    }
+
+    // Gather pending letters for cash-out display
+    const pendingLetters = Array.from(this.pendingLetters);
+
+    // Check milestone: any affordable upgrade?
+    let milestone = null;
+    const upgradeIds = [
+      'pickaxe_width', 'round_time', 'letter_drop',
+      'grenade_unlock', 'grenade_radius', 'grenade_cooldown',
+      'missile_unlock', 'missile_radius',
+      'rocket_boots_unlock', 'rocket_boots_fuel',
+    ];
+    for (const id of upgradeIds) {
+      const cost = this.progression.getPurchaseCost(id);
+      if (cost != null && cost <= this.player.coins) {
+        milestone = 'New upgrade available!';
+        break;
+      }
+    }
+
+    SFXMapper.cashOutSuction();
+    this.cashOut.start({
+      deposited: result.deposited,
+      totalCoins: result.totalCoins,
+      letters: pendingLetters,
+      milestone,
+    }, () => {
+      this._cashOutActive = false;
+      this.state = STATES.CAMP;
+      this.ui.showCamp(true);
+    });
+  }
+
   _pickLetterForZone(zoneId) {
     const zone = getZoneById(zoneId);
     if (!zone || !zone.letters || zone.letters.length === 0) {
@@ -1936,74 +2087,6 @@ export class Game {
       return zone.letters[Math.floor(Math.random() * zone.letters.length)];
     }
     return this.letterPool.pickRandomLetter();
-  }
-
-  // ==========================================
-  // Spelling Challenge Methods
-  // ==========================================
-
-  _collectLetterForMastery(letter, pickupPosition = null) {
-    return this.spellingGlue.collectLetter(letter, pickupPosition);
-  }
-
-  _tryStartQueuedLetterQuiz() {
-    return this.spellingGlue.tryStartQuiz();
-  }
-
-  _enterLetterSoundQuiz(letter, choices) {
-    return this.spellingGlue.enterLetterSoundQuiz(letter, choices);
-  }
-
-  _resolveLetterSoundQuiz(choice) {
-    return this.spellingGlue.resolveLetterSoundQuiz(choice);
-  }
-
-  _exitLetterSoundQuiz() {
-    return this.spellingGlue.exitLetterSoundQuiz();
-  }
-
-  _rememberSpellingCameraMode() {
-    return this.spellingGlue._rememberCameraMode();
-  }
-
-  _restoreSpellingCameraMode() {
-    return this.spellingGlue._restoreCameraMode();
-  }
-
-  _playPendingLetterLevelUp() {
-    return this.spellingGlue.playPendingLevelUp();
-  }
-
-  _speakLetter(letter) {
-    return this.spellingGlue.speakLetter(letter);
-  }
-
-  _enterSpellingChallenge(letter) {
-    return this.spellingGlue.enterSpellingChallenge(letter);
-  }
-
-  _onSpellingPlay() {
-    return this.spellingGlue.onSpellingPlay();
-  }
-
-  _onSpellingPlayWord(word) {
-    return this.spellingGlue.onSpellingPlayWord(word);
-  }
-
-  _onSpellingCheck(input) {
-    return this.spellingGlue.onSpellingCheck(input);
-  }
-
-  _onSpellingReveal() {
-    return this.spellingGlue.onSpellingReveal();
-  }
-
-  _onSpellingClose() {
-    return this.spellingGlue.onSpellingClose();
-  }
-
-  _exitSpellingChallenge(success) {
-    return this.spellingGlue.exitSpellingChallenge(success);
   }
 
   _applyGraphicsSettings() {

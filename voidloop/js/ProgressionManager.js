@@ -254,9 +254,9 @@ export class ProgressionManager {
 
     state.introduced = true;
     state.dropsTowardQuiz += Math.max(1, count);
-    const queued = this._queueReadyQuiz(state.letter);
+    // Quiz no longer auto-queued in-zone; letters are drilled at camp
     this._saveSoon();
-    return { queued, state };
+    return { queued: false, state };
   }
 
   peekQuiz() {

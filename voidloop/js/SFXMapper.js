@@ -392,4 +392,17 @@ export const SFXMapper = {
       playVariant(pre, name, { volume: 0.08 });
     }
   },
+
+  // === CASH-OUT (The Vacuum) ===
+  cashOutSuction() {
+    playVariant('WHSH', 'MOVEMENT-Simple Whoosh', { volume: 0.5, pitch: 0.7 });
+  },
+
+  cashOutChime() {
+    playVariant('DSGNTonl', 'USABLE-Coin Toss', { volume: 0.4, pitch: 1.1 + Math.random() * 0.2 });
+  },
+
+  cashOutFanfare() {
+    playVariant('MAGSpel', 'CAST-High Powering Up', { volume: 0.6, pitch: 1.05 });
+  },
 };
