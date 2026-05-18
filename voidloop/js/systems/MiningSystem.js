@@ -127,6 +127,22 @@ export class MiningSystem {
         if (!dir || dir.lengthSq() < 0.001) continue;
         const raycaster = new THREE.Raycaster(attempt.origin, dir.normalize(), 0.05, attempt.rayRange);
         const hit = this.game.world.terrainMesh.raycast(raycaster, attempt.origin, attempt.rayRange + 2);
+        if (this.game._ourCraftDemo) {
+          console.log('[MiningDebug] terrain ray attempt', {
+            origin: attempt.origin.toArray().map(n => Number(n.toFixed(2))),
+            dir: dir.toArray().map(n => Number(n.toFixed(2))),
+            rayRange: attempt.rayRange,
+            maxPlayerDistance: attempt.maxPlayerDistance,
+            hit: hit ? {
+              point: hit.point?.toArray?.().map(n => Number(n.toFixed(2))),
+              distance: Number(hit.distance?.toFixed?.(2) ?? hit.distance),
+              gridPos: hit.gridPos,
+              type: hit.cell?.type,
+              renderable: hit.cell?.renderable,
+              solid: hit.cell?.solid,
+            } : null,
+          });
+        }
         if (!hit?.point) continue;
         if (hit.point.distanceTo(playerFocus) > attempt.maxPlayerDistance) continue;
         const target = this._buildTerrainMiningStatusFromHit(hit, isPickaxe);
@@ -134,10 +150,8 @@ export class MiningSystem {
       }
     }
 
-    if (this.game.cameraMode === 'iso' || this.game.cameraMode === 'topDown') {
-      const underfootTarget = this.findUnderfootTarget(isPickaxe);
-      if (underfootTarget) return underfootTarget;
-    }
+    const underfootTarget = this.findUnderfootTarget(isPickaxe);
+    if (underfootTarget) return underfootTarget;
 
     return null;
   }
@@ -156,8 +170,10 @@ export class MiningSystem {
     for (const [ox, oz] of offsets) {
       const x = base.x + ox;
       const z = base.z + oz;
+      const zoneEntry = this.game.world.terrainMesh._findZoneEntry?.(x, z);
       const zone = getZoneAtPosition(x, z);
-      if (!zone) continue;
+      const zoneId = zoneEntry?.zone?.id || zone?.id;
+      if (!zoneId) continue;
 
       const groundY = this.game.world.getGroundHeightAt(x, z, base.y + 0.4);
       if (!Number.isFinite(groundY) || groundY <= -998) continue;
@@ -168,22 +184,32 @@ export class MiningSystem {
       }
       if (!this.game.world.terrainMesh.isSolidAt(center.x, center.y, center.z)) continue;
 
-      return this._buildTerrainMiningStatusFromCenter(center, zone.id, isPickaxe);
+      return this._buildTerrainMiningStatusFromCenter(center, zoneId, isPickaxe);
     }
 
     return null;
   }
 
   _buildTerrainMiningStatusFromHit(hit, isPickaxe) {
+    const zoneEntry = this.game.world.terrainMesh._findZoneEntry?.(hit.point.x, hit.point.z);
     const zone = getZoneAtPosition(hit.point.x, hit.point.z);
-    if (!zone) return null;
+    const zoneId = zoneEntry?.zone?.id || zone?.id;
+    if (!zoneId) return null;
+    if (zoneEntry?.zone?.dataSource === 'ourcraft' && hit.gridPos) {
+      const brushCenter = new THREE.Vector3(
+        hit.gridPos.x + 0.5,
+        hit.gridPos.y + 0.5,
+        hit.gridPos.z + 0.5
+      );
+      return this._buildTerrainMiningStatusFromCenter(brushCenter, zoneId, isPickaxe, hit.point.clone());
+    }
     const normal = hit.face?.normal?.clone() || new THREE.Vector3(0, 1, 0);
     normal.transformDirection(hit.object.matrixWorld).normalize();
     let brushCenter = hit.point.clone().addScaledVector(normal, -0.45);
     if (!this.game.world.terrainMesh.isSolidAt(brushCenter.x, brushCenter.y, brushCenter.z)) {
       brushCenter = hit.point.clone().addScaledVector(normal, 0.45);
     }
-    return this._buildTerrainMiningStatusFromCenter(brushCenter, zone.id, isPickaxe, hit.point.clone());
+    return this._buildTerrainMiningStatusFromCenter(brushCenter, zoneId, isPickaxe, hit.point.clone());
   }
 
   _buildTerrainMiningStatusFromCenter(brushCenter, zoneId, isPickaxe, hitPoint = brushCenter.clone()) {

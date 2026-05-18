@@ -14,8 +14,8 @@ import { generateTileAwareMipmaps } from './AtlasMipmapGenerator.js';
 
 const ISO_LEVEL = 0;
 const CHUNK_SIZE = 16;
-const TERRAIN_MIN_Y = -150;
-const TERRAIN_MAX_Y = 10;
+const TERRAIN_MIN_Y = -200;
+const TERRAIN_MAX_Y = 200;
 const SURFACE_Y = 2;
 const CELL_SIZE = 1;
 const MAX_REBUILDS_PER_FRAME = 1;
@@ -317,6 +317,8 @@ export class TerrainMesh {
     this._lastVisibilityMode = null;
     this._lastVisibilityForward = new THREE.Vector3(0, 0, -1);
     this._lastPlayerPos = new THREE.Vector3();
+    this.ourCraftLoader = null;
+    this.ourCraftYShift = -75;
     this._frustum = new THREE.Frustum();
     this._projScreenMatrix = new THREE.Matrix4();
     this._cameraForward = new THREE.Vector3(0, 0, -1);
@@ -409,7 +411,12 @@ export class TerrainMesh {
 
   _createZoneBlockTexture(zone) {
     const gl = this.renderer.getContext();
-    const b = zone.bounds;
+    const b = { ...zone.bounds };
+    // For ourCraft zones, use the full terrain y-range so every chunk upload fits
+    if (zone.dataSource === 'ourcraft') {
+      b.minY = TERRAIN_MIN_Y;
+      b.maxY = TERRAIN_MAX_Y;
+    }
     this.zoneBlockTexture = new ZoneBlockTexture(gl, b);
     if (this.unifiedRenderer) {
       this.unifiedRenderer.setZoneBlockTexture(this.zoneBlockTexture.texture, this.zoneBlockTexture.origin);
@@ -442,10 +449,13 @@ export class TerrainMesh {
       const cx1 = Math.floor((b.maxX - 1) / CHUNK_SIZE);
       const cz0 = Math.floor(b.minZ / CHUNK_SIZE);
       const cz1 = Math.floor((b.maxZ - 1) / CHUNK_SIZE);
-      const cy = Math.floor(0 / CHUNK_SIZE);
+      const cy0 = b.minY !== undefined ? Math.floor(b.minY / CHUNK_SIZE) : Math.floor(0 / CHUNK_SIZE);
+      const cy1 = b.maxY !== undefined ? Math.floor((b.maxY - 1) / CHUNK_SIZE) : cy0;
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cz = cz0; cz <= cz1; cz++) {
-          this._rebuildChunk(cx, cy, cz);
+          for (let cy = cy0; cy <= cy1; cy++) {
+            this._rebuildChunk(cx, cy, cz);
+          }
         }
       }
     }
@@ -1192,6 +1202,30 @@ export class TerrainMesh {
     return this._tmpCenter.distanceToSquared(point);
   }
 
+  _rebuildTouchedChunksNow(touched, maxChunks = 128) {
+    let rebuilt = 0;
+    for (const key of touched || []) {
+      if (rebuilt >= maxChunks) break;
+      const c = this._parseChunkKey(key);
+      if (!c || !this._chunkWithinTerrainBounds(c.cx, c.cy, c.cz)) continue;
+      this.dirtyChunkSet.delete(key);
+      const idx = this.dirtyChunks.indexOf(key);
+      if (idx >= 0) this.dirtyChunks.splice(idx, 1);
+      this._rebuildChunk(c.cx, c.cy, c.cz);
+      rebuilt++;
+    }
+    if (rebuilt > 0) this._refreshStats();
+  }
+
+  _rebuildOurCraftTouchedChunksNow(brushes, touched) {
+    const hasOurCraftBrush = (brushes || []).some((brush) => {
+      const center = brush?.center || brush;
+      const entry = center ? (brush.zoneId ? this.zones.get(brush.zoneId) : this._findZoneEntry(center.x, center.z)) : null;
+      return entry?.zone?.dataSource === 'ourcraft';
+    });
+    if (hasOurCraftBrush) this._rebuildTouchedChunksNow(touched);
+  }
+
   applyDigBrush(center, radius, strength = 1, zoneId = null, options = {}) {
     const zoneEntry = zoneId ? this.zones.get(zoneId) : this._findZoneEntry(center.x, center.z);
     if (!zoneEntry) {
@@ -1208,6 +1242,35 @@ export class TerrainMesh {
     const touched = new Set();
     const maxCells = Math.max(0, options.maxCells || 0);
     const candidates = maxCells > 0 ? [] : null;
+    const isOurCraftZone = zoneEntry.zone.dataSource === 'ourcraft';
+    const debugStats = isOurCraftZone ? {
+      center: center.toArray?.().map(n => Number(n.toFixed(2))) || center,
+      radius,
+      brushRadius,
+      zoneId: zoneEntry.zone.id,
+      maxCells,
+      bounds: { minX, maxX, minY, maxY, minZ, maxZ },
+      insideBrush: 0,
+      protected: 0,
+      notRenderable: 0,
+      notMineable: 0,
+      candidates: 0,
+      removedCells: 0,
+      touchedChunks: 0,
+      centerCell: null,
+      firstRenderable: null,
+    } : null;
+    if (debugStats) {
+      const centerCell = {
+        x: Math.floor(center.x),
+        y: Math.floor(center.y),
+        z: Math.floor(center.z),
+      };
+      debugStats.centerCell = {
+        ...centerCell,
+        state: this.getCellState(centerCell.x, centerCell.y, centerCell.z),
+      };
+    }
     let removedCells = 0;
     let removedVolume = 0;
 
@@ -1216,7 +1279,10 @@ export class TerrainMesh {
         if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
         for (let z = minZ; z <= maxZ; z++) {
           if (!zoneContains(zoneEntry.zone, x, z)) continue;
-          if (this._isProtected(x, y, z, zoneEntry.zone.id)) continue;
+          if (this._isProtected(x, y, z, zoneEntry.zone.id)) {
+            if (debugStats) debugStats.protected++;
+            continue;
+          }
           if (this._isBoundaryCell(x, y, z, zoneEntry)) continue;
 
           const cx = x + 0.5;
@@ -1227,16 +1293,28 @@ export class TerrainMesh {
           const dz = cz - center.z;
           const distSq = dx * dx + dy * dy + dz * dz;
           if (distSq > brushRadius * brushRadius) continue;
+          if (debugStats) debugStats.insideBrush++;
 
           const cellState = this.getCellState(x, y, z);
-          if (!cellState.renderable || !cellState.properties.mineable) continue;
-          const oldDensity = this.sampleDensity(cx, cy, cz);
+          if (!cellState.renderable) {
+            if (debugStats) debugStats.notRenderable++;
+            continue;
+          }
+          if (!cellState.properties.mineable) {
+            if (debugStats) debugStats.notMineable++;
+            continue;
+          }
+          if (debugStats && !debugStats.firstRenderable) {
+            debugStats.firstRenderable = { x, y, z, type: cellState.type, properties: cellState.properties };
+          }
+          const oldDensity = isOurCraftZone ? 1.2 : this.sampleDensity(cx, cy, cz);
           if (oldDensity <= ISO_LEVEL) continue;
 
           const dist = Math.sqrt(distSq);
-          const newDensity = Math.min(oldDensity, dist - brushRadius - 0.15);
+          const newDensity = isOurCraftZone ? -2 : Math.min(oldDensity, dist - brushRadius - 0.15);
           if (candidates) {
             candidates.push({ x, y, z, distSq, oldDensity, newDensity });
+            if (debugStats) debugStats.candidates++;
             continue;
           }
           this._setDensity(x, y, z, newDensity);
@@ -1267,6 +1345,21 @@ export class TerrainMesh {
       this.revision++;
       this.queueDirtyChunks(touched);
       this._deferDirtyRebuild();
+      // Invalidate column bounds for affected columns
+      for (let x = minX; x <= maxX; x++) {
+        const cx = Math.floor(x / CHUNK_SIZE);
+        for (let z = minZ; z <= maxZ; z++) {
+          const cz = Math.floor(z / CHUNK_SIZE);
+          this._columnBounds.delete(this._columnBoundsKey(cx, cz));
+        }
+      }
+      if (zoneEntry.zone.dataSource === 'ourcraft') this._rebuildTouchedChunksNow(touched);
+    }
+
+    if (debugStats) {
+      debugStats.removedCells = removedCells;
+      debugStats.touchedChunks = touched.size;
+      console[removedCells > 0 ? 'log' : 'warn']('[MiningDebug] applyDigBrush OurCraft', debugStats);
     }
 
     return {
@@ -1302,6 +1395,7 @@ export class TerrainMesh {
 
     const touched = new Set();
     const changedCells = new Set();
+    const affectedColumnKeys = new Set();
     let removedCells = 0;
     let removedVolume = 0;
     let resultZoneId = null;
@@ -1313,6 +1407,7 @@ export class TerrainMesh {
       if (!zoneEntry) continue;
       if (!resultZoneId) resultZoneId = zoneEntry.zone.id;
       brush.zoneId = zoneEntry.zone.id;
+      const isOurCraftZone = zoneEntry.zone.dataSource === 'ourcraft';
       maxDepth = Math.max(maxDepth, SURFACE_Y - center.y);
 
       const brushRadius = brush.radius;
@@ -1323,6 +1418,12 @@ export class TerrainMesh {
       const minZ = Math.floor(center.z - brushRadius - 1);
       const maxZ = Math.ceil(center.z + brushRadius + 1);
 
+      for (let x = minX; x <= maxX; x++) {
+        const colCx = Math.floor(x / CHUNK_SIZE);
+        for (let z = minZ; z <= maxZ; z++) {
+          affectedColumnKeys.add(this._columnBoundsKey(colCx, Math.floor(z / CHUNK_SIZE)));
+        }
+      }
       for (let x = minX; x <= maxX; x++) {
         for (let y = minY; y <= maxY; y++) {
           if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) continue;
@@ -1344,11 +1445,11 @@ export class TerrainMesh {
 
             const cellState = this.getCellState(x, y, z);
             if (!cellState.renderable || !cellState.properties.mineable) continue;
-            const oldDensity = this.sampleDensity(cx, cy, cz);
+            const oldDensity = isOurCraftZone ? 1.2 : this.sampleDensity(cx, cy, cz);
             if (oldDensity <= ISO_LEVEL) continue;
 
             const dist = Math.sqrt(distSq);
-            const newDensity = Math.min(oldDensity, dist - brushRadius - 0.15);
+            const newDensity = isOurCraftZone ? -2 : Math.min(oldDensity, dist - brushRadius - 0.15);
             this._setDensity(x, y, z, newDensity);
             this._setBlockType(x, y, z, 'air');
             this._queueFallingCheck(x, y + 1, z);
@@ -1370,6 +1471,10 @@ export class TerrainMesh {
       this.revision++;
       this.queueDirtyChunks(touched);
       this._deferDirtyRebuild();
+      for (const key of affectedColumnKeys) {
+        this._columnBounds.delete(key);
+      }
+      this._rebuildOurCraftTouchedChunksNow(normalized, touched);
     }
 
     const resultCenter = normalized[0].center.clone
@@ -1505,9 +1610,19 @@ export class TerrainMesh {
     if (y > TERRAIN_MAX_Y) return 'air';
     const zoneEntry = this._findZoneEntry(x + 0.5, z + 0.5);
     if (!zoneEntry) return 'air';
-    if (this._isBoundaryCell(x, y, z, zoneEntry)) return 'boundary_bedrock';
+
+    // Check player modifications first (mining, placing) — applies to ALL zones
     const key = this._sampleKey(x, y, z);
     if (this.modifiedBlockTypes.has(key)) return this.modifiedBlockTypes.get(key);
+
+    // ourCraft voxel override
+    if (zoneEntry.zone.dataSource === 'ourcraft') {
+      const type = this._getOurCraftBlockType(x, y, z);
+      if (type !== null) return type;
+      return 'air';
+    }
+
+    if (this._isBoundaryCell(x, y, z, zoneEntry)) return 'boundary_bedrock';
     const density = this.sampleDensity(x + 0.5, y + 0.5, z + 0.5);
     if (density <= ISO_LEVEL) {
       const fluid = this._fluidBodyForCell(x, y, z, zoneEntry);
@@ -1621,6 +1736,8 @@ export class TerrainMesh {
     this.visibleChunkKeys.clear();
     this.hotChunkKeys.clear();
     this.visibilityStats = { visible: 0, hot: 0, live: 0, dirty: 0, rebuilt: 0, rebuildMs: 0, streamed: 0 };
+    this.ourCraftLoader = null;
+    this.ourCraftYShift = -75;
     this.setCutaway(new THREE.Vector3(), 0, this.cutaway.radius, this.cutaway.ceilingY, { reach: this.cutaway.reach });
   }
 
@@ -1650,6 +1767,14 @@ export class TerrainMesh {
     if (!zoneContains(zone, x, z)) return -2;
     if (y < TERRAIN_MIN_Y) return 2;
     if (y > TERRAIN_MAX_Y) return -2;
+
+    // ourCraft voxel override
+    if (zone.dataSource === 'ourcraft') {
+      const type = this._getOurCraftBlockType(x, y, z);
+      if (type === null) return -2;
+      return type === 'air' || type === 'water' ? -2 : 1.2;
+    }
+
     if (this._isBoundaryCell(Math.floor(x), Math.floor(y), Math.floor(z), zoneEntry)) return 2.4;
 
     const b = zone.bounds;
@@ -1869,6 +1994,8 @@ export class TerrainMesh {
 
   _isBoundaryCell(x, y, z, zoneEntry) {
     if (!zoneEntry?.zone) return false;
+    // ourCraft zones have natural edges — no fake bedrock shell
+    if (zoneEntry.zone.dataSource === 'ourcraft') return false;
     if (y <= BOTTOM_SAFETY_Y) return true;
     const b = zoneEntry.zone.bounds;
     const cx = Math.floor(x) + 0.5;
@@ -2442,9 +2569,24 @@ export class TerrainMesh {
     return TERRAIN_MATERIAL_IDS.dirt;
   }
 
+  _getOurCraftBlockType(x, y, z) {
+    if (!this.ourCraftLoader) return null;
+    const ourCraftY = y - this.ourCraftYShift;
+    const type = this.ourCraftLoader.getBlockType(x, ourCraftY, z);
+    return type;
+  }
+
   _baseBlockTypeForCell(x, y, z, dir, knownZoneEntry = null) {
     const zoneEntry = knownZoneEntry || this._findZoneEntry(x + 0.5, z + 0.5);
     if (!zoneEntry) return 'stone';
+
+    // ourCraft voxel override
+    if (zoneEntry.zone.dataSource === 'ourcraft') {
+      const type = this._getOurCraftBlockType(x, y, z);
+      if (type !== null) return type;
+      return 'air';
+    }
+
     if (this._isBoundaryCell(x, y, z, zoneEntry)) return 'boundary_bedrock';
 
     const { zone, seed } = zoneEntry;

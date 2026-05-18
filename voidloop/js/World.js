@@ -244,6 +244,105 @@ export class World {
     await this.buildTerrainMesh();
   }
 
+  async loadOurCraftZone(options = {}) {
+    this.clear();
+    const { OurCraftLoader } = await import('./OurCraftLoader.js');
+    const loader = new OurCraftLoader(options.chunkBaseUrl);
+    const radius = options.radius || 8;
+    const chunkSize = 16;
+    const worldSize = radius * 2 * chunkSize;
+
+    // Preload all chunks
+    const loadedChunks = await loader.preloadChunks(radius);
+    console.log('[MiningDebug] loadOurCraftZone chunks', {
+      loadedChunks,
+      cacheSize: loader._cache.size,
+      chunkBaseUrl: loader.chunkBaseUrl,
+    });
+    if (loadedChunks <= 0) {
+      console.error('[MiningDebug] OurCraft loaded zero chunks. Mining cannot work until chunk files are reachable.', {
+        chunkBaseUrl: loader.chunkBaseUrl,
+        sampleUrl: `${loader.chunkBaseUrl}0,0.bin`,
+      });
+    }
+
+    // Determine y-shift based on actual surface heights
+    let minSurfaceY = 255;
+    let maxSurfaceY = 0;
+    let totalSurfaceY = 0;
+    let count = 0;
+    for (const chunk of loader._cache.values()) {
+      for (const sy of chunk.surfaceY) {
+        if (sy < minSurfaceY) minSurfaceY = sy;
+        if (sy > maxSurfaceY) maxSurfaceY = sy;
+        totalSurfaceY += sy;
+        count++;
+      }
+    }
+    const avgSurfaceY = count > 0 ? Math.round(totalSurfaceY / count) : 75;
+    const yShift = -(avgSurfaceY - 2); // put average surface at y=2
+    this.terrainMesh.ourCraftYShift = yShift;
+    this.terrainMesh.ourCraftLoader = loader;
+
+    // Compute build bounds: cover from 2 chunks below lowest surface to 2 chunks above highest
+    const lowestSurfaceWorldY = minSurfaceY + yShift;
+    const highestSurfaceWorldY = maxSurfaceY + yShift;
+    const buildMinY = Math.max(lowestSurfaceWorldY - 32, -200);
+    const buildMaxY = Math.min(highestSurfaceWorldY + 32, 200);
+
+    // Create a synthetic zone covering the loaded chunks
+    const zone = {
+      id: 'ourcraft_demo',
+      name: 'ourCraft Demo',
+      order: 0,
+      description: 'Imported ourCraft terrain',
+      letters: [],
+      blockTypes: ['grass', 'dirt', 'stone', 'sand_A', 'gravel', 'water', 'oak_log', 'oak_leaves', 'gold_ore', 'iron_ore', 'diamond_ore'],
+      floatingBlockTypes: [],
+      enemyTypes: ['slime'],
+      fogColor: 0x87ceeb,
+      fogNear: 60,
+      fogFar: 180,
+      bounds: {
+        minX: -radius * chunkSize,
+        maxX: radius * chunkSize,
+        minZ: -radius * chunkSize,
+        maxZ: radius * chunkSize,
+        // Pre-build surface + immediate depth/height; streaming handles the rest
+        minY: buildMinY,
+        maxY: buildMaxY,
+      },
+      spawnPoint: { x: 0, z: 0 },
+      exitGateway: null,
+      hazard: null,
+      structures: null,
+      fluidBodies: [],
+      dataSource: 'ourcraft',
+    };
+
+    // Preload block types for rendering
+    const allTypes = [...new Set([...zone.blockTypes, 'stone', 'stone_dark'])];
+    await this.instancer.preloadTypes([...new Set([...allTypes, 'stone_dark'])]);
+    await this.terrainMesh.preloadTypes(allTypes);
+    this.instancer.setAtlasTexture(this.terrainMesh.getAtlasTexture());
+
+    this.terrainMesh.addZone(zone, 1);
+    await this.buildTerrainMesh();
+
+    // Spawn player above the actual surface at (0,0)
+    const surfaceY = this.terrainMesh.getColumnTop(0, 0);
+    this.startPosition = new THREE.Vector3(0, surfaceY > -999 ? surfaceY + 1.5 : 3, 0);
+    this.biome = { name: zone.name, blocks: zone.blockTypes, enemies: zone.enemyTypes, fogColor: zone.fogColor, fogNear: zone.fogNear, fogFar: zone.fogFar };
+
+    console.log('[MiningDebug] OurCraft zone ready', {
+      chunks: loader._cache.size,
+      yShift,
+      surfaceY: { min: minSurfaceY, avg: avgSurfaceY, max: maxSurfaceY },
+      buildY: { min: buildMinY, max: buildMaxY },
+      startPosition: this.startPosition,
+    });
+  }
+
   async buildTerrainMesh() {
     await this.terrainMesh.preloadTypes();
     this.terrainMesh.rebuildAll();

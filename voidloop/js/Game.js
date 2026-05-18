@@ -88,6 +88,7 @@ export class Game {
   constructor(container, options = {}) {
     this.container = container;
     this._startZoneId = options.startZoneId || null;
+    this._ourCraftDemo = options.ourCraftDemo || (typeof location !== 'undefined' && new URLSearchParams(location.search).has('ourcraft'));
     this.state = STATES.LOADING;
     this.clock = new THREE.Clock();
 
@@ -169,7 +170,9 @@ export class Game {
     this.floorPlane.receiveShadow = false;
     this.scene.add(this.floorPlane);
     this.boundaryEnv = new BoundaryEnvironment(this.scene);
-    this.boundaryEnv.create();
+    if (!this._ourCraftDemo) {
+      this.boundaryEnv.create();
+    }
 
     // Progression (needed before timer init)
     this.progression = new ProgressionManager();
@@ -372,6 +375,15 @@ export class Game {
 
     if (this.playtestKey) {
       await this._loadPlaytestLevel();
+    } else if (this._ourCraftDemo) {
+      await this.world.loadOurCraftZone();
+      // Position player at ourCraft spawn point
+      this.spawnPoint = this.world.startPosition ? this.world.startPosition.clone() : new THREE.Vector3(0, 3, 0);
+      this.player.position.copy(this.spawnPoint);
+      this.beacon.setPosition(this.spawnPoint);
+      this.player.hp = this.player.maxHp;
+      this.exitOpen = false;
+      this.floorTimer = GAME.COUNTDOWN_BASE;
     } else {
       await this._generateZones(this._worldSeed, this._startZoneId);
     }
@@ -512,7 +524,8 @@ export class Game {
     }
 
     const letters = this.letterPool.getCurrentLetters().join(' ');
-    this.ui.setFloorText(`ZONE: ${zone?.name?.toUpperCase() || 'UNKNOWN'} — Letters: ${letters}`);
+    const zoneName = zone?.name || this.biome?.name || 'UNKNOWN';
+    this.ui.setFloorText(`ZONE: ${zoneName.toUpperCase()} — Letters: ${letters}`);
     this.ui.showExitOpen(false);
     this._spawnPet();
     this.zoneGateway.create();
@@ -791,8 +804,10 @@ export class Game {
     }
 
     // Contextual J button — mine block or attack enemy
-    const minePressed = input.pressed('KeyJ') || (this.cameraMode === 'thirdPerson' && input.buttonPressed?.('left'));
     const activeWeapon = this.player.weapons[this.player.currentSlot];
+    const leftClickPressed = input.buttonPressed?.('left');
+    const minePressed = input.pressed('KeyJ')
+      || (leftClickPressed && (this.cameraMode === 'thirdPerson' || activeWeapon?.data?.id === 'pickaxe'));
     if (minePressed && this._canUseWeapon(activeWeapon)) {
       const weapon = activeWeapon;
       if (weapon.data.type === 'grapple') {
@@ -852,6 +867,22 @@ export class Game {
         // Mine nearest block
         const miningTarget = this.mining.findTarget(GAME.MINE_RANGE);
         const nearestBlock = miningTarget?.block;
+        if (this._ourCraftDemo) {
+          console.log('[MiningDebug] pickaxe target', {
+            cameraMode: this.cameraMode,
+            player: this.player.position.toArray().map(n => Number(n.toFixed(2))),
+            weapon: activeWeapon?.data?.id,
+            hasTarget: !!miningTarget,
+            allowed: miningTarget?.allowed,
+            reason: miningTarget?.reason,
+            isTerrain: miningTarget?.isTerrain,
+            typeKey: nearestBlock?.typeKey,
+            zoneId: nearestBlock?.zoneId,
+            gridPos: miningTarget?.gridPos,
+            brushCenter: miningTarget?.brushCenter?.toArray?.().map(n => Number(n.toFixed(2))),
+            hitPoint: miningTarget?.hitPoint?.toArray?.().map(n => Number(n.toFixed(2))),
+          });
+        }
         if (miningTarget && !miningTarget.allowed) {
           this.ui.showMiningBlocked(miningTarget, nearestBlock ? BLOCK_TYPES[nearestBlock.typeKey] : null);
           this.player.playAttackAnim();
@@ -893,6 +924,18 @@ export class Game {
             destroyed = result.destroyed;
             typeKey = result.cell?.type || typeKey;
             zoneId = result.cell?.zoneId || zoneId;
+            if (this._ourCraftDemo) {
+              console.log('[MiningDebug] pickaxe terrain result', {
+                destroyed,
+                meaningful: result.meaningful,
+                removedCells: result.removedCells,
+                touchedChunks: result.touchedChunks?.length,
+                center: result.center?.toArray?.().map(n => Number(n.toFixed(2))),
+                radius: result.radius,
+                zoneId: result.zoneId,
+                cell: result.cell,
+              });
+            }
           } else {
             // ── Floating block mining ──
             destroyed = nearestBlock.takeDamage(this.mining.getDamage(nearestBlock));
@@ -981,6 +1024,13 @@ export class Game {
           }
         } else {
           // Swing at nothing
+          if (this._ourCraftDemo) {
+            console.warn('[MiningDebug] pickaxe swing found no block target', {
+              cameraMode: this.cameraMode,
+              player: this.player.position.toArray().map(n => Number(n.toFixed(2))),
+              mineRange: GAME.MINE_RANGE,
+            });
+          }
           this.player.playAttackAnim();
           SFXMapper.swingMiss();
         }

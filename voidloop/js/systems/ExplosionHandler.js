@@ -92,17 +92,41 @@ export class ExplosionHandler {
       this.game.particles.spark(hitPos, 3);
     }
 
+    const terrainZoneEntry = this.game.world?.terrainMesh?._findZoneEntry?.(position.x, position.z);
     const zone = getZoneAtPosition(position.x, position.z);
+    const terrainZoneId = terrainZoneEntry?.zone?.id || zone?.id || null;
     const terrainCenter = position.clone();
     terrainCenter.y += config.terrainCenterOffsetY || 0;
     const depth = Math.max(0, 1 - terrainCenter.y);
     const typeKey = depth > 12 ? 'stone_dark' : depth > 4 ? 'stone' : 'dirt';
+    const isOurCraftBlast = terrainZoneEntry?.zone?.dataSource === 'ourcraft';
+    if (isOurCraftBlast) {
+      console.log('[MiningDebug] explosion terrain request', {
+        kind: config.kind,
+        position: position.toArray().map(n => Number(n.toFixed(2))),
+        terrainCenter: terrainCenter.toArray().map(n => Number(n.toFixed(2))),
+        radius,
+        terrainZoneId,
+        maxTerrainCells: config.maxTerrainCells || GAME.GRENADE_MAX_TERRAIN_CELLS,
+      });
+    }
     const terrainResult = this.game.world.explodeTerrain(terrainCenter, {
       radius,
-      zoneId: zone?.id || null,
+      zoneId: terrainZoneId,
       type: typeKey,
       maxCells: config.maxTerrainCells || GAME.GRENADE_MAX_TERRAIN_CELLS,
     });
+    if (isOurCraftBlast) {
+      console.log('[MiningDebug] explosion terrain result', {
+        kind: config.kind,
+        meaningful: terrainResult.meaningful,
+        removedCells: terrainResult.removedCells,
+        touchedChunks: terrainResult.touchedChunks?.length,
+        center: terrainResult.center?.toArray?.().map(n => Number(n.toFixed(2))),
+        radius: terrainResult.radius,
+        zoneId: terrainResult.zoneId,
+      });
+    }
     if (terrainResult.meaningful && !isRemote) {
       this.game.blocksMined += Math.max(1, Math.min(config.terrainMinedCap || 12, Math.round((terrainResult.removedCells || 1) / 24)));
       this.game.mining.awardTerrainDigRewards(terrainResult, terrainCenter, terrainResult.zoneId);

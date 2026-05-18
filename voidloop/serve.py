@@ -14,6 +14,12 @@ import sys
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('PORT', '8000'))
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def translate_path(self, path):
+        if path.startswith('/demo_world/'):
+            rel = path.lstrip('/')
+            return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), rel)
+        return super().translate_path(path)
+
     def end_headers(self):
         # Disable caching for JS files during development
         if self.path.endswith('.js') or self.path.endswith('.html'):
