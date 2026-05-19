@@ -11,7 +11,7 @@ export class CollectionBeacon {
     this.mesh = null;
     this.light = null;
     this.ring = null;
-    this.particles = null;
+    this.ripple = null;
     this.active = false;
     this._createMesh();
   }
@@ -19,45 +19,64 @@ export class CollectionBeacon {
   _createMesh() {
     const group = new THREE.Group();
 
-    // Main pillar — glowing translucent cylinder
-    const pillarGeo = new THREE.CylinderGeometry(0.25, 0.35, 2.2, 16);
-    const pillarMat = new THREE.MeshBasicMaterial({
+    // ── Circular Platform Base ──
+    const platformGeo = new THREE.CylinderGeometry(2.5, 2.5, 0.15, 32);
+    const platformMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2a2a,
+      roughness: 0.8,
+      metalness: 0.3,
+    });
+    const platform = new THREE.Mesh(platformGeo, platformMat);
+    platform.position.y = 0.075;
+    platform.receiveShadow = true;
+    group.add(platform);
+
+    // ── Concentric Glow Rings ──
+    this.rings = [];
+    for (let i = 0; i < 3; i++) {
+      const rInner = 0.6 + i * 0.55;
+      const rOuter = rInner + 0.08;
+      const ringGeo = new THREE.RingGeometry(rInner, rOuter, 48);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x4ade80,
+        transparent: true,
+        opacity: 0.18 - i * 0.04,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.16;
+      group.add(ring);
+      this.rings.push(ring);
+    }
+
+    // ── Vertical Glow Beam ──
+    const beamGeo = new THREE.CylinderGeometry(1.0, 1.0, 8.0, 24, 1, true);
+    const beamMat = new THREE.MeshBasicMaterial({
       color: 0x4ade80,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.beam = new THREE.Mesh(beamGeo, beamMat);
+    this.beam.position.y = 4.0;
+    group.add(this.beam);
+
+    // ── Inner bright core ──
+    const coreGeo = new THREE.CylinderGeometry(0.25, 0.25, 8.0, 12);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xaaffaa,
       transparent: true,
       opacity: 0.45,
       depthWrite: false,
     });
-    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-    pillar.position.y = 1.1;
-    group.add(pillar);
+    this.core = new THREE.Mesh(coreGeo, coreMat);
+    this.core.position.y = 4.0;
+    group.add(this.core);
 
-    // Inner bright core
-    const coreGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.0, 8);
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xaaffaa,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false,
-    });
-    const core = new THREE.Mesh(coreGeo, coreMat);
-    core.position.y = 1.1;
-    group.add(core);
-
-    // Glow ring on ground
-    const ringGeo = new THREE.RingGeometry(0.45, 0.65, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x4ade80,
-      transparent: true,
-      opacity: 0.25,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    this.ring = new THREE.Mesh(ringGeo, ringMat);
-    this.ring.rotation.x = -Math.PI / 2;
-    this.ring.position.y = 0.02;
-    group.add(this.ring);
-
-    // Outer ripple ring
+    // ── Ground ripple ring ──
     const rippleGeo = new THREE.RingGeometry(0.7, 0.75, 32);
     const rippleMat = new THREE.MeshBasicMaterial({
       color: 0x4ade80,
@@ -71,13 +90,79 @@ export class CollectionBeacon {
     this.ripple.position.y = 0.01;
     group.add(this.ripple);
 
-    // Point light
-    this.light = new THREE.PointLight(0x4ade80, 1.8, 10);
+    // ── Floating Sign Sprite ──
+    this.signSprite = this._createSignSprite();
+    this.signSprite.position.set(0, 3.6, 0);
+    group.add(this.signSprite);
+
+    // ── Point light ──
+    this.light = new THREE.PointLight(0x4ade80, 3.5, 14);
     this.light.position.y = 1.8;
     group.add(this.light);
 
     this.mesh = group;
     this.scene.add(group);
+  }
+
+  _createSignSprite() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    // Dark rounded panel background
+    ctx.fillStyle = 'rgba(10, 18, 12, 0.88)';
+    ctx.strokeStyle = 'rgba(74, 222, 128, 0.55)';
+    ctx.lineWidth = 6;
+    this._roundRect(ctx, 10, 10, 492, 236, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    // Green inner glow border
+    ctx.shadowColor = 'rgba(74, 222, 128, 0.4)';
+    ctx.shadowBlur = 30;
+    ctx.strokeStyle = 'rgba(74, 222, 128, 0.25)';
+    ctx.lineWidth = 3;
+    this._roundRect(ctx, 22, 22, 468, 212, 18);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // "DEPOSIT ZONE" text
+    ctx.fillStyle = '#4ade80';
+    ctx.font = 'bold 52px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('DEPOSIT ZONE', 256, 90);
+
+    // Downward arrow
+    ctx.fillStyle = '#4ade80';
+    ctx.font = 'bold 90px "Segoe UI", sans-serif';
+    ctx.fillText('⬇', 256, 175);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const spriteMat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.scale.set(3.2, 1.6, 1);
+    return sprite;
+  }
+
+  _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 
   setPosition(pos) {
@@ -91,36 +176,46 @@ export class CollectionBeacon {
 
     const time = Date.now() * 0.002;
 
-    // Pillar gentle pulse
-    const pillar = this.mesh.children[0];
-    pillar.scale.set(
-      1 + Math.sin(time) * 0.03,
-      1 + Math.sin(time * 1.3) * 0.02,
-      1 + Math.sin(time) * 0.03
-    );
+    // Rings rotation + scale pulse
+    if (this.rings) {
+      this.rings.forEach((ring, i) => {
+        ring.rotation.z += dt * (0.3 + i * 0.15);
+        const s = 1 + Math.sin(time * (1.2 + i * 0.4)) * 0.06;
+        ring.scale.set(s, s, 1);
+      });
+    }
+
+    // Beam gentle pulse
+    if (this.beam) {
+      this.beam.scale.set(
+        1 + Math.sin(time * 1.5) * 0.04,
+        1,
+        1 + Math.sin(time * 1.5) * 0.04
+      );
+      this.beam.material.opacity = 0.18 + Math.sin(time * 2) * 0.04;
+    }
 
     // Core brighter pulse
-    const core = this.mesh.children[1];
-    core.material.opacity = 0.6 + Math.sin(time * 2) * 0.15;
-
-    // Ring rotation + scale
-    if (this.ring) {
-      this.ring.rotation.z += dt * 0.3;
-      const s = 1 + Math.sin(time * 1.5) * 0.08;
-      this.ring.scale.set(s, s, 1);
+    if (this.core) {
+      this.core.material.opacity = 0.4 + Math.sin(time * 2.5) * 0.12;
     }
 
     // Ripple expand/contract
     if (this.ripple) {
       const rippleTime = (Date.now() * 0.001) % 2;
-      const rippleScale = 1 + rippleTime * 0.5;
+      const rippleScale = 1 + rippleTime * 0.8;
       this.ripple.scale.set(rippleScale, rippleScale, 1);
       this.ripple.material.opacity = 0.15 * (1 - rippleTime / 2);
     }
 
     // Light flicker
     if (this.light) {
-      this.light.intensity = 1.8 + Math.sin(time * 3) * 0.3;
+      this.light.intensity = 3.2 + Math.sin(time * 3) * 0.4;
+    }
+
+    // Sign bob
+    if (this.signSprite) {
+      this.signSprite.position.y = 3.6 + Math.sin(time * 1.2) * 0.1;
     }
   }
 
@@ -157,5 +252,9 @@ export class CollectionBeacon {
     this.light = null;
     this.ring = null;
     this.ripple = null;
+    this.rings = null;
+    this.beam = null;
+    this.core = null;
+    this.signSprite = null;
   }
 }

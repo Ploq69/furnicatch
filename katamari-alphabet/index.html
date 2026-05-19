@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Katamari Alphabet</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f8fafc;
+      --muted: rgba(248,250,252,0.68);
+      --panel: rgba(7,10,18,0.74);
+      --panel-strong: rgba(8,13,24,0.92);
+      --line: rgba(255,255,255,0.14);
+      --gold: #ffd166;
+      --mint: #7df9a8;
+      --coral: #ff6f61;
+      --aqua: #6ee7f9;
+      --violet: #b69cff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #07111b;
+      color: var(--ink);
+      font-family: Avenir Next, Trebuchet MS, Verdana, sans-serif;
+      letter-spacing: 0;
+      user-select: none;
+    }
+    canvas { display: block; }
+    button, input { font: inherit; }
+
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .topbar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.22);
+      backdrop-filter: blur(12px);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .level-panel h1 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: var(--gold);
+    }
+
+    .level-panel .sub {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .meter-panel {
+      min-width: 260px;
+      text-align: center;
+    }
+
+    .meter-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .meter {
+      width: 100%;
+      height: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--mint), var(--aqua), var(--gold));
+      transition: width 0.18s ease-out;
+    }
+
+    .letters-panel {
+      justify-self: end;
+      min-width: 260px;
+    }
+
+    .letter-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(42px, 1fr));
+      gap: 8px;
+    }
+
+    .letter-chip {
+      min-height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.42);
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .letter-chip.ready {
+      color: #07111b;
+      background: var(--gold);
+      border-color: rgba(255,255,255,0.5);
+      box-shadow: 0 0 20px rgba(255,209,102,0.28);
+    }
+
+    .bottom-hint {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      max-width: min(720px, calc(100vw - 32px));
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .key {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 26px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.16);
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    #toast {
+      position: absolute;
+      top: 112px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      min-width: 220px;
+      padding: 10px 14px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    #toast.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .pickup-panel {
+      position: absolute;
+      left: 16px;
+      bottom: 74px;
+      min-width: 230px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    .pickup-panel.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .pickup-name {
+      color: var(--gold);
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .pickup-count {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .debug-panel {
+      position: absolute;
+      right: 16px;
+      bottom: 74px;
+      width: 260px;
+      display: none;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: rgba(248,250,252,0.86);
+      white-space: pre-line;
+    }
+    .debug-panel.active { display: block; }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      z-index: 30;
+      background:
+        linear-gradient(180deg, rgba(1,5,12,0.52), rgba(1,5,12,0.82)),
+        radial-gradient(circle at 30% 20%, rgba(255,209,102,0.2), transparent 34%),
+        radial-gradient(circle at 70% 70%, rgba(110,231,249,0.2), transparent 32%);
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+    }
+    .overlay.active { display: flex; }
+
+    .start-card, .quiz-card, .complete-card {
+      width: min(720px, calc(100vw - 32px));
+      background: var(--panel-strong);
+      border: 1px solid rgba(255,255,255,0.18);
+      box-shadow: 0 28px 90px rgba(0,0,0,0.45);
+      border-radius: 8px;
+      padding: clamp(22px, 4vw, 38px);
+    }
+
+    .start-card h2, .complete-card h2 {
+      margin: 0 0 12px;
+      font-size: clamp(36px, 8vw, 76px);
+      line-height: 0.92;
+      color: var(--gold);
+      font-weight: 1000;
+    }
+
+    .start-card p, .complete-card p {
+      max-width: 580px;
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    .primary-btn, .secondary-btn, .quiz-choice {
+      min-height: 44px;
+      border: 1px solid rgba(255,255,255,0.18);
+      color: var(--ink);
+      cursor: pointer;
+      border-radius: 8px;
+      transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+    }
+    .primary-btn {
+      padding: 12px 22px;
+      background: var(--gold);
+      color: #07111b;
+      font-weight: 900;
+    }
+    .secondary-btn {
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.08);
+      font-weight: 800;
+    }
+    .primary-btn:hover, .secondary-btn:hover, .quiz-choice:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,0.42);
+    }
+
+    .quiz-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .quiz-progress {
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .quiz-score {
+      color: var(--gold);
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .quiz-card h2 {
+      margin: 0 0 6px;
+      color: var(--gold);
+      font-size: clamp(28px, 5vw, 48px);
+      line-height: 1;
+    }
+    .quiz-prompt {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 16px;
+      min-height: 24px;
+    }
+    .quiz-choices {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .quiz-choice {
+      min-height: 104px;
+      padding: 12px;
+      background: rgba(255,255,255,0.08);
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      gap: 8px;
+    }
+    .quiz-choice.played { border-color: rgba(110,231,249,0.62); }
+    .quiz-choice.correct { background: rgba(125,249,168,0.22); border-color: var(--mint); }
+    .quiz-choice.wrong { background: rgba(255,111,97,0.18); border-color: var(--coral); }
+    .quiz-speaker { font-size: 28px; }
+    .quiz-label {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+    .quiz-helper {
+      margin-top: 14px;
+      color: rgba(255,255,255,0.52);
+      font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+      .letters-panel { justify-self: stretch; }
+      .meter-panel { min-width: 0; }
+      .quiz-choices { grid-template-columns: 1fr; }
+      .bottom-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div class="topbar">
+      <div class="panel level-panel">
+        <div class="sub" id="level-kicker">Level 1 / 7</div>
+        <h1 id="level-title">Loading</h1>
+        <div class="sub" id="phase-title">Tiny</div>
+      </div>
+      <div class="panel meter-panel">
+        <div class="meter-title">Growth</div>
+        <div class="meter"><div class="meter-fill" id="growth-fill"></div></div>
+      </div>
+      <div class="panel letters-panel">
+        <div class="meter-title">Letters To Capture</div>
+        <div class="letter-row" id="letter-row"></div>
+      </div>
+    </div>
+    <div class="panel" id="toast"></div>
+    <div class="panel pickup-panel" id="pickup-panel">
+      <div class="pickup-name" id="pickup-name">Pencil</div>
+      <div class="pickup-count" id="pickup-count">Collected x1</div>
+    </div>
+    <div class="panel debug-panel" id="debug-panel"></div>
+    <div class="bottom-hint">
+      <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>
+      <span>or arrow keys to roll. Collect small objects first, then grow into the whole scene.</span>
+    </div>
+  </div>
+
+  <div class="overlay active" id="start-overlay">
+    <div class="start-card">
+      <h2>Katamari Alphabet</h2>
+      <p>Roll through toy-box worlds, scoop up letters, and prove what you learned in a ten-question sound drill after each level.</p>
+      <button class="primary-btn" id="start-btn">Start Rolling</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="quiz-overlay">
+    <div class="quiz-card">
+      <div class="quiz-head">
+        <div class="quiz-progress" id="quiz-progress">Question 1 of 10</div>
+        <div class="quiz-score" id="quiz-score">0 / 0</div>
+      </div>
+      <h2 id="quiz-title">Letter Drill</h2>
+      <p class="quiz-prompt" id="quiz-prompt"></p>
+      <div class="quiz-choices" id="quiz-choices"></div>
+      <div class="quiz-helper">Tap once to hear the choice. Tap the same choice again to answer.</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="complete-overlay">
+    <div class="complete-card">
+      <h2>Alphabet Rolled</h2>
+      <p id="complete-text">You collected the whole alphabet.</p>
+      <button class="primary-btn" id="restart-btn">Roll Again</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "_KA-RAPIER-001": "Rapier compat import marker for the no-bundler Live Server build.",
+      "rapier": "https://cdn.skypack.dev/@dimforge/rapier3d-compat"
+    }
+  }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

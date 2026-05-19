@@ -21,6 +21,10 @@ const DEFAULTS = {
   skyCycleEnabled: true,
   skyCycleSpeed: 1.0,
   starfieldEnabled: true,
+  auroraEnabled: true,
+  starDensity: 0.6,
+  starBrightness: 1.0,
+  petLightIntensity: 1.0,
 };
 
 export class SettingsManager {

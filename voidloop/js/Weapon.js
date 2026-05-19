@@ -49,7 +49,8 @@ export class Weapon {
   }
 
   attack(origin, direction, scene, audio, particles, enemies, attackerWeaponId = null) {
-    if (this.cooldown > 0) return false;
+    // No cooldown for thrown weapons (unlimited grenades)
+    if (this.cooldown > 0 && this.data.type !== 'thrown') return false;
 
     let didAttack = false;
     if (this.data.type === 'melee') {
@@ -59,8 +60,8 @@ export class Weapon {
     } else if (this.data.type === 'thrown') {
       didAttack = this._thrownAttack(origin, direction, scene, audio, particles, enemies);
     }
-    if (didAttack) {
-      this.cooldown = this.data.type === 'thrown' ? GAME.GRENADE_COOLDOWN : GAME.ATTACK_COOLDOWN;
+    if (didAttack && this.data.type !== 'thrown') {
+      this.cooldown = GAME.ATTACK_COOLDOWN;
     }
     return didAttack;
   }
@@ -119,7 +120,7 @@ export class Weapon {
     return true;
   }
 
-  _thrownAttack(origin, direction, scene, audio, particles, enemies) {
+  _thrownAttack(origin, direction, scene, audio, particles, enemies, chargePower = 1.0) {
     const activeGrenades = this.projectiles.filter(p => p.explosive).length;
     if (activeGrenades >= GAME.GRENADE_MAX_ACTIVE) return false;
 
@@ -127,9 +128,17 @@ export class Weapon {
     if (throwDir.y < 0.08) throwDir.y += 0.18;
     throwDir.normalize();
 
+    // Scale velocity by charge power (0.0 - 1.0)
+    const baseSpeed = 8;
+    const maxSpeed = 28;
+    const speed = baseSpeed + (maxSpeed - baseSpeed) * chargePower;
+    const baseUp = 3;
+    const maxUp = 12;
+    const upForce = baseUp + (maxUp - baseUp) * chargePower;
+
     const proj = {
       mesh: null,
-      velocity: throwDir.multiplyScalar(13).add(new THREE.Vector3(0, 5.5, 0)),
+      velocity: throwDir.multiplyScalar(speed).add(new THREE.Vector3(0, upForce, 0)),
       life: GAME.GRENADE_FUSE,
       age: 0,
       armedAt: GAME.GRENADE_ARM_TIME,
@@ -152,6 +161,10 @@ export class Weapon {
     SFXMapper.grenadeThrow();
 
     return true;
+  }
+
+  throwCharged(origin, direction, scene, chargePower = 1.0) {
+    return this._thrownAttack(origin, direction, scene, null, null, [], chargePower);
   }
 
   updateProjectiles(dt, context, particlesArg, enemiesArg, attackerWeaponId = null) {
@@ -228,10 +241,7 @@ export class Weapon {
 
         if (collided) {
           p.bounceCount++;
-          if (p.age >= p.armedAt && impactSpeed > 7) {
-            explode(next);
-            continue;
-          }
+          // Fuse-only: grenades no longer explode on impact
           if (p.velocity.lengthSq() < 1.2) {
             p.velocity.set(0, 0, 0);
           }

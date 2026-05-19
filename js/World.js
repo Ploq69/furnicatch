@@ -6,6 +6,7 @@ import { LetterCreature } from './LetterCreature.js';
 import { PropCreature } from './PropCreature.js';
 import { NPC } from './NPC.js';
 import { SimplexNoise } from './SimplexNoise.js';
+import { OurCraftLoader } from './OurCraftLoader.js';
 
 const BLOCK = {
   air: 0,
@@ -14,8 +15,12 @@ const BLOCK = {
   stone: 3,
   wood: 4,
   brick: 5,
-  ore: 6,
-  crystal: 7,
+  sand: 6,
+  gravel: 7,
+  water: 8,
+  leaves: 9,
+  ore: 10,
+  crystal: 11,
 };
 
 const BLOCK_COLORS = {
@@ -24,6 +29,10 @@ const BLOCK_COLORS = {
   [BLOCK.stone]: [0x555f6b, 0x737d88, 0x8f98a3],
   [BLOCK.wood]: [0x7a4b28, 0x9b6535, 0xc1844a],
   [BLOCK.brick]: [0x7f3f37, 0xa75145, 0xc76858],
+  [BLOCK.sand]: [0xc2b280, 0xd4c4a0, 0xe6d5b8],
+  [BLOCK.gravel]: [0x6b7280, 0x7c8798, 0x8e99a8],
+  [BLOCK.water]: [0x3b82f6, 0x60a5fa, 0x93c5fd],
+  [BLOCK.leaves]: [0x2d5a27, 0x3d7a33, 0x4e9a40],
   [BLOCK.ore]: [0x334155, 0x64748b, 0xfbbf24],
   [BLOCK.crystal]: [0x2563eb, 0x38bdf8, 0xa78bfa],
 };
@@ -111,11 +120,25 @@ export class World {
     this.blockTypes = BLOCK;
     // Deterministic smooth noise for terrain
     this.simplex = new SimplexNoise(12345);
+    this.ourCraftLoader = null;
   }
 
   async generate(biomeKey = 'meadow') {
     this.biomeKey = biomeKey;
     this._frameCount = 0;
+    if (biomeKey === 'ourcraft_demo') {
+      this.voxelHeight = 256;
+      this.voxelMinY = 0;
+      this.worldChunkRadius = 8;
+      this.activeRadius = 3;
+      this.ourCraftLoader = new OurCraftLoader(this);
+    } else {
+      this.voxelHeight = 64;
+      this.voxelMinY = -24;
+      this.worldChunkRadius = GAME.WORLD_CHUNK_RADIUS;
+      this.activeRadius = GAME.ACTIVE_CHUNK_RADIUS;
+      this.ourCraftLoader = null;
+    }
     await this.ensureActiveChunks(new THREE.Vector3(0, 0, 0), true);
   }
 
@@ -344,7 +367,25 @@ export class World {
     const key = this._chunkKey(cx, cz);
     this.loadingChunks.add(key);
     const biome = BIOMES[biomeKey];
-    const chunk = {
+
+    let chunk;
+    if (this.ourCraftLoader) {
+      const loaded = await this.ourCraftLoader.loadChunk(cx, cz);
+      if (loaded) {
+        chunk = loaded;
+        this.chunks.set(key, chunk);
+        this.scene.add(chunk.group);
+        this._remeshChunk(chunk);
+        this._markNeighborChunksDirty(cx, cz);
+        if (detail === 'full') {
+          await this._populateChunkContent(chunk, biome);
+        }
+        this.loadingChunks.delete(key);
+        return;
+      }
+    }
+
+    chunk = {
       key,
       cx,
       cz,

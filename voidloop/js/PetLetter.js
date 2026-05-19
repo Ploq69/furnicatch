@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { glyph3D } from '../../js/Glyph3DManager.js';
 import { PET_LEVELS, PET_ATTACK_RANGE, PET_ATTACK_INTERVAL } from './constants.js';
+import { settings } from './SettingsManager.js';
 import { ShadowDecal } from './ShadowDecal.js';
 
 const PET_STATES = {
@@ -67,7 +68,7 @@ export class PetLetter {
     const cfg = PET_LEVELS.find(l => l.level === this.visualLevel) || PET_LEVELS[0];
     const color = new THREE.Color(cfg.color);
     // Dramatically brighter to compete with ambient (0.6) — decay=2 means falloff is steep
-    const intensity = 8.0 + this.visualLevel * 2.0;
+    const intensity = (8.0 + this.visualLevel * 2.0) * (settings.get('petLightIntensity') ?? 1.0);
     const distance = 12 + this.visualLevel * 2.0;
     // Point light that follows the pet — no shadows (too expensive for a moving light)
     this.glowLight = new THREE.PointLight(color, intensity, distance, 2);
@@ -139,7 +140,7 @@ export class PetLetter {
     if (this.glowLight) {
       const color = new THREE.Color(cfg.color);
       this.glowLight.color.copy(color);
-      this.glowLight.intensity = 8.0 + this.visualLevel * 2.0;
+      this.glowLight.intensity = (8.0 + this.visualLevel * 2.0) * (settings.get('petLightIntensity') ?? 1.0);
       this.glowLight.distance = 12 + this.visualLevel * 2.0;
     }
     // Sync glow orb color

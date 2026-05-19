@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voxel Katamari Prototype</title>
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: #88d7ff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      user-select: none;
+    }
+
+    #ui {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      color: #17324d;
+      background: rgba(255, 255, 255, 0.78);
+      border: 3px solid rgba(255, 255, 255, 0.9);
+      border-radius: 18px;
+      padding: 14px 18px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      min-width: 230px;
+    }
+
+    #ui h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      letter-spacing: 0.4px;
+    }
+
+    #ui p {
+      margin: 4px 0;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    #barOuter {
+      height: 14px;
+      width: 100%;
+      background: rgba(23, 50, 77, 0.12);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 9px;
+    }
+
+    #barInner {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #69e06d, #ffe667, #ff9b6a);
+      border-radius: 999px;
+      transition: width 0.18s ease-out;
+    }
+
+    #message {
+      position: fixed;
+      left: 50%;
+      top: 18%;
+      transform: translate(-50%, -50%) scale(0.8);
+      color: #fff;
+      font-weight: 900;
+      font-size: 38px;
+      text-shadow: 0 5px 0 rgba(0,0,0,0.18), 0 10px 25px rgba(0,0,0,0.35);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 20;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    #message.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.08);
+    }
+
+    #start {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 50% 35%, rgba(255,255,255,0.35), rgba(42,172,255,0.92));
+      display: grid;
+      place-items: center;
+      z-index: 50;
+    }
+
+    #startCard {
+      max-width: 560px;
+      text-align: center;
+      background: rgba(255,255,255,0.86);
+      border: 5px solid white;
+      border-radius: 32px;
+      padding: 34px;
+      box-shadow: 0 25px 75px rgba(0,0,0,0.25);
+      color: #1c3a57;
+    }
+
+    #startCard h2 {
+      font-size: 40px;
+      margin: 0 0 10px;
+    }
+
+    #startCard p {
+      font-size: 17px;
+      line-height: 1.45;
+      margin: 8px 0;
+    }
+
+    button {
+      margin-top: 18px;
+      border: 0;
+      background: linear-gradient(180deg, #ffdc52, #ff9e42);
+      color: #5a2f00;
+      font-weight: 900;
+      font-size: 22px;
+      padding: 15px 28px;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 8px 0 #c96f20, 0 18px 30px rgba(0,0,0,0.22);
+      transition: transform 0.08s, box-shadow 0.08s;
+    }
+
+    button:active {
+      transform: translateY(6px);
+      box-shadow: 0 2px 0 #c96f20, 0 8px 18px rgba(0,0,0,0.18);
+    }
+  </style>
+</head>
+<body>
+  <div id="start">
+    <div id="startCard">
+      <h2>Voxel Katamari</h2>
+      <p>Roll around, collect tiny voxel junk, grow bigger, and swallow larger objects.</p>
+      <p><b>Controls:</b> WASD / Arrow keys to roll. Hold Shift for a little boost.</p>
+      <button id="playBtn">Start Rolling</button>
+    </div>
+  </div>
+
+  <div id="ui">
+    <h1>Voxel Katamari</h1>
+    <p><b>Size:</b> <span id="sizeText">1.00</span>x</p>
+    <p><b>Collected:</b> <span id="countText">0</span> / <span id="totalText">0</span></p>
+    <p>Collect small things first. Bigger size = bigger snacks.</p>
+    <div id="barOuter"><div id="barInner"></div></div>
+  </div>
+
+  <div id="message">YUMMY!</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x8ad9ff);
+    scene.fog = new THREE.Fog(0x8ad9ff, 45, 115);
+
+    const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 500);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x6fa3c4, 2.2);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 2.7);
+    sun.position.set(18, 30, 12);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -65;
+    sun.shadow.camera.right = 65;
+    sun.shadow.camera.top = 65;
+    sun.shadow.camera.bottom = -65;
+    scene.add(sun);
+
+    const groundGroup = new THREE.Group();
+    scene.add(groundGroup);
+
+    const floorTiles = [];
+    const holes = [];
+    const groundMatA = new THREE.MeshStandardMaterial({ color: 0x8fe065, roughness: 0.95 });
+    const groundMatB = new THREE.MeshStandardMaterial({ color: 0x7bcf58, roughness: 0.95 });
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x6f7f91, roughness: 1 });
+    const holeMat = new THREE.MeshStandardMaterial({ color: 0x4d7c38, roughness: 1 });
+    const tileGeo = new THREE.BoxGeometry(3.85, 0.5, 3.85);
+    const holeGeo = new THREE.BoxGeometry(3.9, 0.08, 3.9);
+
+    function makeFloorTile(x, z, mat, isRoad = false) {
+      const group = new THREE.Group();
+      const tile = new THREE.Mesh(tileGeo, mat);
+      tile.receiveShadow = true;
+      tile.castShadow = true;
+      group.add(tile);
+      group.position.set(x, -0.28, z);
+      group.userData.collectSize = 0.55;
+      group.userData.isFloor = true;
+      group.userData.homeY = -0.28;
+      group.userData.spin = 0;
+      group.userData.wiggle = Math.random() * Math.PI * 2;
+      group.userData.value = 1;
+      if (isRoad) {
+        group.scale.set(1, 1, 0.9);
+        group.userData.collectSize = 0.62;
+      }
+      groundGroup.add(group);
+      floorTiles.push(group);
+      return group;
+    }
+
+    for (let x = -18; x <= 18; x++) {
+      for (let z = -18; z <= 18; z++) {
+        const isRoad = x === 0 || z === 0;
+        const mat = isRoad ? roadMat : ((x + z) % 2 === 0 ? groundMatA : groundMatB);
+        makeFloorTile(x * 4, z * 4, mat, isRoad);
+      }
+    }
+
+    function roundedBoxMaterial(color) {
+      return new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0.02 });
+    }
+
+    const katamari = new THREE.Group();
+    scene.add(katamari);
+
+    let radius = 1.25;
+    const coreGeo = new THREE.SphereGeometry(radius, 32, 22);
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0xf24b78, roughness: 0.45, metalness: 0.02 });
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    core.castShadow = true;
+    core.receiveShadow = true;
+    katamari.add(core);
+    katamari.position.set(0, radius, 0);
+
+    const bandMat = new THREE.MeshStandardMaterial({ color: 0xffd84a, roughness: 0.55 });
+    const band = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.01, 0.08, 8, 80), bandMat);
+    band.rotation.x = Math.PI / 2;
+    katamari.add(band);
+    const band2 = band.clone();
+    band2.rotation.y = Math.PI / 2;
+    katamari.add(band2);
+
+    const items = [];
+    const particles = [];
+    const collectibleThings = [];
+    let collected = 0;
+    let targetRotation = new THREE.Vector3();
+    const keys = {};
+
+    const palette = [0xff6b6b, 0xffd93d, 0x6bff95, 0x4dabf7, 0xb197fc, 0xff9f43, 0x8ce99a, 0xf783ac, 0xa5d8ff, 0xf8f0a5];
+
+    function rand(min, max) { return min + Math.random() * (max - min); }
+    function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function makeVoxelThing(x, z, size, type = "cube") {
+      const color = choice(palette);
+      const mat = roundedBoxMaterial(color);
+      const group = new THREE.Group();
+      group.position.set(x, size / 2, z);
+      group.userData.collectSize = size;
+      group.userData.value = Math.max(1, Math.round(size * 4));
+      group.userData.spin = rand(-1, 1);
+      group.userData.wiggle = Math.random() * Math.PI * 2;
+      group.userData.homeY = size / 2;
+
+      if (type === "stack") {
+        const count = Math.floor(rand(2, 5));
+        for (let i = 0; i < count; i++) {
+          const cube = new THREE.Mesh(new THREE.BoxGeometry(size, size * rand(0.5, 1.1), size), mat);
+          cube.position.set(rand(-0.15,0.15) * size, i * size * 0.55, rand(-0.15,0.15) * size);
+          cube.rotation.y = rand(-0.3, 0.3);
+          cube.castShadow = true;
+          cube.receiveShadow = true;
+          group.add(cube);
+        }
+      } else if (type === "tree") {
+        const trunk = new THREE.Mesh(new THREE.BoxGeometry(size * 0.35, size * 1.2, size * 0.35), roundedBoxMaterial(0x8b5a2b));
+        trunk.position.y = size * 0.45;
+        trunk.castShadow = true;
+        group.add(trunk);
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(size * 1.15, size * 1.15, size * 1.15), mat);
+        leaf.position.y = size * 1.25;
+        leaf.castShadow = true;
+        group.add(leaf);
+        group.userData.collectSize = size * 1.45;
+      } else {
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), mat);
+        cube.rotation.set(rand(-0.15,0.15), rand(0, Math.PI), rand(-0.15,0.15));
+        cube.castShadow = true;
+        cube.receiveShadow = true;
+        group.add(cube);
+      }
+
+      scene.add(group);
+      items.push(group);
+      collectibleThings.push(group);
+      return group;
+    }
+
+    function scatterWorld() {
+      for (let i = 0; i < 180; i++) {
+        let x = rand(-58, 58), z = rand(-58, 58);
+        if (Math.hypot(x, z) < 5) { i--; continue; }
+        const d = Math.hypot(x, z);
+        const size = d < 22 ? rand(0.28, 0.72) : d < 42 ? rand(0.55, 1.25) : rand(1.0, 2.2);
+        makeVoxelThing(x, z, size, Math.random() < 0.18 ? "stack" : "cube");
+      }
+      for (let i = 0; i < 34; i++) {
+        const x = rand(-62, 62), z = rand(-62, 62);
+        if (Math.hypot(x, z) < 14) continue;
+        makeVoxelThing(x, z, rand(1.2, 2.6), "tree");
+      }
+      document.getElementById("totalText").textContent = collectibleThings.length + floorTiles.length;
+    }
+    scatterWorld();
+
+    function createPop(position, color) {
+      for (let i = 0; i < 14; i++) {
+        const s = rand(0.07, 0.17);
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), new THREE.MeshStandardMaterial({ color, roughness: 0.5 }));
+        mesh.position.copy(position);
+        mesh.velocity = new THREE.Vector3(rand(-2.5,2.5), rand(1.5,5), rand(-2.5,2.5));
+        mesh.life = rand(0.45, 0.8);
+        mesh.castShadow = true;
+        scene.add(mesh);
+        particles.push(mesh);
+      }
+    }
+
+    function showMessage(text) {
+      const el = document.getElementById("message");
+      el.textContent = text;
+      el.classList.add("show");
+      clearTimeout(showMessage.timeout);
+      showMessage.timeout = setTimeout(() => el.classList.remove("show"), 420);
+    }
+
+    function attachItem(item) {
+      const worldPos = new THREE.Vector3();
+      item.getWorldPosition(worldPos);
+      const local = katamari.worldToLocal(worldPos.clone());
+      let direction = local.clone().normalize();
+      if (direction.lengthSq() < 0.001) direction = new THREE.Vector3(rand(-1, 1), -0.45, rand(-1, 1)).normalize();
+      const attachDistance = radius + item.userData.collectSize * 0.42;
+      local.copy(direction.multiplyScalar(attachDistance));
+
+      if (item.userData.isFloor) {
+        groundGroup.remove(item);
+        const hole = new THREE.Mesh(holeGeo, holeMat);
+        hole.position.set(worldPos.x, -0.56, worldPos.z);
+        hole.receiveShadow = true;
+        scene.add(hole);
+        holes.push(hole);
+      } else {
+        scene.remove(item);
+      }
+
+      item.position.copy(local);
+      item.rotation.set(rand(0, Math.PI), rand(0, Math.PI), rand(0, Math.PI));
+      item.scale.multiplyScalar(item.userData.isFloor ? 0.34 : 0.92);
+      katamari.add(item);
+
+      const color = item.children[0]?.material?.color || new THREE.Color(0xffffff);
+      createPop(worldPos, color);
+
+      collected++;
+      radius += item.userData.isFloor ? 0.0045 : 0.012 + item.userData.collectSize * 0.018;
+      katamari.scale.setScalar(1 + collected * 0.0022);
+
+      if (collected % 10 === 0) showMessage("BIGGER!");
+      else if (Math.random() < 0.25) showMessage(choice(["YUMMY!", "POP!", "NICE!", "CHONK!"]));
+    }
+
+    function updateUI() {
+      const size = (radius / 1.25).toFixed(2);
+      document.getElementById("sizeText").textContent = size;
+      document.getElementById("countText").textContent = collected;
+      const total = collectibleThings.length + floorTiles.length;
+      document.getElementById("barInner").style.width = Math.min(100, collected / total * 100) + "%";
+    }
+
+    function addDecorations() {
+      const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+      for (let i = 0; i < 18; i++) {
+        const cloud = new THREE.Group();
+        cloud.position.set(rand(-80,80), rand(15,28), rand(-80,80));
+        for (let j = 0; j < 4; j++) {
+          const c = new THREE.Mesh(new THREE.BoxGeometry(rand(2.4,5), rand(1,2.2), rand(1.5,3.2)), cloudMat);
+          c.position.set(j * 2.1, rand(-0.5,0.5), rand(-0.6,0.6));
+          cloud.add(c);
+        }
+        scene.add(cloud);
+      }
+    }
+    addDecorations();
+
+    window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+    let started = false;
+    document.getElementById("playBtn").onclick = () => {
+      started = true;
+      document.getElementById("start").style.display = "none";
+    };
+
+    const clock = new THREE.Clock();
+    const velocity = new THREE.Vector3();
+    const desired = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.033, clock.getDelta());
+      const time = performance.now() * 0.001;
+
+      if (started) {
+        desired.set(0, 0, 0);
+        if (keys["w"] || keys["arrowup"]) desired.z -= 1;
+        if (keys["s"] || keys["arrowdown"]) desired.z += 1;
+        if (keys["a"] || keys["arrowleft"]) desired.x -= 1;
+        if (keys["d"] || keys["arrowright"]) desired.x += 1;
+        if (desired.lengthSq() > 0) desired.normalize();
+
+        const speed = (keys["shift"] ? 18 : 12) + Math.min(8, collected * 0.035);
+        desired.multiplyScalar(speed);
+        velocity.lerp(desired, 0.105);
+
+        katamari.position.x += velocity.x * dt;
+        katamari.position.z += velocity.z * dt;
+        katamari.position.x = THREE.MathUtils.clamp(katamari.position.x, -68, 68);
+        katamari.position.z = THREE.MathUtils.clamp(katamari.position.z, -68, 68);
+        katamari.position.y = radius * katamari.scale.x;
+
+        const moveLen = velocity.length();
+        if (moveLen > 0.05) {
+          const axis = new THREE.Vector3(velocity.z, 0, -velocity.x).normalize();
+          katamari.rotateOnWorldAxis(axis, (moveLen * dt) / Math.max(0.4, radius));
+        }
+
+        for (let i = items.length - 1; i >= 0; i--) {
+          const item = items[i];
+          const dx = item.position.x - katamari.position.x;
+          const dz = item.position.z - katamari.position.z;
+          const distance = Math.hypot(dx, dz);
+          const itemSize = item.userData.collectSize;
+
+          item.rotation.y += item.userData.spin * dt * 0.4;
+          item.position.y = item.userData.homeY + Math.sin(time * 2 + item.userData.wiggle) * 0.035;
+
+          if (distance < radius + itemSize * 0.7 && itemSize < radius * 0.95) {
+            items.splice(i, 1);
+            attachItem(item);
+          } else if (distance < radius + itemSize * 0.95 && itemSize >= radius * 0.95) {
+            const push = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(dt * 3.5);
+            item.position.add(push);
+          }
+        }
+
+        for (let i = floorTiles.length - 1; i >= 0; i--) {
+          const tile = floorTiles[i];
+          const dx = tile.position.x - katamari.position.x;
+          const dz = tile.position.z - katamari.position.z;
+          const distance = Math.hypot(dx, dz);
+          const pickupRadius = radius * 0.85 + 1.9;
+
+          if (distance < pickupRadius) {
+            floorTiles.splice(i, 1);
+            attachItem(tile);
+          }
+        }
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        p.velocity.y -= 9 * dt;
+        p.position.addScaledVector(p.velocity, dt);
+        p.rotation.x += dt * 8;
+        p.rotation.y += dt * 7;
+        p.scale.multiplyScalar(0.985);
+        if (p.life <= 0) {
+          scene.remove(p);
+          particles.splice(i, 1);
+        }
+      }
+
+      const camTarget = katamari.position.clone();
+      const camOffset = new THREE.Vector3(0, 13 + radius * 1.5, 20 + radius * 3.2);
+      camera.position.lerp(camTarget.clone().add(camOffset), 0.06);
+      camera.lookAt(camTarget.x, camTarget.y + radius * 0.9, camTarget.z);
+
+      updateUI();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

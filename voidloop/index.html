@@ -132,18 +132,84 @@
       left: 50%;
       transform: translateX(-50%);
       background: rgba(0,0,0,0.7);
-      border: 1px solid rgba(251,191,36,0.5);
+      border: 1px solid rgba(74,222,128,0.5);
       border-radius: 8px;
       padding: 8px 16px;
       font-size: 14px;
       font-weight: 700;
-      color: #fbbf24;
-      text-shadow: 0 0 8px rgba(251,191,36,0.4);
+      color: #4ade80;
+      text-shadow: 0 0 8px rgba(74,222,128,0.4);
       pointer-events: none;
       z-index: 11;
       animation: pulse 1.5s ease-in-out infinite;
     }
     #deposit-prompt.active { display: block; }
+
+    /* Deposit Complete Overlay (demo mode quick deposit) */
+    #deposit-complete-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 95;
+      background: rgba(0,0,0,0.6);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      pointer-events: none;
+    }
+    #deposit-complete-overlay.active { display: flex; }
+    .deposit-complete-panel {
+      background: rgba(10,18,12,0.92);
+      border: 1px solid rgba(74,222,128,0.45);
+      border-radius: 16px;
+      padding: 24px 32px;
+      max-width: 320px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 0 40px rgba(74,222,128,0.15);
+    }
+    .deposit-complete-title {
+      font-size: 20px;
+      font-weight: 900;
+      color: #4ade80;
+      text-align: center;
+      letter-spacing: 2px;
+      text-shadow: 0 0 12px rgba(74,222,128,0.35);
+      margin-bottom: 4px;
+    }
+    .deposit-complete-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .deposit-complete-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.85);
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+    }
+    .deposit-complete-row span:last-child {
+      color: #4ade80;
+      font-weight: 800;
+    }
+    .deposit-complete-total {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 800;
+      color: #fbbf24;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 8px;
+      margin-top: 4px;
+    }
 
     /* Cash-Out Screen ("The Vacuum") */
     #cash-out-screen {
@@ -327,38 +393,62 @@
     .backpack-slots {
       display: flex;
       flex-wrap: wrap;
-      gap: 4px;
-      max-width: 200px;
+      gap: 5px;
+      max-width: 260px;
     }
     .backpack-slot {
-      width: 32px;
-      height: 32px;
-      background: rgba(0,0,0,0.45);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 6px;
+      width: 44px;
+      height: 44px;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 18px;
       position: relative;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .backpack-slot img {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
     }
     .backpack-slot.filled {
-      border-color: rgba(251,191,36,0.4);
-      background: rgba(251,191,36,0.08);
+      border-color: rgba(251,191,36,0.35);
+      background: rgba(251,191,36,0.06);
     }
     .backpack-slot.full {
-      border-color: rgba(239,68,68,0.5);
-      background: rgba(239,68,68,0.1);
+      border-color: rgba(239,68,68,0.55);
+      background: rgba(239,68,68,0.12);
+      animation: slotPulse 0.8s ease-in-out infinite;
+    }
+    @keyframes slotPulse {
+      0%, 100% { border-color: rgba(239,68,68,0.55); }
+      50% { border-color: rgba(239,68,68,0.9); }
     }
     .backpack-slot-count {
       position: absolute;
-      bottom: 1px;
-      right: 2px;
-      font-size: 9px;
+      bottom: 2px;
+      right: 3px;
+      font-size: 10px;
       font-weight: 800;
       color: #fff;
-      text-shadow: 0 0 3px rgba(0,0,0,0.8);
+      text-shadow: 0 0 4px rgba(0,0,0,0.9);
+    }
+    .backpack-full-warning {
+      width: 100%;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #4ade80;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+      animation: pulse 1s ease-in-out infinite;
     }
 
     /* Top-center: Floor + Exit */
@@ -3045,7 +3135,7 @@
         <span class="pet-hud-level" id="pet-hud-level"></span>
       </div>
       <div id="backpack-hud">
-        <div class="backpack-header">Backpack</div>
+        <div class="backpack-header">Inventory (Auto)</div>
         <div class="backpack-slots" id="backpack-slots"></div>
       </div>
     </div>
@@ -3072,7 +3162,7 @@
   </div>
 
   <div class="crosshair" id="crosshair" style="display:none;"></div>
-  <div id="deposit-prompt">Press F to deposit resources</div>
+  <div id="deposit-prompt">🌀 Deposit zone — resources auto-vacuumed</div>
 
   <div id="fps-display">-- FPS</div>
 
@@ -3443,6 +3533,24 @@
           <label>Starfield</label>
           <input type="checkbox" id="settings-stars" checked>
         </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-toggle">
+          <label>Aurora</label>
+          <input type="checkbox" id="settings-aurora" checked>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>Star Density <span class="val" id="settings-star-density-val">0.6x</span></label>
+        <input type="range" id="settings-star-density" min="0.1" max="1.5" step="0.1" value="0.6">
+      </div>
+      <div class="settings-row">
+        <label>Star Brightness <span class="val" id="settings-star-brightness-val">1.0x</span></label>
+        <input type="range" id="settings-star-brightness" min="0.2" max="2.0" step="0.1" value="1.0">
+      </div>
+      <div class="settings-row">
+        <label>Pet Light Intensity <span class="val" id="settings-pet-light-val">1.0x</span></label>
+        <input type="range" id="settings-pet-light" min="0.0" max="3.0" step="0.1" value="1.0">
       </div>
 
       <div class="settings-row">

@@ -1287,11 +1287,11 @@ export class UIManager {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = Math.floor(seconds % 60).toString().padStart(2, '0');
     this.elTimer.textContent = `${m}:${s}`;
-    // Countdown styling
+    // Countdown styling (scaled for 3-minute rounds)
     if (seconds <= 10) {
       this.elTimer.style.color = '#ff4444';
       this.elTimer.style.animation = 'pulse 0.5s infinite';
-    } else if (seconds <= 20) {
+    } else if (seconds <= 30) {
       this.elTimer.style.color = '#ffaa00';
       this.elTimer.style.animation = 'none';
     } else {
@@ -1368,6 +1368,44 @@ export class UIManager {
     if (this.elDepositPrompt) {
       this.elDepositPrompt.classList.toggle('active', show);
     }
+  }
+
+  showDepositComplete(result) {
+    // Brief deposit-complete overlay for demo mode
+    let el = document.getElementById('deposit-complete-overlay');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'deposit-complete-overlay';
+      el.innerHTML = `
+        <div class="deposit-complete-panel">
+          <div class="deposit-complete-title">DEPOSIT COMPLETE!</div>
+          <div class="deposit-complete-rows"></div>
+          <div class="deposit-complete-total"></div>
+        </div>
+      `;
+      document.body.appendChild(el);
+    }
+
+    const rowsEl = el.querySelector('.deposit-complete-rows');
+    const totalEl = el.querySelector('.deposit-complete-total');
+    rowsEl.innerHTML = '';
+
+    for (const item of result.deposited) {
+      const row = document.createElement('div');
+      row.className = 'deposit-complete-row';
+      row.innerHTML = `<span>${item.name}</span><span>${item.count} ✓</span>`;
+      rowsEl.appendChild(row);
+    }
+
+    if (result.totalCoins > 0) {
+      totalEl.textContent = `+${result.totalCoins} coins`;
+      totalEl.style.display = 'block';
+    } else {
+      totalEl.style.display = 'none';
+    }
+
+    el.classList.add('active');
+    setTimeout(() => el.classList.remove('active'), 2200);
   }
 
   setFloorText(text) {
@@ -2091,25 +2129,59 @@ export class UIManager {
     const max = bp.maxSlots;
     const used = slots.length;
     let html = '';
-    const ICON_EMOJI = {
-      loose_dirt: '🟫', gravel_bits: '⚪', scrap_stone: '🪨', old_junk: '🗑️',
-      moss_chip: '🌿', crystal_shard: '🔷', amber: '🍋', ancient_bark: '🪵',
-      ash: '⚫', magma_shard: '🔶', obsidian_fragment: '💣', ember_essence: '🔥',
-      ice_chunk: '🧊', frost_shard: '❄️', glacial_metal: '⛓️', blizzard_essence: '🌨️',
-      sand: '🍪', desert_shard: '💛', gold_nugget: '🪙', solar_essence: '☀️',
-      rust_chunk: '🟤', gear_shard: '⚙️', alloy_ingot: '🟨', furnace_ember: '🔥',
-      mud_pie: '🥞', moss_clump: '🌿', petrified_bark: '🪵', mire_essence: '💚',
-      brick_chip: '🧱', royal_shard: '❤️', crown_jewel: '👑',
+    const ICON_PATHS = {
+      stone: 'assets/icons/drops/stone.png',
+      dirt: 'assets/icons/drops/dirt.png',
+      iron_ore: 'assets/icons/drops/iron_ore.png',
+      copper_ore: 'assets/icons/drops/copper_ore.png',
+      gold_ore: 'assets/icons/drops/gold_ore.png',
+      loose_dirt: 'assets/icons/drops/loose_dirt.png',
+      gravel_bits: 'assets/icons/drops/gravel_bits.png',
+      scrap_stone: 'assets/icons/drops/scrap_stone.png',
+      old_junk: '../Free Icon Pack v3.1 (Basic)/Item/Chest/64px/Chest 1st 64px.png',
+      moss_chip: '../Free Icon Pack v3.1 (Basic)/Nature/Leaf/64px/Leaf 2nd 64px.png',
+      crystal_shard: 'assets/icons/drops/crystal_shard.png',
+      amber: 'assets/icons/drops/amber.png',
+      ancient_bark: '../Free Icon Pack v3.1 (Basic)/Nature/Wheat/64px/Wheat 1st 64px.png',
+      ash: 'assets/icons/drops/ash.png',
+      magma_shard: 'assets/icons/drops/magma_shard.png',
+      obsidian_fragment: '../Free Icon Pack v3.1 (Basic)/Item/Bomb/64px/Bomb 1st 64px.png',
+      ember_essence: '../Free Icon Pack v3.1 (Basic)/Item/Potion/64px/Red Potion 1st 64px.png',
+      ice_chunk: 'assets/icons/drops/ice_chunk.png',
+      frost_shard: 'assets/icons/drops/frost_shard.png',
+      glacial_metal: '../Free Icon Pack v3.1 (Basic)/Currency/Ingot/64px/Silver 1st 64px.png',
+      blizzard_essence: '../Free Icon Pack v3.1 (Basic)/Currency/Crystal/64w/Crystal Blue Outline 64px.png',
+      sand: 'assets/icons/drops/sand.png',
+      desert_shard: '../Free Icon Pack v3.1 (Basic)/Currency/Crystal/64w/Crystal Yellow 64px.png',
+      gold_nugget: 'assets/icons/drops/gold_nugget.png',
+      solar_essence: '../Free Icon Pack v3.1 (Basic)/Currency/Crystal/64w/Crystal Yellow Outline 64px.png',
+      rust_chunk: 'assets/icons/drops/rust_chunk.png',
+      gear_shard: 'assets/icons/drops/gear_shard.png',
+      alloy_ingot: '../Free Icon Pack v3.1 (Basic)/Currency/Ingot/64px/Gold 1st 64px.png',
+      furnace_ember: '../Free Icon Pack v3.1 (Basic)/Item/Torch/64w/Torch 1st 64px.png',
+      mud_pie: 'assets/icons/drops/mud_pie.png',
+      moss_clump: '../Free Icon Pack v3.1 (Basic)/Nature/Leaf/64px/Leaf 2nd 64px.png',
+      petrified_bark: '../Free Icon Pack v3.1 (Basic)/Nature/Wheat/64px/Wheat 1st 64px.png',
+      mire_essence: '../Free Icon Pack v3.1 (Basic)/Item/Potion/64px/Green Potion 1st 64px.png',
+      brick_chip: 'assets/icons/drops/brick_chip.png',
+      royal_shard: '../Free Icon Pack v3.1 (Basic)/Currency/Crystal/64w/Crystal Red Outline 64px.png',
+      crown_jewel: 'assets/icons/drops/crown_jewel.png',
     };
     for (let i = 0; i < max; i++) {
       const slot = slots[i];
       if (slot) {
-        const emoji = ICON_EMOJI[slot.type] || '❓';
+        const path = ICON_PATHS[slot.type];
         const isFull = slot.count >= bp.maxStackSize;
-        html += `<div class="backpack-slot filled ${isFull ? 'full' : ''}">${emoji}<span class="backpack-slot-count">${slot.count}</span></div>`;
+        const iconHtml = path
+          ? `<img src="${path}" alt="" draggable="false">`
+          : `<span style="font-size:18px">❓</span>`;
+        html += `<div class="backpack-slot filled ${isFull ? 'full' : ''}">${iconHtml}<span class="backpack-slot-count">${slot.count}</span></div>`;
       } else {
         html += `<div class="backpack-slot"></div>`;
       }
+    }
+    if (bp.isFull()) {
+      html += `<div class="backpack-full-warning">INVENTORY FULL!</div>`;
     }
     this.elBackpackSlots.innerHTML = html;
   }

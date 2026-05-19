@@ -135,7 +135,7 @@ export class Game {
     this.typedWord = '';
     this.challengeCompleting = false;
     this.challengeCameraSide = 1;
-    this.biomeKeys = ['farm_garden', 'food_market', 'space_camp'];
+    this.biomeKeys = ['farm_garden', 'food_market', 'space_camp', 'ourcraft_demo'];
     this.currentBiomeIndex = 0;
     this.selectedBiomeKey = this.biomeKeys[this.currentBiomeIndex];
     

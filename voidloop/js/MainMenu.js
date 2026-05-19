@@ -229,56 +229,37 @@ export class MainMenu {
     if (!overlay || !grid) return;
 
     grid.innerHTML = '';
-    const zoneColors = {
-      forest: '#87ceeb',
-      fire: '#ff6b4a',
-      ice: '#aaddff',
-      desert: '#e6c288',
-      steelworks: '#8899aa',
-      mire: '#5a7a5a',
-      citadel: '#d4a574',
-    };
 
-    for (const zone of zones) {
-      const card = document.createElement('div');
-      card.className = 'zone-card' + (zone.completed ? ' completed' : '') + (!zone.unlocked ? ' locked' : '');
-      card.style.setProperty('--zone-color', zoneColors[zone.id] || '#888');
+    // ourCraft Demo card
+    const demoCard = document.createElement('div');
+    demoCard.className = 'zone-card';
+    demoCard.style.setProperty('--zone-color', '#4ade80');
 
-      const name = document.createElement('div');
-      name.className = 'zone-card-name';
-      name.textContent = zone.name;
-      card.appendChild(name);
+    const demoName = document.createElement('div');
+    demoName.className = 'zone-card-name';
+    demoName.textContent = 'ourCraft Demo';
+    demoCard.appendChild(demoName);
 
-      const desc = document.createElement('div');
-      desc.className = 'zone-card-desc';
-      desc.textContent = zone.description;
-      card.appendChild(desc);
+    const demoDesc = document.createElement('div');
+    demoDesc.className = 'zone-card-desc';
+    demoDesc.textContent = 'Imported 256-deep voxel terrain from ourCraft world generator.';
+    demoCard.appendChild(demoDesc);
 
-      const meta = document.createElement('div');
-      meta.className = 'zone-card-meta';
-      meta.textContent = `Letters: ${zone.letters?.join(' ') || ''}`;
-      card.appendChild(meta);
+    const demoMeta = document.createElement('div');
+    demoMeta.className = 'zone-card-meta';
+    demoMeta.textContent = 'Procedural | C++ Export';
+    demoCard.appendChild(demoMeta);
 
-      if (zone.unlocked) {
-        const btn = document.createElement('button');
-        btn.className = 'zone-card-btn';
-        btn.textContent = zone.completed ? 'Replay' : 'Play';
-        btn.addEventListener('click', () => {
-          this._hasStarted = true;
-          overlay.classList.remove('active');
-          this._transitionToGame(false, null, false, zone.id);
-        });
-        card.appendChild(btn);
-      } else {
-        const locked = document.createElement('div');
-        locked.className = 'zone-card-locked';
-        const prev = zones.find(z => z.order === zone.order - 1);
-        locked.textContent = prev ? `🔒 Complete ${prev.name} to unlock` : '🔒 Locked';
-        card.appendChild(locked);
-      }
-
-      grid.appendChild(card);
-    }
+    const demoBtn = document.createElement('button');
+    demoBtn.className = 'zone-card-btn';
+    demoBtn.textContent = 'Play';
+    demoBtn.addEventListener('click', () => {
+      this._hasStarted = true;
+      overlay.classList.remove('active');
+      this._transitionToGame(false, null, false, null, true);
+    });
+    demoCard.appendChild(demoBtn);
+    grid.appendChild(demoCard);
 
     backBtn.onclick = () => {
       overlay.classList.remove('active');
@@ -304,7 +285,7 @@ export class MainMenu {
     document.dispatchEvent(new CustomEvent('show-settings'));
   }
 
-  _transitionToGame(isMultiplayer = false, net = null, isHost = false, startZoneId = null) {
+  _transitionToGame(isMultiplayer = false, net = null, isHost = false, startZoneId = null, ourCraftDemo = false) {
     this._destroyBackground();
     this.elMenu.classList.add('hidden');
     const vignette = document.querySelector('.menu-vignette');
@@ -314,7 +295,7 @@ export class MainMenu {
     if (loading) loading.style.display = 'flex';
 
     try {
-      this.game = new Game(this.container, { startZoneId });
+      this.game = new Game(this.container, { startZoneId, ourCraftDemo });
       this.game.isMultiplayer = isMultiplayer;
       this.game.isHost = isHost;
       this.game.net = net;

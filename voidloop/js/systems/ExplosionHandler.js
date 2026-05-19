@@ -88,6 +88,14 @@ export class ExplosionHandler {
       if (distSq > radiusSq) continue;
       const dist = Math.sqrt(distSq);
       const falloff = Math.max(0.25, 1 - dist / radius);
+
+      // Blast impulse for ragdoll knockback
+      const blastDir = hitPos.clone().sub(position).normalize();
+      const impulseForce = 42 * falloff;
+      blastDir.y += 0.4;
+      blastDir.normalize();
+      enemy.applyImpulse(blastDir.multiplyScalar(impulseForce));
+
       enemy.takeDamage(Math.round(damage * falloff), attackerWeaponId);
       this.game.particles.spark(hitPos, 3);
     }

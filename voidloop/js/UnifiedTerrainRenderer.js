@@ -244,9 +244,15 @@ void main() {
   // Lighting & shadows
   vec3 viewLightDir = normalize(mat3(uViewMatrix) * lightDir);
   float NdotL = max(dot(vNormal, viewLightDir), 0.0);
-  float diffuse = mix(0.38, 1.0, NdotL) * lightIntensity;
+  float daylight = clamp(lightIntensity / 2.0, 0.0, 1.0);
+  float skyAmbient = mix(0.24, 0.56, daylight);
+  float faceAmbient = skyAmbient;
+  if (faceAxis == 2) faceAmbient *= 1.15;
+  else if (faceAxis == 3) faceAmbient *= 0.62;
+  else faceAmbient *= 0.92;
+  float diffuse = faceAmbient + NdotL * lightIntensity * 0.68;
   float shadow = voxelShadow(vWorldPos, normalize(cross(dFdx(vWorldPos), dFdy(vWorldPos))), lightDir, zoneBlockDataOrigin);
-  color *= diffuse * shadow;
+  color *= faceAmbient + (diffuse - faceAmbient) * shadow;
 
   // Point light (pet) contribution — additive on top of sun lighting
   if (pointLightIntensity > 0.0) {

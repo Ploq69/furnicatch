@@ -9,6 +9,9 @@ const SAVE_KEY = 'voidloop_progress_v1';
  * All resource types in the game.
  */
 export const RESOURCE_TYPES = [
+  // Demo / ourCraft resources
+  'stone', 'dirt', 'iron_ore', 'copper_ore', 'gold_ore',
+
   // Dig junk
   'loose_dirt', 'gravel_bits', 'scrap_stone', 'old_junk',
 
@@ -32,6 +35,12 @@ export const RESOURCE_TYPES = [
  * Resource display names and coin values for selling.
  */
 export const RESOURCE_META = {
+  stone:              { name: 'Stone',              value: 2 },
+  dirt:               { name: 'Dirt',               value: 1 },
+  iron_ore:           { name: 'Iron Ore',           value: 5 },
+  copper_ore:         { name: 'Copper Ore',         value: 4 },
+  gold_ore:           { name: 'Gold Ore',           value: 10 },
+
   loose_dirt:         { name: 'Loose Dirt',         value: 1 },
   gravel_bits:        { name: 'Gravel Bits',        value: 1 },
   scrap_stone:        { name: 'Scrap Stone',        value: 2 },

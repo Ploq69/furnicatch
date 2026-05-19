@@ -7,6 +7,13 @@ import * as THREE from 'three';
 import { DropInstancer } from './DropInstancer.js';
 
 const ICON_PATHS = {
+  // Demo / ourCraft resources
+  stone:           'assets/icons/drops/stone.png',
+  dirt:            'assets/icons/drops/dirt.png',
+  iron_ore:        'assets/icons/drops/iron_ore.png',
+  copper_ore:      'assets/icons/drops/copper_ore.png',
+  gold_ore:        'assets/icons/drops/gold_ore.png',
+
   loose_dirt:      'assets/icons/drops/loose_dirt.png',
   gravel_bits:     'assets/icons/drops/gravel_bits.png',
   scrap_stone:     'assets/icons/drops/scrap_stone.png',

@@ -537,6 +537,14 @@ export const BIOMES = {
     propPool: CATCHABLE_CATALOG.filter(item => item.biome === 'space_camp').map(item => item.key),
   },
   meadow: null,
+  ourcraft_demo: {
+    name: 'ourCraft Demo',
+    fogColor: 0x87ceeb,
+    groundBlocks: ['grass', 'dirt', 'stone', 'sand', 'gravel'],
+    decorations: [],
+    furniturePool: [],
+    propPool: CATCHABLE_CATALOG.filter(item => item.biome === 'farm_garden').map(item => item.key),
+  },
 };
 
 BIOMES.meadow = BIOMES.farm_garden;

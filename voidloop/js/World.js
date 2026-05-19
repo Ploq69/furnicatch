@@ -210,7 +210,7 @@ export class World {
 
     // Spawn enemies
     if (spawnEnemies) {
-      const enemyCount = Math.min(Math.floor(5 + size / 8), 25);
+      const enemyCount = Math.min(Math.floor(25 + size / 3), 80);
       const enemyTypes = zone.enemyTypes;
       for (let i = 0; i < enemyCount; i++) {
         const et = rng.choice(enemyTypes);
@@ -333,6 +333,23 @@ export class World {
     const surfaceY = this.terrainMesh.getColumnTop(0, 0);
     this.startPosition = new THREE.Vector3(0, surfaceY > -999 ? surfaceY + 1.5 : 3, 0);
     this.biome = { name: zone.name, blocks: zone.blockTypes, enemies: zone.enemyTypes, fogColor: zone.fogColor, fogNear: zone.fogNear, fogFar: zone.fogFar };
+
+    // Spawn demo enemies
+    const enemyTypes = zone.enemyTypes || ['slime'];
+    const enemyCount = 20;
+    for (let i = 0; i < enemyCount; i++) {
+      const et = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 5 + Math.random() * 25;
+      const ex = Math.cos(angle) * dist;
+      const ez = Math.sin(angle) * dist;
+      const enemy = new Enemy(et, ex, ez);
+      enemy.world = this;
+      enemy.zoneId = zone.id;
+      enemy._netId = this._nextEnemyId++;
+      await enemy.spawn(this.scene);
+      this.enemies.push(enemy);
+    }
 
     console.log('[MiningDebug] OurCraft zone ready', {
       chunks: loader._cache.size,

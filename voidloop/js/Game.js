@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SkyGradient, createSkyGradientPreset } from './SkyGradient.js';
+import { SkyGradient } from './SkyGradient.js';
 import { assetLoader } from './AssetLoader.js';
 import { input } from './InputManager.js';
 import { audio } from './AudioManager.js';
@@ -13,7 +13,7 @@ import { UIManager } from './UIManager.js';
 import { SFXMapper } from './SFXMapper.js';
 import { TouchControls } from './TouchControls.js';
 import { LootDrop, LOOT_CONFIG } from './LootDrop.js';
-import { GAME, BIOMES, BLOCK_TYPES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES, ZONE_BLOCK_LOOT_TABLES, ZONE_ENEMY_LOOT_TABLES } from './constants.js';
+import { GAME, BIOMES, BLOCK_TYPES, BLOCK_LOOT_TABLES, ENEMY_LOOT_TABLES, ENEMY_TYPES, ZONE_BLOCK_LOOT_TABLES, ZONE_ENEMY_LOOT_TABLES } from './constants.js';
 import { ZoneManager } from './ZoneManager.js';
 import { ZONES, getZoneById, getZoneAtPosition } from './ZoneData.js';
 import { Inventory } from './Inventory.js';
@@ -24,6 +24,7 @@ import { LetterDrop } from './LetterDrop.js';
 import { RunBackpack } from './RunBackpack.js';
 import { IconDrop } from './IconDrop.js';
 import { CollectionBeacon } from './CollectionBeacon.js';
+import { BackpackVacuum } from './BackpackVacuum.js';
 import { CashOutScreen } from './CashOutScreen.js';
 import { glyph3D } from '../../js/Glyph3DManager.js';
 import { PetManager } from './PetManager.js';
@@ -109,8 +110,6 @@ export class Game {
     this.scene.background = new THREE.Color(0x0a0a0a);
     this.renderer.setClearColor(this.scene.background);
     this.skyGradient = null;
-    this.cloudGroup = null;
-    this.cloudMaterial = null;
     this.boundaryEnvironment = null;
     this._createSky();
 
@@ -248,6 +247,19 @@ export class Game {
         this.skyGradient.starsEnabled = value;
         this.skyGradient._updateUniforms();
       }
+      if (key === 'auroraEnabled' && this.skyGradient) {
+        this.skyGradient.auroraEnabled = value;
+        this.skyGradient._updateUniforms();
+      }
+      if (key === 'starDensity' && this.skyGradient) {
+        this.skyGradient.material.uniforms.starDensity.value = value;
+      }
+      if (key === 'starBrightness' && this.skyGradient) {
+        this.skyGradient.material.uniforms.starBrightness.value = value;
+      }
+      if (key === 'petLightIntensity') {
+        this._syncPetLightIntensity();
+      }
     });
 
     // Playtest mode detection
@@ -276,6 +288,7 @@ export class Game {
     this.zoneManager = new ZoneManager();
     this.inventory = new Inventory();
     this.resources = new ResourceInventory();
+    this.backpackVacuum = new BackpackVacuum(this.scene, this.runBackpack, this.resources, this.player, this.ui);
     this._blockHazardTimer = 0;
     this.spellingGlue = new SpellingQuizGlue(this);
     this.zoneGateway = new ZoneGatewaySystem(this);
@@ -316,6 +329,21 @@ export class Game {
     this._worldSeed = null;
     this._syncSendTimer = 0;
     this._remotePlayer = null;
+
+    // Grenade charge-up state
+    this.grenadeCharge = {
+      active: false,
+      timer: 0,
+      maxTime: 1.0,
+      minTime: 0.15,
+    };
+    // Trajectory preview line
+    const trajGeo = new THREE.BufferGeometry();
+    trajGeo.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+    this.grenadeTrajectory = new THREE.Line(trajGeo, new THREE.LineBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.7 }));
+    this.grenadeTrajectory.frustumCulled = false;
+    this.grenadeTrajectory.visible = false;
+    this.scene.add(this.grenadeTrajectory);
 
     // Start loading
     this._loadAssets();
@@ -383,7 +411,7 @@ export class Game {
       this.beacon.setPosition(this.spawnPoint);
       this.player.hp = this.player.maxHp;
       this.exitOpen = false;
-      this.floorTimer = GAME.COUNTDOWN_BASE;
+      this.floorTimer = this._ourCraftDemo ? 180 : GAME.COUNTDOWN_BASE;
     } else {
       await this._generateZones(this._worldSeed, this._startZoneId);
     }
@@ -399,6 +427,7 @@ export class Game {
     this.ui.hideLoading();
     this.state = STATES.PLAYING;
     window._game = this;
+    this.grenadeFuse = GAME.GRENADE_FUSE;
     this.renderer.setAnimationLoop(() => this._loop());
   }
 
@@ -468,22 +497,22 @@ export class Game {
 
   _canUseWeapon(weapon) {
     if (!weapon) return false;
-    if (weapon.cooldown <= 0) return true;
-    return weapon.data?.type === 'thrown' && this.progression.state.grenade.unlocked && this.progression.state.grenade.charges > 0;
+    // Unlimited grenades for testing
+    if (weapon.data?.type === 'thrown') return true;
+    return weapon.cooldown <= 0;
   }
 
   _prepareGrenadeThrow(weapon) {
-    if (!this.progression.state.grenade.unlocked) {
-      return { allowed: false, message: 'Unlock grenades first' };
-    }
-    if (weapon.cooldown > 0) {
-      if (!this.progression.spendGrenadeCharge()) {
-        return { allowed: false, message: `${weapon.cooldown.toFixed(1)}s` };
-      }
-      weapon.cooldown = 0;
-      return { allowed: true, charged: true };
-    }
+    // Unlimited grenades for testing
     return { allowed: true, charged: false };
+  }
+
+  _syncPetLightIntensity() {
+    const mult = settings.get('petLightIntensity') ?? 1.0;
+    if (this.pet?.glowLight) {
+      const base = 8.0 + this.pet.visualLevel * 2.0;
+      this.pet.glowLight.intensity = base * mult;
+    }
   }
 
   async _generateZones(seed, zoneId = null) {
@@ -515,6 +544,7 @@ export class Game {
     this.loot.clear();
     this.letterDrops.clear();
     this.shaderFX.clear();
+    this.backpackVacuum.stop();
     this._clearPet();
     this.letterPool.reset();
 
@@ -565,6 +595,7 @@ export class Game {
     this.loot.clear();
     this.letterDrops.clear();
     this.shaderFX.clear();
+    this.backpackVacuum.stop();
     this._clearPet();
 
     // Reset score tracking
@@ -632,6 +663,7 @@ export class Game {
     if (this.state === STATES.PLAYING && !this._cashOutActive) {
       // Escape handling: pause takes priority, then loadout/petden close
       if (input.pressed('Escape')) {
+        this._cancelGrenadeCharge();
         if (this.ui.progressionOpen) {
           this.ui.hideShop();
         } else if (this.ui.loadoutOpen) {
@@ -644,14 +676,17 @@ export class Game {
       }
 
       if (input.pressed('KeyI') && !this.paused && !this.ui.progressionOpen) {
+        this._cancelGrenadeCharge();
         this.ui.toggleLoadout();
       }
 
       if (input.pressed('KeyP') && !this.paused && !this.ui.progressionOpen) {
+        this._cancelGrenadeCharge();
         this.ui.togglePetDen();
       }
 
       if (input.pressed('KeyB') && !this.paused && !this.ui.loadoutOpen && !this.ui.petDenOpen) {
+        this._cancelGrenadeCharge();
         this.ui.showShop();
       }
 
@@ -716,6 +751,10 @@ export class Game {
     this.totalTime += dt;
     if (this.floorTimer <= 0) {
       this.floorTimer = 0;
+      if (this._ourCraftDemo) {
+        this._endDemoRound();
+        return;
+      }
       this.player.hp = 0; // Time's up = death
     }
     this.ui.setTimer(this.floorTimer);
@@ -803,12 +842,54 @@ export class Game {
       this.missileSystem.tryFire();
     }
 
-    // Contextual J button — mine block or attack enemy
+    // Debug: spawn enemy with K
+    if (input.pressed('KeyK')) {
+      this._spawnTestEnemy();
+    }
+
+    // Adjust grenade fuse with - / =
+    if (input.pressed('Minus')) {
+      this.grenadeFuse = Math.max(0.1, this.grenadeFuse - 0.1);
+      this.ui.showFloatingText(`Fuse: ${this.grenadeFuse.toFixed(1)}s`, 0xffaa00);
+    }
+    if (input.pressed('Equal')) {
+      this.grenadeFuse = Math.min(5.0, this.grenadeFuse + 0.1);
+      this.ui.showFloatingText(`Fuse: ${this.grenadeFuse.toFixed(1)}s`, 0xffaa00);
+    }
+
+    // Grenade charge-up handling
     const activeWeapon = this.player.weapons[this.player.currentSlot];
+    const grenadeEquipped = activeWeapon?.data?.type === 'thrown';
+    const jPressed = input.pressed('KeyJ');
+    const jHeld = input.isDown('KeyJ');
     const leftClickPressed = input.buttonPressed?.('left');
+
+    if (grenadeEquipped && jPressed && !this.grenadeCharge.active) {
+      this.grenadeCharge.active = true;
+      this.grenadeCharge.timer = 0;
+    }
+
+    if (this.grenadeCharge.active) {
+      if (jHeld) {
+        this.grenadeCharge.timer += dt;
+        this.grenadeCharge.timer = Math.min(this.grenadeCharge.timer, this.grenadeCharge.maxTime);
+        this._updateGrenadeChargeVisual();
+      } else {
+        this.grenadeCharge.active = false;
+        if (this.grenadeCharge.timer >= this.grenadeCharge.minTime) {
+          const power = this.grenadeCharge.timer / this.grenadeCharge.maxTime;
+          this._throwChargedGrenade(power);
+        } else {
+          this.ui.showFloatingText('Hold longer...', 0xffaa00);
+        }
+        this._hideGrenadeTrajectory();
+      }
+    }
+
+    // Contextual J button / left click — instant attacks only (melee, ranged, grapple, mine)
     const minePressed = input.pressed('KeyJ')
       || (leftClickPressed && (this.cameraMode === 'thirdPerson' || activeWeapon?.data?.id === 'pickaxe'));
-    if (minePressed && this._canUseWeapon(activeWeapon)) {
+    if (minePressed && this._canUseWeapon(activeWeapon) && activeWeapon?.data?.type !== 'thrown') {
       const weapon = activeWeapon;
       if (weapon.data.type === 'grapple') {
         const aim = this._getMiningAim();
@@ -822,26 +903,6 @@ export class Game {
           SFXMapper.swingMiss();
         }
         weapon.cooldown = 0.35;
-      } else if (weapon.data.type === 'thrown') {
-        const prep = this._prepareGrenadeThrow(weapon);
-        if (!prep.allowed) {
-          this.ui.showFloatingText(prep.message, 0xffaa00);
-          SFXMapper.swingMiss();
-          return;
-        }
-        const aim = this._getMiningAim();
-        const thrown = this.player.attack(aim.origin, aim.direction, this.scene, audio, this.particles, this.world.enemies);
-        if (thrown) {
-          const grenade = weapon.projectiles[weapon.projectiles.length - 1];
-          if (grenade?.explosive) {
-            grenade.radius = this.progression.getGrenadeRadius();
-          }
-          weapon.cooldown = this.progression.getGrenadeCooldown();
-          this.player.playAttackAnim();
-          // third-person uses full-body attack animation, no viewmodel swing needed
-        } else {
-          SFXMapper.swingMiss();
-        }
       } else {
 
       // Check for nearby enemy first (combat priority)
@@ -1043,6 +1104,7 @@ export class Game {
     // Hotbar
     for (let i = 0; i < this.player.weapons.length; i++) {
       if (input.pressed(`Digit${i + 1}`)) {
+        this._cancelGrenadeCharge();
         this.player.equipWeapon(i);
         this.ui.setHotbarSlot(i);
         SFXMapper.hotbarSelect();
@@ -1140,6 +1202,15 @@ export class Game {
 
     // Check death / timer expiry → cash-out → camp
     if (this.player.hp <= 0) {
+      this._cancelGrenadeCharge();
+      if (this._ourCraftDemo) {
+        // Demo mode: respawn at beacon instead of ending round
+        this.player.hp = this.player.maxHp;
+        this.player.position.copy(this.spawnPoint || new THREE.Vector3(0, 3, 0));
+        this.ui.showFloatingText('Respawned!', 0x4ade80);
+        SFXMapper.playerDeath();
+        return;
+      }
       SFXMapper.playerDeath();
       this._triggerCashOut();
       return;
@@ -1261,9 +1332,10 @@ export class Game {
       starsEnabled: starsEnabled,
       sunStrength: 4.0,
       sunDiscSize: 0.06,
-      auroraEnabled: false,
+      auroraEnabled: settings.get('auroraEnabled'),
     });
-    this._createCloudLayer();
+    this.skyGradient.material.uniforms.starDensity.value = settings.get('starDensity');
+    this.skyGradient.material.uniforms.starBrightness.value = settings.get('starBrightness');
   }
 
   _updateSky(dt) {
@@ -1288,40 +1360,24 @@ export class Game {
       this.world?.terrainMesh?.unifiedRenderer?.setLightDir?.(sunDir.x, sunDir.y, sunDir.z);
       this.world?.terrainMesh?.unifiedRenderer?.setLightIntensity?.(adjustedIntensity);
     }
-    if (this.cloudGroup) {
-      this.cloudGroup.position.x = this.camera.position.x;
-      this.cloudGroup.position.z = this.camera.position.z;
-    }
+
   }
 
-  _setSkyAtmosphere({ visible = true, topColor, horizonColor, fogColor, sunColor, cloudOpacity = 0.32, darkness = 0, hazeStrength = 0.3 }) {
+  _setSkyAtmosphere({ visible = true, darkness = 0 } = {}) {
     if (!this.skyGradient) return;
     this.skyGradient.setVisible(visible);
     this.skyGradient.setDarkness(darkness);
-
-    // Build gradient preset from current zone colors
-    const preset = ZONE_ATMOSPHERE[this.zoneManager?.currentZoneId] || ZONE_ATMOSPHERE.default;
-    const builders = createSkyGradientPreset({
-      skyTop: topColor ?? preset.skyTop,
-      horizon: horizonColor ?? preset.horizon,
-      fog: fogColor ?? preset.fog,
-      sunColor: sunColor ?? preset.sunColor,
-    });
-    this.skyGradient.setBuilders(builders);
 
     // Sync directional light with sky sun so shadows align with visible sun
     const sunDir = this.skyGradient.getSunDirection();
     const sunFactor = this.skyGradient.getSunIntensityFactor();
     const adjustedIntensity = 4.0 * 0.5 * sunFactor * (1.0 - darkness * 0.5);
     if (this.sun) {
-      this.sun.color.copy(sunColor ?? new THREE.Color(preset.sunColor)).lerp(new THREE.Color(0x9fb6ff), darkness * 0.25);
-      // Position the directional light so it shines FROM the sun direction
       this.sun.position.set(sunDir.x * 50, sunDir.y * 50, sunDir.z * 50);
       this.sun.intensity = adjustedIntensity;
     }
 
     this.skyGradient.setSun({
-      color: sunColor ?? new THREE.Color(preset.sunColor),
       strength: 4.0 * sunFactor * (1.0 - darkness * 0.5),
       sharpness: 16.0,
       glowStrength: 0.6,
@@ -1330,62 +1386,11 @@ export class Game {
     this.world?.terrainMesh?.unifiedRenderer?.setLightDir?.(sunDir.x, sunDir.y, sunDir.z);
     this.world?.terrainMesh?.unifiedRenderer?.setLightIntensity?.(adjustedIntensity);
 
-    // Tick the gradient once so colors update immediately
+    // Tick the sky once so colors update immediately
     this.skyGradient.update(0);
-
-    if (this.cloudMaterial) {
-      this.cloudMaterial.opacity = cloudOpacity * (1 - darkness);
-      this.cloudMaterial.color.copy(new THREE.Color(VOXEL_SKY.CLOUD).lerp(fogColor || horizonColor, hazeStrength * 0.28));
-    }
-    if (this.cloudGroup) this.cloudGroup.visible = visible && cloudOpacity > 0.03 && darkness < 0.96;
   }
 
 
-
-  _createCloudLayer() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0.0, 'rgba(255,255,255,0)');
-    grad.addColorStop(0.30, 'rgba(255,255,255,0.78)');
-    grad.addColorStop(0.56, 'rgba(255,255,255,0.92)');
-    grad.addColorStop(1.0, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    for (let i = 0; i < 9; i++) {
-      const x = 20 + i * 26 + (i % 2) * 8;
-      const y = 52 + Math.sin(i * 1.7) * 13;
-      ctx.fillRect(x, y, 34 + (i % 3) * 10, 10 + (i % 2) * 6);
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.LinearFilter;
-    this.cloudMaterial = new THREE.MeshBasicMaterial({
-      map: texture,
-      color: VOXEL_SKY.CLOUD,
-      transparent: true,
-      opacity: 0.32,
-      depthWrite: false,
-      fog: false,
-      side: THREE.DoubleSide,
-    });
-    this.cloudGroup = new THREE.Group();
-    this.cloudGroup.name = 'stylized_cloud_layer';
-    const cloudGeo = new THREE.PlaneGeometry(38, 12);
-    for (let i = 0; i < 18; i++) {
-      const mesh = new THREE.Mesh(cloudGeo, this.cloudMaterial);
-      const angle = (i / 18) * Math.PI * 2;
-      const radius = 55 + (i % 4) * 12;
-      mesh.position.set(Math.cos(angle) * radius, 38 + (i % 3) * 8, Math.sin(angle) * radius);
-      mesh.rotation.set(-0.22, -angle + Math.PI * 0.5, 0);
-      mesh.scale.setScalar(0.9 + (i % 5) * 0.18);
-      mesh.renderOrder = -960;
-      this.cloudGroup.add(mesh);
-    }
-    this.scene.add(this.cloudGroup);
-  }
 
   _syncTerrainFog() {
     const fog = this.scene.fog;
@@ -1409,7 +1414,8 @@ export class Game {
 
   _updateZoneAtmosphere(isoDepthFactor = 0) {
     const currentZone = getZoneAtPosition(this.player.position.x, this.player.position.z);
-    const preset = ZONE_ATMOSPHERE[currentZone?.id] || ZONE_ATMOSPHERE.default;
+    // Use a single consistent sky preset regardless of zone
+    const preset = ZONE_ATMOSPHERE.default;
     const baseBackground = new THREE.Color(preset.fog ?? currentZone?.fogColor ?? 0x0a0a0a);
     const skyTop = new THREE.Color(preset.skyTop);
     const skyHorizon = new THREE.Color(preset.horizon);
@@ -1440,13 +1446,7 @@ export class Game {
 
       this._setSkyAtmosphere({
         visible: undergroundT < 0.98,
-        topColor: skyTop,
-        horizonColor: skyHorizon,
-        fogColor,
-        sunColor,
-        cloudOpacity: preset.cloudOpacity * 0.55 * (1 - undergroundT),
         darkness: undergroundT,
-        hazeStrength: preset.hazeStrength,
       });
       this.ambient.color.copy(baseAmbient).lerp(new THREE.Color(0xd9e4d0), ISO_UNDERGROUND_VIEW.AMBIENT_BOOST * undergroundT);
     } else if (this.cameraMode === 'thirdPerson') {
@@ -1457,16 +1457,7 @@ export class Game {
       const fogNear = Math.max(18, Math.min(VOXEL_SKY.TP_FOG_NEAR, zoneFogNear - preset.hazeStrength * 8));
       const fogFar = Math.max(fogNear + 24, Math.min(VOXEL_SKY.TP_FOG_FAR, zoneFogFar - preset.hazeStrength * 6));
       this.scene.fog = new THREE.Fog(fogBase, fogNear, fogFar);
-      this._setSkyAtmosphere({
-        visible: true,
-        topColor: skyTop,
-        horizonColor: skyHorizon,
-        fogColor: fogBase,
-        sunColor,
-        cloudOpacity: preset.cloudOpacity,
-        darkness: 0,
-        hazeStrength: preset.hazeStrength,
-      });
+      this._setSkyAtmosphere({ visible: true });
       this.ambient.color.copy(baseAmbient);
     } else {
       this.scene.background = fogBase;
@@ -1474,16 +1465,7 @@ export class Game {
       const near = currentZone?.fogNear ? currentZone.fogNear + 18 : VOXEL_SKY.FOG_NEAR;
       const far = currentZone?.fogFar ? currentZone.fogFar + 88 : VOXEL_SKY.FOG_FAR;
       this.scene.fog = new THREE.Fog(fogBase, near, far);
-      this._setSkyAtmosphere({
-        visible: true,
-        topColor: skyTop,
-        horizonColor: skyHorizon,
-        fogColor: fogBase,
-        sunColor,
-        cloudOpacity: preset.cloudOpacity * 0.85,
-        darkness: 0,
-        hazeStrength: preset.hazeStrength,
-      });
+      this._setSkyAtmosphere({ visible: true });
       this.ambient.color.copy(baseAmbient);
     }
 
@@ -1669,6 +1651,122 @@ export class Game {
 
   _explodeBlast(position, config = {}) {
     return this.explosions.blast(position, config);
+  }
+
+  _spawnTestEnemy() {
+    const angle = this.player.rotation + (Math.random() - 0.5) * 0.5;
+    const dist = 3 + Math.random() * 4;
+    const x = this.player.position.x + Math.sin(angle) * dist;
+    const z = this.player.position.z + Math.cos(angle) * dist;
+    const types = Object.keys(ENEMY_TYPES);
+    const typeKey = types[Math.floor(Math.random() * types.length)];
+    const enemy = new Enemy(typeKey, x, z);
+    enemy.world = this.world;
+    enemy.zoneId = this.zoneManager.currentZoneId || 'ourcraft_demo';
+    enemy._netId = this.world._nextEnemyId++;
+    enemy.spawn(this.scene).then(() => {
+      this.world.enemies.push(enemy);
+    });
+  }
+
+  _throwChargedGrenade(power) {
+    const weapon = this.player.weapons[this.player.currentSlot];
+    const prep = this._prepareGrenadeThrow(weapon);
+    if (!prep.allowed) {
+      this.ui.showFloatingText(prep.message, 0xffaa00);
+      return;
+    }
+    const aim = this._getMiningAim();
+    const thrown = weapon.throwCharged(aim.origin, aim.direction, this.scene, power);
+    if (thrown) {
+      const grenade = weapon.projectiles[weapon.projectiles.length - 1];
+      if (grenade?.explosive) {
+        grenade.radius = this.progression.getGrenadeRadius();
+        grenade.life = this.grenadeFuse;
+      }
+      this.player.playAttackAnim();
+    }
+  }
+
+  _simulateGrenadeTrajectory(origin, direction, chargePower) {
+    const throwDir = direction.clone().normalize();
+    if (throwDir.y < 0.08) throwDir.y += 0.18;
+    throwDir.normalize();
+
+    const baseSpeed = 8;
+    const maxSpeed = 28;
+    const speed = baseSpeed + (maxSpeed - baseSpeed) * chargePower;
+    const baseUp = 3;
+    const maxUp = 12;
+    const upForce = baseUp + (maxUp - baseUp) * chargePower;
+
+    let vel = throwDir.multiplyScalar(speed).add(new THREE.Vector3(0, upForce, 0));
+    let pos = origin.clone().add(direction.clone().multiplyScalar(0.6));
+
+    const points = [];
+    const dt = 0.05;
+    const maxSteps = 60;
+
+    for (let i = 0; i < maxSteps; i++) {
+      points.push(pos.clone());
+      vel.y += GAME.GRAVITY * dt;
+      const next = pos.clone().addScaledVector(vel, dt);
+
+      const groundY = this.world?.getGroundHeightAt?.(next.x, next.z, pos.y + 0.5) ?? -999;
+      if (groundY > -999 && next.y <= groundY + 0.12 && vel.y <= 0) {
+        next.y = groundY + 0.14;
+        vel.y = Math.abs(vel.y) * 0.42;
+        vel.x *= 0.72;
+        vel.z *= 0.72;
+      }
+
+      pos.copy(next);
+
+      if (vel.lengthSq() < 0.5 && groundY > -999 && Math.abs(pos.y - groundY) < 0.5) {
+        points.push(pos.clone());
+        break;
+      }
+    }
+    return points;
+  }
+
+  _updateGrenadeChargeVisual() {
+    if (!this.aimReticle) return;
+    const ratio = Math.min(1, this.grenadeCharge.timer / this.grenadeCharge.maxTime);
+    const size = 22 + ratio * 22;
+    const colors = ['#e8fff2', '#facc15', '#ffaa00', '#ff4444'];
+    const colorIdx = Math.min(3, Math.floor(ratio * 4));
+    this.aimReticle.style.fontSize = `${size}px`;
+    this.aimReticle.style.color = colors[colorIdx];
+
+    // Trajectory preview
+    if (this.grenadeTrajectory) {
+      const aim = this._getMiningAim();
+      const points = this._simulateGrenadeTrajectory(aim.origin, aim.direction, ratio);
+      const positions = new Float32Array(points.length * 3);
+      for (let i = 0; i < points.length; i++) {
+        positions[i * 3] = points[i].x;
+        positions[i * 3 + 1] = points[i].y;
+        positions[i * 3 + 2] = points[i].z;
+      }
+      this.grenadeTrajectory.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      this.grenadeTrajectory.geometry.attributes.position.needsUpdate = true;
+      this.grenadeTrajectory.visible = true;
+    }
+  }
+
+  _hideGrenadeTrajectory() {
+    if (this.grenadeTrajectory) this.grenadeTrajectory.visible = false;
+    if (this.aimReticle) {
+      this.aimReticle.style.fontSize = '22px';
+      this.aimReticle.style.color = '#e8fff2';
+    }
+  }
+
+  _cancelGrenadeCharge() {
+    if (!this.grenadeCharge.active) return;
+    this.grenadeCharge.active = false;
+    this._hideGrenadeTrajectory();
   }
 
   _spawnShockwave(position, radius, color = 0xffaa33) {
@@ -2058,10 +2156,10 @@ export class Game {
 
   _onIconDropCollect(type, amount) {
     const result = this.runBackpack.add(type, amount);
-    if (result.success && result.added > 0) {
+    if (result.success && result.amountAdded > 0) {
       const meta = RESOURCE_META[type];
       const label = meta?.name || type;
-      this.mining.batchResourceText(label, result.added, 0xfacc15, '🎒');
+      this.mining.batchResourceText(type, result.amountAdded, 0xfacc15, label);
       const now = performance.now?.() || Date.now();
       if (now - this._lastCollectSfxAt > 70) {
         this._lastCollectSfxAt = now;
@@ -2077,18 +2175,51 @@ export class Game {
 
   _updateBeacon(dt) {
     this.beacon.update(dt);
-    const nearBeacon = this.beacon.isPlayerNear(this.player.position, 3);
+    const nearBeacon = this.beacon.isPlayerNear(this.player.position, 3.5);
     const hasItems = this.runBackpack.getTotalItems() > 0;
-    this.ui.showDepositPrompt(nearBeacon && hasItems);
+    const vacuuming = this.backpackVacuum.active || this.backpackVacuum.orbs.length > 0;
 
-    if (nearBeacon && hasItems && input.pressed('KeyE')) {
-      this._triggerCashOut();
+    if (nearBeacon && hasItems && !vacuuming) {
+      this.backpackVacuum.start(this.beacon.getVortexPosition());
     }
+
+    if (vacuuming || (nearBeacon && hasItems)) {
+      this.backpackVacuum.update(dt, this.player.position, this.beacon.getVortexPosition());
+    }
+
+    this.ui.showDepositPrompt(nearBeacon && (hasItems || vacuuming));
+  }
+
+  _endDemoRound() {
+    if (this._cashOutActive) return;
+    this._cashOutActive = true;
+
+    // Deposit any remaining backpack resources
+    const result = this.runBackpack.depositAll(this.resources);
+    if (result.totalCoins > 0) {
+      this.player.coins += result.totalCoins;
+    }
+
+    const pendingLetters = Array.from(this.pendingLetters);
+    SFXMapper.cashOutSuction();
+    this.cashOut.start({
+      deposited: result.deposited,
+      totalCoins: result.totalCoins,
+      letters: pendingLetters,
+      milestone: 'Time\'s up!',
+    }, () => {
+      this._cashOutActive = false;
+      this.state = STATES.CAMP;
+      this.ui.showCamp(true);
+    });
   }
 
   _triggerCashOut() {
     if (this._cashOutActive) return;
     this._cashOutActive = true;
+
+    // Stop any active auto-vacuum so orbs don't conflict
+    this.backpackVacuum.stop();
 
     // Deposit backpack resources
     const result = this.runBackpack.depositAll(this.resources);
@@ -2096,7 +2227,15 @@ export class Game {
       this.player.coins += result.totalCoins;
     }
 
-    // Gather pending letters for cash-out display
+    // ── Demo mode: quick deposit, don't end round ──
+    if (this._ourCraftDemo) {
+      SFXMapper.cashOutSuction();
+      this.ui.showDepositComplete(result);
+      this._cashOutActive = false;
+      return;
+    }
+
+    // ── Full cash-out for roguelike mode ──
     const pendingLetters = Array.from(this.pendingLetters);
 
     // Check milestone: any affordable upgrade?
@@ -2212,6 +2351,7 @@ export class Game {
     });
 
     this.pet = pet;
+    this._syncPetLightIntensity();
   }
 
   _clearPet() {

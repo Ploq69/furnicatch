@@ -36,6 +36,13 @@ export class SettingsMenu {
     this.elSkySpeed = document.getElementById('settings-skyspeed');
     this.elSkySpeedVal = document.getElementById('settings-skyspeed-val');
     this.elStars = document.getElementById('settings-stars');
+    this.elAurora = document.getElementById('settings-aurora');
+    this.elStarDensity = document.getElementById('settings-star-density');
+    this.elStarDensityVal = document.getElementById('settings-star-density-val');
+    this.elStarBrightness = document.getElementById('settings-star-brightness');
+    this.elStarBrightnessVal = document.getElementById('settings-star-brightness-val');
+    this.elPetLight = document.getElementById('settings-pet-light');
+    this.elPetLightVal = document.getElementById('settings-pet-light-val');
 
     this.elGamepad = document.getElementById('settings-gamepad-enabled');
     this.elLook = document.getElementById('settings-look');
@@ -83,6 +90,22 @@ export class SettingsMenu {
     this.elName?.addEventListener('change', (e) => settings.set('playerName', e.target.value.trim() || 'Player'));
     this.elSkyCycle?.addEventListener('change', (e) => settings.set('skyCycleEnabled', e.target.checked));
     this.elStars?.addEventListener('change', (e) => settings.set('starfieldEnabled', e.target.checked));
+    this.elAurora?.addEventListener('change', (e) => settings.set('auroraEnabled', e.target.checked));
+    this.elStarDensity?.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      settings.set('starDensity', v);
+      this.elStarDensityVal.textContent = v.toFixed(1) + 'x';
+    });
+    this.elStarBrightness?.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      settings.set('starBrightness', v);
+      this.elStarBrightnessVal.textContent = v.toFixed(1) + 'x';
+    });
+    this.elPetLight?.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      settings.set('petLightIntensity', v);
+      this.elPetLightVal.textContent = v.toFixed(1) + 'x';
+    });
 
     this.elGamepad?.addEventListener('change', (e) => settings.set('gamepadEnabled', e.target.checked));
     this.elLook?.addEventListener('input', (e) => {
@@ -126,6 +149,13 @@ export class SettingsMenu {
     if (this.elSkySpeed) this.elSkySpeed.value = settings.get('skyCycleSpeed');
     if (this.elSkySpeedVal) this.elSkySpeedVal.textContent = settings.get('skyCycleSpeed').toFixed(1) + 'x';
     if (this.elStars) this.elStars.checked = settings.get('starfieldEnabled');
+    if (this.elAurora) this.elAurora.checked = settings.get('auroraEnabled');
+    if (this.elStarDensity) this.elStarDensity.value = settings.get('starDensity');
+    if (this.elStarDensityVal) this.elStarDensityVal.textContent = settings.get('starDensity').toFixed(1) + 'x';
+    if (this.elStarBrightness) this.elStarBrightness.value = settings.get('starBrightness');
+    if (this.elStarBrightnessVal) this.elStarBrightnessVal.textContent = settings.get('starBrightness').toFixed(1) + 'x';
+    if (this.elPetLight) this.elPetLight.value = settings.get('petLightIntensity');
+    if (this.elPetLightVal) this.elPetLightVal.textContent = settings.get('petLightIntensity').toFixed(1) + 'x';
 
     if (this.elGamepad) this.elGamepad.checked = settings.get('gamepadEnabled');
     if (this.elLook) this.elLook.value = settings.get('gamepadLookSensitivity');

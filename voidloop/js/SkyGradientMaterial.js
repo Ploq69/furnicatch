@@ -12,10 +12,6 @@ const VERTEX_SHADER = `
 const FRAGMENT_SHADER = `
   precision highp float;
 
-  uniform vec4 gradientColors[4];
-  uniform vec4 gradientPositions;
-  uniform int numStops;
-
   uniform vec3 sunDir;
   uniform vec3 sunColor;
   uniform float sunStrength;
@@ -25,7 +21,10 @@ const FRAGMENT_SHADER = `
 
   uniform float nightVisibility;
   uniform float time;
+  uniform float cyclePhase;
   uniform float starEnabled;
+  uniform float starDensity;
+  uniform float starBrightness;
   uniform float darkness;
 
   // Aurora uniforms
@@ -57,26 +56,69 @@ const FRAGMENT_SHADER = `
 
   float snoise(vec3 v);
 
-  vec4 sampleGradient(float t) {
-    if (numStops <= 1) return gradientColors[0];
-    vec4 baseColor = gradientColors[0];
-    if (t <= gradientPositions[0]) {
-      baseColor = gradientColors[0];
-    } else if (t >= gradientPositions[numStops - 1]) {
-      baseColor = gradientColors[numStops - 1];
+  // ---- OurCraft atmospheric scattering (ported from atmosphericScattering.frag) ----
+  vec3 atmosphericScattering(vec3 localPos, vec3 lightPos, vec3 skyColor, vec3 sunScatterColor, float g, bool noSun) {
+    vec3 upVector = vec3(0.0, 1.0, 0.0);
+    float fCosEarth = max(dot(localPos, upVector), 0.0);
+    float fOneMinusCosEarth = 1.0 - fCosEarth;
+    float fCosSunEarth = 1.0 - abs(dot(lightPos, upVector));
+
+    float g2 = g * g;
+    float fCosSun = dot(lightPos, localPos);
+    if (noSun) fCosSun = 0.0;
+
+    float fMiePhase = 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + fCosSun * fCosSun) / pow(1.0 + g2 - 2.0 * g * fCosSun, 1.5);
+    vec3 computedSky = skyColor
+      + fMiePhase * sunScatterColor
+      + fCosSunEarth * sunScatterColor * pow(fOneMinusCosEarth, 16.0)
+      + pow(fOneMinusCosEarth, 16.0) * sunScatterColor;
+
+    return computedSky;
+  }
+
+  vec3 computeSkyColor(vec3 viewDir, vec3 lightPos, float timeOfDay) {
+    // Scattering presets. Day uses Voidloop's bright sky/fog colors; twilight
+    // and night retain the darker OurCraft-inspired atmospheric colors.
+
+    vec3 dayC1 = vec3(99.0, 184.0, 255.0) / 255.0;
+    vec3 dayC2 = vec3(215.0, 244.0, 255.0) / 255.0;
+
+    vec3 twiC1 = vec3(22.0, 49.0, 111.0) * 0.9 / 255.0;
+    vec3 twiC2 = vec3(35.0, 22.0, 36.0) * 0.9 / 255.0;
+
+    vec3 nightC1 = vec3(9.0, 15.0, 23.0) * 0.2 / 255.0;
+    vec3 nightC2 = vec3(4.0, 8.0, 10.0) * 0.2 / 255.0;
+
+    // Time of day: 0=sunrise, 0.25=noon, 0.50=sunset, 0.75=midnight, 1.0=sunrise
+    float tod = fract(timeOfDay);
+
+    vec3 col1, col2;
+    float mixFactor = 0.0;
+    float bias = 2.0;
+
+    if (tod <= 0.25) {
+      // twilight -> day
+      col1 = atmosphericScattering(viewDir, lightPos, twiC1, twiC2, 0.995, false);
+      col2 = atmosphericScattering(viewDir, lightPos, dayC1, dayC2, 0.40, true);
+      mixFactor = pow(tod / 0.25, 1.0 / bias);
+    } else if (tod <= 0.50) {
+      // day -> twilight
+      col1 = atmosphericScattering(viewDir, lightPos, dayC1, dayC2, 0.40, true);
+      col2 = atmosphericScattering(viewDir, lightPos, twiC1, twiC2, 0.995, false);
+      mixFactor = pow((tod - 0.25) / 0.25, bias);
+    } else if (tod <= 0.75) {
+      // twilight -> night
+      col1 = atmosphericScattering(viewDir, lightPos, twiC1, twiC2, 0.995, false);
+      col2 = atmosphericScattering(viewDir, lightPos, nightC1, nightC2, 0.850, true);
+      mixFactor = pow((tod - 0.50) / 0.25, 1.0 / bias);
     } else {
-      for (int i = 1; i < 4; i++) {
-        if (i >= numStops) break;
-        float a = gradientPositions[i - 1];
-        float b = gradientPositions[i];
-        if (t >= a && t <= b) {
-          float f = (t - a) / max(b - a, 0.0001);
-          baseColor = mix(gradientColors[i - 1], gradientColors[i], f);
-          break;
-        }
-      }
+      // night -> twilight
+      col1 = atmosphericScattering(viewDir, lightPos, nightC1, nightC2, 0.850, true);
+      col2 = atmosphericScattering(viewDir, lightPos, twiC1, twiC2, 0.995, false);
+      mixFactor = pow((tod - 0.75) / 0.25, bias);
     }
-    return baseColor;
+
+    return mix(col1, col2, mixFactor);
   }
 
   vec3 computeSun(vec3 viewDir, vec3 sunDir, vec3 sunColor, float strength, float sharpness, float glowStrength, float discSize) {
@@ -89,24 +131,29 @@ const FRAGMENT_SHADER = `
     return sunColor * total;
   }
 
-  float computeStars(vec3 viewDir, float time) {
-    float skyRot = time * 0.02;
+  float computeStars(vec3 viewDir, float time, float density, float brightness) {
+    float skyRot = time * 0.015;
     float c = cos(skyRot);
     float s = sin(skyRot);
-    mat3 rot = mat3(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0);
+    mat3 rot = mat3(c, 0.0, s, 0.0, 1.0, 0.0, -s, 0.0, c);
     vec3 rotDir = rot * viewDir;
 
-    // Remap snoise from [-1,1] to [0,1]
-    float starNoise = (snoise(rotDir * 28.0) + 1.0) * 0.5;
-    float mask = (snoise(rotDir * 8.0) + 1.0) * 0.5;
-    float blinkVar = (snoise(rotDir * 45.0) + 1.0) * 0.5;
+    float starNoise = (snoise(rotDir * 95.0) + 1.0) * 0.5;
+    float mask = (snoise(rotDir * 3.5) + 1.0) * 0.5;
+    float blinkVar = (snoise(rotDir * 130.0) + 1.0) * 0.5;
 
-    starNoise *= (1.0 - smoothstep(0.5, 1.0, mask));
-    float baseBlink = time * 1.5;
-    float speedVar = 1.0 + sin(blinkVar) * 0.5;
-    float blink = cos(baseBlink * speedVar + blinkVar);
-    float blinkThresh = blink * 0.12;
-    return smoothstep(0.72 + blinkThresh, 1.0, starNoise);
+    float band = smoothstep(0.15, 0.45, mask);
+    starNoise *= band;
+
+    float thresh = mix(0.88, 0.78, density);
+    float baseBlink = time * 1.2;
+    float speedVar = 1.0 + sin(blinkVar * 6.28) * 0.6;
+    float blink = cos(baseBlink * speedVar + blinkVar * 4.0);
+    float blinkThresh = blink * 0.08;
+    float star = smoothstep(thresh + blinkThresh, 1.0, starNoise);
+
+    star = pow(star, 1.4) * brightness;
+    return star;
   }
 
   // Aurora helpers
@@ -137,7 +184,6 @@ const FRAGMENT_SHADER = `
       vec3 p = viewDir * t;
       vec2 world_pos = p.xz;
 
-      // Flow warping
       vec2 s_wp = world_pos * auroraFlowScale;
       vec2 flow = vec2(
         (snoise(vec3(s_wp.x, s_wp.y, flow_time)) + 1.0) * 0.5,
@@ -145,7 +191,6 @@ const FRAGMENT_SHADER = `
       );
       vec2 flow_dir = normalize(flow - 0.5);
 
-      // Wiggle warping
       vec2 w_wo = world_pos * auroraWiggleScale;
       float time_offset = w_wo.x + w_wo.y;
       vec2 wiggle_noise = vec2(
@@ -156,15 +201,12 @@ const FRAGMENT_SHADER = `
 
       vec2 warped_pos = world_pos + flow_dir * auroraFlowStrength + wiggle + vec2(auroraFlowXSpeed * globalTime, 0.0);
 
-      // Bands
       float large_bands = make_stripe(warped_pos.x * auroraDensity, 0.2);
       float smaller_bands = make_stripe(warped_pos.x * auroraDensity * 1.7, 0.1);
       float base_bands = pow(max(large_bands, smaller_bands), auroraSharpness);
 
-      // Vertical falloff
       float vertical_intensity = smoothstep(0.0, 0.15, height_factor) * smoothstep(1.0, 0.5, height_factor);
 
-      // Undersparkles
       float undersparkle_intensity = 1.0 - smoothstep(0.0, auroraUndersparkleMaxHeight, height_factor);
       vec2 sn = warped_pos * auroraUndersparkleScale;
       float k = globalTime * auroraUndersparkleSpeed;
@@ -186,23 +228,25 @@ const FRAGMENT_SHADER = `
       if (accumulated_alpha > 0.95) break;
     }
 
-    float up_factor = smoothstep(0.05, 0.7, viewDir.y);
+    float up_factor = smoothstep(0.0, 0.5, viewDir.y);
     float final_alpha = accumulated_alpha * up_factor * auroraAlpha;
     return vec4(accumulated_color * up_factor * auroraAlpha, final_alpha);
   }
 
   void main() {
     vec3 viewDir = normalize(vWorldDir);
-    float t = clamp(viewDir.y * 0.5 + 0.5, 0.0, 1.0);
-    vec4 grad = sampleGradient(t);
-    vec3 color = grad.rgb;
 
+    // OurCraft sky: atmospheric scattering with day/twilight/night blending
+    vec3 lightPos = normalize(sunDir);
+    vec3 color = computeSkyColor(viewDir, lightPos, cyclePhase);
+
+    // Sun disc
     vec3 sun = computeSun(viewDir, sunDir, sunColor, sunStrength, sunSharpness, sunGlowStrength, sunDiscSize);
     float dayVis = max(1.0 - nightVisibility, 0.05);
     color += sun * dayVis;
 
     if (starEnabled > 0.5 && nightVisibility > 0.01) {
-      float stars = computeStars(viewDir, time);
+      float stars = computeStars(viewDir, time, starDensity, starBrightness);
       color += vec3(stars) * nightVisibility;
     }
 
@@ -269,14 +313,6 @@ const FRAGMENT_SHADER = `
 export class SkyGradientMaterial extends THREE.ShaderMaterial {
   constructor(options = {}) {
     const defaults = {
-      gradientColors: [
-        new THREE.Vector4(1.0, 0.85, 0.5, 1.0),   // horizon: warm yellow
-        new THREE.Vector4(0.6, 0.75, 0.95, 1.0),   // lower mid: light blue
-        new THREE.Vector4(0.3, 0.55, 0.92, 1.0),   // upper mid: medium blue
-        new THREE.Vector4(0.1, 0.25, 0.75, 1.0),   // zenith: deep blue
-      ],
-      gradientPositions: new THREE.Vector4(0.0, 0.30, 0.65, 1.0),
-      numStops: 4,
       sunDir: new THREE.Vector3(-0.2, 0.6, -0.6),
       sunColor: new THREE.Vector3(1.0, 0.92, 0.6),
       sunStrength: 4.0,
@@ -285,16 +321,19 @@ export class SkyGradientMaterial extends THREE.ShaderMaterial {
       sunDiscSize: 0.06,
       nightVisibility: 0.0,
       time: 0.0,
+      cyclePhase: 0.25,
       starEnabled: 1.0,
+      starDensity: 0.6,
+      starBrightness: 1.0,
       darkness: 0.0,
       // Aurora defaults
       auroraEnabled: 1.0,
-      auroraAlpha: 0.6,
+      auroraAlpha: 1.2,
       auroraDensity: 0.8,
       auroraSharpness: 1.5,
-      auroraNumSamples: 8,
-      auroraStartHeight: 0.1,
-      auroraEndHeight: 0.5,
+      auroraNumSamples: 12,
+      auroraStartHeight: 0.05,
+      auroraEndHeight: 0.65,
       auroraFlowScale: 0.4,
       auroraFlowStrength: 0.5,
       auroraFlowSpeed: 0.15,
@@ -302,24 +341,21 @@ export class SkyGradientMaterial extends THREE.ShaderMaterial {
       auroraWiggleScale: 0.6,
       auroraWiggleStrength: 0.3,
       auroraWiggleSpeed: 0.2,
-      auroraBottomColor: new THREE.Vector3(0.0, 0.4, 0.15),
-      auroraTopColor: new THREE.Vector3(0.1, 0.6, 0.4),
+      auroraBottomColor: new THREE.Vector3(0.05, 0.6, 0.25),
+      auroraTopColor: new THREE.Vector3(0.2, 0.75, 0.55),
       auroraUndersparkleScale: 3.0,
       auroraUndersparkleSpeed: 0.5,
       auroraUndersparkleThreshold: 0.6,
       auroraUndersparkleMaxHeight: 0.7,
       auroraUndersparkleColorPrimary: new THREE.Vector3(0.5, 1.0, 0.7),
       auroraUndersparkleColorSecondary: new THREE.Vector3(0.8, 0.9, 1.0),
-      auroraOpacityPerSample: 0.15,
+      auroraOpacityPerSample: 0.35,
     };
 
     const opts = { ...defaults, ...options };
 
     super({
       uniforms: {
-        gradientColors: { value: opts.gradientColors },
-        gradientPositions: { value: opts.gradientPositions },
-        numStops: { value: opts.numStops },
         sunDir: { value: opts.sunDir },
         sunColor: { value: opts.sunColor },
         sunStrength: { value: opts.sunStrength },
@@ -328,7 +364,10 @@ export class SkyGradientMaterial extends THREE.ShaderMaterial {
         sunDiscSize: { value: opts.sunDiscSize },
         nightVisibility: { value: opts.nightVisibility },
         time: { value: opts.time },
+        cyclePhase: { value: opts.cyclePhase },
         starEnabled: { value: opts.starEnabled },
+        starDensity: { value: opts.starDensity },
+        starBrightness: { value: opts.starBrightness },
         darkness: { value: opts.darkness },
         // Aurora uniforms
         auroraEnabled: { value: opts.auroraEnabled },
@@ -362,28 +401,6 @@ export class SkyGradientMaterial extends THREE.ShaderMaterial {
       depthTest: true,
       fog: false,
     });
-  }
-
-  setGradientColors(colors) {
-    for (let i = 0; i < 4; i++) {
-      if (colors[i]) {
-        const c = colors[i];
-        if (c.isColor) {
-          this.uniforms.gradientColors.value[i].set(c.r, c.g, c.b, 1.0);
-        } else {
-          this.uniforms.gradientColors.value[i].set(c.r ?? c[0], c.g ?? c[1], c.b ?? c[2], 1.0);
-        }
-      }
-    }
-  }
-
-  setGradientPositions(positions) {
-    this.uniforms.gradientPositions.value.set(
-      positions[0] ?? 0.0,
-      positions[1] ?? 0.33,
-      positions[2] ?? 0.66,
-      positions[3] ?? 1.0
-    );
   }
 
   setAuroraUniforms(opts) {

@@ -382,7 +382,8 @@ export class MiningSystem {
     const luck = this.game.progression.state.letterDropLevel || 0;
     const volumeBonus = Math.min(3, Math.floor((result.removedVolume || 0) / 10));
     const amount = Math.max(1, Math.min(4, 1 + Math.floor((width - 1) / 2) + volumeBonus));
-    const resourceType = this._pickDigJunkResource(depth, width, luck);
+    const cellType = result.cell?.type || 'dirt';
+    const resourceType = this._pickDigJunkResource(depth, width, luck, cellType);
 
     this.game.iconDrops?.spawn(hitPos, resourceType, amount);
 
@@ -401,7 +402,43 @@ export class MiningSystem {
     }
   }
 
-  _pickDigJunkResource(depth, tier, luck) {
+  _pickDigJunkResource(depth, tier, luck, cellType = 'dirt') {
+    // Demo mode: contextual resources based on block type
+    if (this.game._ourCraftDemo) {
+      const roll = Math.random();
+      switch (cellType) {
+        case 'dirt':
+        case 'grass':
+        case 'coarse_dirt':
+        case 'sand_A':
+        case 'sand_B':
+        case 'red_sand':
+          return roll > 0.3 ? 'dirt' : 'loose_dirt';
+        case 'stone':
+        case 'cobblestone':
+        case 'mossy_stone':
+        case 'stone_bricks':
+        case 'brick':
+        case 'bricks_A':
+        case 'bricks_B':
+        case 'gravel':
+          return roll > 0.3 ? 'stone' : 'scrap_stone';
+        case 'iron_ore':
+        case 'stone_with_copper':
+        case 'metal':
+          return roll > 0.25 ? 'copper_ore' : 'iron_ore';
+        case 'gold_ore':
+        case 'stone_with_gold':
+          return roll > 0.2 ? 'gold_ore' : 'stone';
+        case 'stone_dark':
+        case 'coal':
+        case 'blackstone':
+          return roll > 0.5 ? 'stone' : 'scrap_stone';
+        default:
+          break;
+      }
+    }
+
     const roll = Math.random() + luck * 0.02 + tier * 0.015;
     if (depth > 12 && roll > 0.82) return 'old_junk';
     if (depth > 5 && roll > 0.55) return 'scrap_stone';

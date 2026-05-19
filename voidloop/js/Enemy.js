@@ -36,6 +36,10 @@ export class Enemy {
     this.mixer = null;
     this.animations = null;
     this.velocity = new THREE.Vector3();
+    this.angularVelocity = new THREE.Vector3();
+    this.isRagdoll = false;
+    this.ragdollTimer = 0;
+    this.pendingImpulse = null;
     this.attackCooldown = 0;
     this.animLockTimer = 0;
     this.groundOffset = 0;
@@ -141,6 +145,11 @@ export class Enemy {
     );
   }
 
+  applyImpulse(vector) {
+    if (!vector || vector.lengthSq() < 0.01) return;
+    this.pendingImpulse = vector.clone();
+  }
+
   _resolveAnimName(name) {
     const map = this.def.animMap || {};
     const mapped = map[name.toLowerCase()];
@@ -208,37 +217,63 @@ export class Enemy {
     SFXMapper.enemyHurt(this.typeKey);
 
     if (this.hp <= 0) {
-      this.die();
+      const impulse = this.pendingImpulse;
+      this.pendingImpulse = null;
+      this.die({ impulse });
     } else {
       this.state = STATES.CHASE;
       this.playAnim('hit', 0.3);
     }
   }
 
-  die() {
+  die(options = {}) {
+    if (this.dead) return;
     this.dead = true;
     this.justDied = true;
     this.state = STATES.DEAD;
-    this.playAnim('death');
     SFXMapper.enemyDeath(this.typeKey);
 
     // Hide HP bar
     if (this.hpBarGroup) this.hpBarGroup.visible = false;
 
-    // Procedural death: scale down
-    this.proceduralData.deathTimer = 0.8;
+    const impulse = options.impulse || this.pendingImpulse;
+    this.pendingImpulse = null;
+    const impulseMag = impulse ? impulse.length() : 0;
 
-    setTimeout(() => {
-      if (this.mesh) this.mesh.visible = false;
-    }, 800);
+    if (impulseMag > 1.5) {
+      // Ragdoll launch!
+      this.isRagdoll = true;
+      this.ragdollTimer = 4.0;
+      this.velocity.copy(impulse);
+      this.velocity.y = Math.max(this.velocity.y, impulseMag * 0.4);
+      this.angularVelocity.set(
+        (Math.random() - 0.5) * 14,
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 14
+      );
+      if (this.mixer) {
+        this.mixer.stopAllAction();
+      }
+    } else {
+      // Normal death animation
+      this.playAnim('death');
+      this.proceduralData.deathTimer = 0.8;
+      setTimeout(() => {
+        if (this.mesh && !this.isRagdoll) this.mesh.visible = false;
+      }, 800);
+    }
   }
 
   update(dt, playerPos, particles, audio, player) {
     this.proceduralTime += dt;
 
     if (this.dead) {
-      if (this.mixer) this.mixer.update(dt);
-      this._applyProceduralAnim(dt);
+      if (this.isRagdoll) {
+        this._updateRagdoll(dt);
+      } else {
+        if (this.mixer) this.mixer.update(dt);
+        this._applyProceduralAnim(dt);
+      }
       return;
     }
 
@@ -362,6 +397,60 @@ export class Enemy {
       if (this.proceduralData.lungeDir) {
         this.mesh.position.addScaledVector(this.proceduralData.lungeDir, lungeAmt);
       }
+    }
+  }
+
+  _updateRagdoll(dt) {
+    if (!this.mesh) return;
+    this.ragdollTimer -= dt;
+
+    // Gravity
+    this.velocity.y += GAME.GRAVITY * dt;
+    // Air drag
+    this.velocity.multiplyScalar(0.99);
+    // Integrate position
+    this.position.addScaledVector(this.velocity, dt);
+    // Integrate rotation
+    this.mesh.rotation.x += this.angularVelocity.x * dt;
+    this.mesh.rotation.y += this.angularVelocity.y * dt;
+    this.mesh.rotation.z += this.angularVelocity.z * dt;
+    // Angular drag
+    this.angularVelocity.multiplyScalar(0.98);
+
+    // Ground collision
+    let groundY = -999;
+    if (this.world) {
+      groundY = this.world.getGroundHeightAt?.(this.position.x, this.position.z, this.position.y + 0.5) ?? -999;
+      if (groundY <= -999) {
+        groundY = this.world.getColumnTop?.(Math.round(this.position.x), Math.round(this.position.z)) ?? -999;
+      }
+    }
+    if (groundY > -999 && this.position.y <= groundY) {
+      this.position.y = groundY;
+      this.velocity.y *= -0.35;
+      this.velocity.x *= 0.65;
+      this.velocity.z *= 0.65;
+      this.angularVelocity.multiplyScalar(0.75);
+    }
+
+    // Sync mesh
+    this.mesh.position.set(this.position.x, this.position.y + this.groundOffset, this.position.z);
+
+    // Fade out
+    if (this.ragdollTimer < 1.5) {
+      const alpha = Math.max(0, this.ragdollTimer / 1.5);
+      this.mesh.traverse(c => {
+        if (c.isMesh && c.material) {
+          if (c.material._origOpacity === undefined) c.material._origOpacity = c.material.opacity ?? 1;
+          c.material.transparent = true;
+          c.material.opacity = c.material._origOpacity * alpha;
+        }
+      });
+    }
+
+    if (this.ragdollTimer <= 0) {
+      this.isRagdoll = false;
+      if (this.mesh) this.mesh.visible = false;
     }
   }
 

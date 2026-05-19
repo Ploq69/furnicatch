@@ -67,3 +67,4 @@ voidloop/audio/sfx/
 
 # Local/runtime config with Firebase web app keys
 voidloop/js/firebase-config.local.js
+tools/ourcraft-generator
